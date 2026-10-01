@@ -2,6 +2,15 @@ name: 发布已验证的 v1 安装包
 
 on:
   workflow_dispatch:
+    inputs:
+      apks_source:
+        description: 已验证 APKS 的临时下载地址
+        required: true
+        type: string
+      module_source:
+        description: 已验证模块 APK 的临时下载地址
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -17,17 +26,20 @@ jobs:
       MODULE: AMPP-Lyrics-v1-module.apk
     steps:
       - name: 下载已验证的安装包
-        env:
-          APKS_SOURCE: ${{ secrets.V1_APKS_SOURCE_URL }}
-          MODULE_SOURCE: ${{ secrets.V1_MODULE_SOURCE_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$APKS_SOURCE"
-          test -n "$MODULE_SOURCE"
-          mkdir dist
-          curl --fail --silent --show-error --location --retry 3 --max-time 600 "$APKS_SOURCE" -o "dist/$APKS"
-          curl --fail --silent --show-error --location --retry 3 --max-time 600 "$MODULE_SOURCE" -o "dist/$MODULE"
+          python3 - <<'PYDOWNLOAD'
+          import json, os, pathlib, subprocess, urllib.parse
+          event = json.loads(pathlib.Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          pathlib.Path('dist').mkdir()
+          for key, filename in [('apks_source', os.environ['APKS']), ('module_source', os.environ['MODULE'])]:
+              url = event['inputs'][key]
+              parsed = urllib.parse.urlparse(url)
+              assert parsed.scheme == 'https' and parsed.hostname == 'release-assets.githubusercontent.com'
+              print('::add-mask::' + url, flush=True)
+              subprocess.run(['curl', '--fail', '--silent', '--show-error', '--location', '--retry', '3', '--max-time', '600', url, '-o', 'dist/' + filename], check=True)
+          PYDOWNLOAD
 
       - name: 校验正式文件内容
         shell: bash
