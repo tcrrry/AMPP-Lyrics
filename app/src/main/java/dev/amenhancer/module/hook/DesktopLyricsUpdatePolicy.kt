@@ -17,8 +17,10 @@ internal object DesktopLyricsUpdatePolicy {
         val wordUpgrade = first.wordLyrics.isBlank() && final.wordLyrics.isNotBlank()
         val translationUpgrade = before?.contains("<translations>") != true &&
             after?.contains("<translations>") == true && final.score >= first.score
-        val pronunciationUpgrade = before?.contains("<transliterations>") != true &&
-            after?.contains("<transliterations>") == true && final.score >= first.score
+        val pronunciationUpgrade = after?.contains("<transliterations>") == true &&
+            DirectLyricsRepository.coverage(final.lyrics, final.romanizedLyrics) >
+                DirectLyricsRepository.coverage(first.lyrics, first.romanizedLyrics) &&
+            DirectLyricsRepository.qualityRank(final) > DirectLyricsRepository.qualityRank(first)
         // Same recording enriched by its provider is a useful update; a similarly
         // ranked competing recording is kept in history for switching instead.
         val sameRecording = first.source == final.source && first.recordId.isNotBlank() && first.recordId == final.recordId

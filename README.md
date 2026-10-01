@@ -7,7 +7,7 @@
 
 **APKS 整合安装包 · 无需 Root · 无需另装 LSPosed 或模块**
 
-[下载 APKS（普通用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1/AMPP-Lyrics-v1-AppleMusic-6.5.3-arm64.apks) · [模块 APK（进阶用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1/AMPP-Lyrics-v1-module.apk) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
+[下载 APKS（普通用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks) · [模块 APK（进阶用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-module.apk) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
 
 </div>
 
@@ -41,14 +41,14 @@
 
 ## 下载
 
-当前正式版本：**v1**（对应已验证的 r25），基于 **Apple Music 6.5.3** 与 **AM++ 1.6.2**。
+当前正式版本：**v1.1**（发音优先级修正版），基于 **Apple Music 6.5.3** 与 **AM++ 1.6.2**。
 
 | 安装文件 | 适合谁 | 使用方式 |
 | --- | --- | --- |
-| **[APKS 整合包](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1/AMPP-Lyrics-v1-AppleMusic-6.5.3-arm64.apks)** | **普通用户，优先选择** | 用 MT 管理器等分包安装器安装，直接使用，无需 Root 或额外模块框架。 |
-| [模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1/AMPP-Lyrics-v1-module.apk) | 已有兼容模块环境、或需要自行嵌入的进阶用户 | 独立模块，不是 Apple Music 主程序，不能单独安装后直接播放音乐。 |
+| **[APKS 整合包](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks)** | **普通用户，优先选择** | 用 MT 管理器等分包安装器安装，直接使用，无需 Root 或额外模块框架。 |
+| [模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-module.apk) | 已有兼容模块环境、或需要自行嵌入的进阶用户 | 独立模块，不是 Apple Music 主程序，不能单独安装后直接播放音乐。 |
 
-v1 与 r25 的安装内容相同，仅使用正式发布名称和文件名；已安装 r25 的用户无需重复安装。
+v1.1 在 v1 / r25 基础上加入发音覆盖率评分，并允许更完整的发音结果刷新播放页。歌曲匹配可信度优先，同档内译文、逐字、发音覆盖率权重依次为 200、100、50；手动指定来源仍然优先。已安装 v1 或 r25 的用户需安装新 APKS 才能获得这次优化。旧版 v1 保留在发布列表中。
 
 发布页附带的 `.sha256` 文件用于校验，不是安装包。开发期 r8～r25 等历史版本保留在原开发仓库；本公开仓库从 v1 开始发布。
 

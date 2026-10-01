@@ -36,4 +36,16 @@ class DesktopLyricsUpdatePolicyTest {
         assertTrue(DesktopLyricsUpdatePolicy.changed(japanese, enriched, 5000))
         assertSame(japanese, DesktopLyricsUpdatePolicy.choose(japanese, enriched.copy(score = 70), 5000))
     }
+
+    @Test fun betterPronunciationCoverageCanRefreshWithinTheExactMatchBand() {
+        val japanese = first.copy(lyrics = "[00:01]君\n[00:02]だ", romanizedLyrics = "[00:01]kimi")
+        val enriched = japanese.copy(score = 99, source = "网易云音乐", romanizedLyrics = "[00:01]kimi\n[00:02]da")
+        assertSame(enriched, DesktopLyricsUpdatePolicy.choose(japanese, enriched, 5000))
+    }
+
+    @Test fun pronunciationDoesNotRefreshToALowerQualityResult() {
+        val japanese = first.copy(lyrics = "[00:01]君", translatedLyrics = "[00:01]你")
+        val poorer = japanese.copy(source = "网易云音乐", translatedLyrics = "", romanizedLyrics = "[00:01]kimi")
+        assertSame(japanese, DesktopLyricsUpdatePolicy.choose(japanese, poorer, 5000))
+    }
 }

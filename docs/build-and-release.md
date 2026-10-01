@@ -1,5 +1,7 @@
 # 源码构建与打包
 
+v1.1 加入发音覆盖率评分和后续刷新判断，模块内部版本为 1.6.3（113）。公开安装包下载入口使用最新正式 Release；旧 v1 仍保留。
+
 v1 对应已经手机验收的 r25，基于 AM++ 1.6.2 与 Apple Music 6.5.3（1599）。公开源码包含模块及其构建依赖；旧开发仓库的提交历史、打包输入、签名材料与个人备份不迁入此仓库。
 
 ## 构建模块
@@ -25,4 +27,4 @@ python3 scripts/package-tcrrry-embedded.py patched output.apks
 
 当前发布文件包含 `base.apk`、`split_config.arm64_v8a.apk` 与 `split_config.xxxhdpi.apk`。其他设备变体需匹配相应分包并验证；签名必须在各分包间一致。
 
-v1 安装包沿用已验证 r25 的二进制，未为改名重编译或重签名。原项目及第三方许可见 LICENSE 与 THIRD_PARTY_NOTICES.md；Apple Music 本身不属于模块 GPL 源码。
+旧 v1 安装包沿用已验证 r25 的二进制；v1.1 重新构建模块后嵌入同版本分包，并沿用原有签名。原项目及第三方许可见 LICENSE 与 THIRD_PARTY_NOTICES.md；Apple Music 本身不属于模块 GPL 源码。

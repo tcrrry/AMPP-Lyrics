@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.FutureTask
 import org.json.JSONArray
 
-private const val AUTO_CACHE_DIRECTORY = "ampp-auto-lyrics-desktop-v9"
+private const val AUTO_CACHE_DIRECTORY = "ampp-auto-lyrics-desktop-v10"
 
 /** A validated candidate returned by one of the automatic lyric sources. */
 internal data class AutoLyricsCandidate(
