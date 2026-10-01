@@ -27,4 +27,4 @@ python3 scripts/package-tcrrry-embedded.py patched output.apks
 
 当前发布文件包含 `base.apk`、`split_config.arm64_v8a.apk` 与 `split_config.xxxhdpi.apk`。其他设备变体需匹配相应分包并验证；签名必须在各分包间一致。
 
-旧 v1 安装包沿用已验证 r25 的二进制；v1.1 重新构建模块后嵌入同版本分包，并沿用原有签名。原项目及第三方许可见 LICENSE 与 THIRD_PARTY_NOTICES.md；Apple Music 本身不属于模块 GPL 源码。
+旧 v1 安装包沿用已验证 r25 的二进制；v1.1 重新构建模块后嵌入同版本分包，整合包沿用原有 NPatch 公共测试签名。独立模块为调试构建；如覆盖安装提示签名冲突，应先确认旧模块的签名与安装方式。原项目及第三方许可见 LICENSE 与 THIRD_PARTY_NOTICES.md；Apple Music 本身不属于模块 GPL 源码。

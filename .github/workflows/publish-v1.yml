@@ -1,4 +1,4 @@
-name: 发布已验证的 v1 安装包
+name: 发布已验证的 v1.1 安装包
 
 on:
   workflow_dispatch:
@@ -22,8 +22,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      APKS: AMPP-Lyrics-v1-AppleMusic-6.5.3-arm64.apks
-      MODULE: AMPP-Lyrics-v1-module.apk
+      APKS: AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks
+      MODULE: AMPP-Lyrics-module.apk
     steps:
       - name: 下载已验证的安装包
         shell: bash
@@ -46,8 +46,8 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          echo "ab6f2b92305c8e80e4bd21a645288586c8df28788d10404e9e0c2a48776c7ce7  $APKS" > "$APKS.sha256"
-          echo "7545db9bb7cd1649d87f00fbc39a1cd297730f710e5e5cc5584fa681f9c5f81e  $MODULE" > "$MODULE.sha256"
+          echo "e08466d26ba06c55b8f491a52e4c7bd383602f68cb3ce06af1182c0167123f10  $APKS" > "$APKS.sha256"
+          echo "e14317e4faedd01a9131ff4258a2f0291e8d69a30fa22278962da027e6107873  $MODULE" > "$MODULE.sha256"
           sha256sum -c "$APKS.sha256"
           sha256sum -c "$MODULE.sha256"
           python3 - <<'PY'
@@ -62,7 +62,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          release_id=$(gh api "repos/$GH_REPO/releases" --jq '.[] | select(.tag_name == "v1") | .id')
+          release_id=$(gh api "repos/$GH_REPO/releases" --jq '.[] | select(.tag_name == "v1.1") | .id')
           test -n "$release_id"
           gh api "repos/$GH_REPO/releases/$release_id" --jq .assets > existing-assets.json
           for file in dist/*; do
@@ -71,7 +71,7 @@ jobs:
             if jq -e --arg name "$name" 'any(.[]; .name == $name)' existing-assets.json >/dev/null; then
               test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' existing-assets.json)" = "$digest"
             else
-              gh release upload v1 "$file"
+              gh release upload v1.1 "$file"
             fi
           done
-          gh release edit v1 --draft=false --prerelease=false --latest
+          gh release edit v1.1 --draft=false --prerelease=false --latest
