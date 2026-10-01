@@ -1,0 +1,50 @@
+.gradle/
+build/
+app/build/
+.kotlin/
+**/build/
+.externalNativeBuild/
+.cxx/
+captures/
+local.properties
+*.iml
+.idea/
+.vscode/
+gradle/wrapper/gradle-wrapper-shared.jar
+gradle/wrapper/gradle-cli.jar
+
+# Local signing and secrets
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+!.env.example
+
+# Logs, heap dumps, and OS/editor debris
+*.log
+*.hprof
+*.tmp
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local reverse-engineering, device QA, and release artifacts
+.codegraph/
+.scratch/
+/dist/
+LSPosed_*/
+*.apk
+*.apks
+audit-*.png
+blur-*.png
+device-*.png
+device-*.xml
+
+# Local research inputs and agent working notes
+/$tmp/
+/液态玻璃/
+/task_plan.md
+/findings.md
+/progress.md
+/design-qa.md
