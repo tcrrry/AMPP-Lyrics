@@ -1,10 +1,14 @@
-name: 发布已验证的 v1.1 安装包
+name: 发布静态校验的 v1.1 三种安装包
 
 on:
   workflow_dispatch:
     inputs:
       apks_source:
         description: 已验证 APKS 的临时下载地址
+        required: true
+        type: string
+      apk_source:
+        description: 静态校验的试验版单 APK 临时下载地址
         required: true
         type: string
       module_source:
@@ -23,6 +27,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       APKS: AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks
+      APK: AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk
       MODULE: AMPP-Lyrics-module.apk
     steps:
       - name: 下载已验证的安装包
@@ -33,7 +38,7 @@ jobs:
           import json, os, pathlib, subprocess, urllib.parse
           event = json.loads(pathlib.Path(os.environ['GITHUB_EVENT_PATH']).read_text())
           pathlib.Path('dist').mkdir()
-          for key, filename in [('apks_source', os.environ['APKS']), ('module_source', os.environ['MODULE'])]:
+          for key, filename in [('apks_source', os.environ['APKS']), ('apk_source', os.environ['APK']), ('module_source', os.environ['MODULE'])]:
               url = event['inputs'][key]
               parsed = urllib.parse.urlparse(url)
               assert parsed.scheme == 'https' and parsed.hostname == 'release-assets.githubusercontent.com'
@@ -48,6 +53,8 @@ jobs:
           cd dist
           echo "e08466d26ba06c55b8f491a52e4c7bd383602f68cb3ce06af1182c0167123f10  $APKS" > "$APKS.sha256"
           echo "e14317e4faedd01a9131ff4258a2f0291e8d69a30fa22278962da027e6107873  $MODULE" > "$MODULE.sha256"
+          echo "309062ad1c1987160e493277a396ab784b1c052e6bf96c68b8ba92a5188a5781  $APK" > "$APK.sha256"
+          sha256sum -c "$APK.sha256"
           sha256sum -c "$APKS.sha256"
           sha256sum -c "$MODULE.sha256"
           python3 - <<'PY'

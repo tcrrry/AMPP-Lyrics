@@ -1,0 +1,61 @@
+name: 构建并发布 v1.1 单 APK（试验版）
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  single-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      APK: AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: 下载固定输入与工具
+        run: |
+          set -euo pipefail
+          mkdir -p inputs dist
+          gh release download v1.1 --pattern 'AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks*' --dir inputs
+          (cd inputs && sha256sum -c AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks.sha256)
+          gh release download V1.4.9 --repo REAndroid/APKEditor --pattern '*.jar' --dir inputs
+          gh release download v1.0.7 --repo 7723mod/NPatch --pattern '*.jar' --dir inputs
+          sdkmanager 'build-tools;35.0.0'
+      - name: 合并、嵌入并静态校验
+        run: |
+          set -euo pipefail
+          python3 scripts/package-single-apk.py \
+            inputs/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks "dist/$APK" \
+            --editor inputs/APKEditor-1.4.9.jar \
+            --npatch inputs/jar-v1.0.7-741-release.jar \
+            --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            --aapt2 "$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          (cd dist && echo "309062ad1c1987160e493277a396ab784b1c052e6bf96c68b8ba92a5188a5781  $APK" | sha256sum -c -)
+      - name: 保存构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: AMPP-Lyrics-single-apk-v1.1
+          path: dist/*
+          if-no-files-found: error
+      - name: 添加单 APK 附件
+        run: |
+          set -euo pipefail
+          gh release view v1.1 --json assets --jq .assets > existing-assets.json
+          for file in dist/*; do
+            name=$(basename "$file")
+            digest="sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
+            if jq -e --arg name "$name" 'any(.[]; .name == $name)' existing-assets.json >/dev/null; then
+              test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' existing-assets.json)" = "$digest"
+            else
+              gh release upload v1.1 "$file"
+            fi
+          done

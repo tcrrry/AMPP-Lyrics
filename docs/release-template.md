@@ -1,6 +1,6 @@
 # 发布说明模板
 
-当前 v1.1：确认测试、签名与归档校验通过后，附上实际 SHA-256 发布。
+以下为 v1.1 三种安装包的发布说明；未来发布请更新版本、验证范围与实际 SHA-256。
 
 ---
 
@@ -8,7 +8,7 @@
 
 基于 [Zennmn / AM-plus-plus](https://github.com/Zennmn/AM-plus-plus) 制作，融合我的[桌面歌词项目](https://github.com/tcrrry/desktop-lyrics)的多源歌词与翻译功能。
 
-![AM++ Lyrics 封面](images/ampp-lyrics-cover.jpg)
+![AM++ Lyrics 封面](https://raw.githubusercontent.com/tcrrry/AMPP-Lyrics/v1.1/docs/images/ampp-lyrics-cover.jpg)
 
 **B站视频：** 待补充
 
@@ -20,10 +20,36 @@
 
 ## 下载与安装
 
-普通用户下载 **[APKS 整合包](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks)**，通过 MT 管理器等分包安装器安装，**无需 Root、LSPosed 或另装模块 APK**。从 v1 / r25 更新可先尝试覆盖安装，安装后完全退出并重启 Apple Music。
+提供三种安装包：
 
-[模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-module.apk) 供已有兼容模块环境或自行嵌入的进阶用户使用；`.sha256` 文件只用于校验。
+| 安装包 | 下载与使用 |
+| --- | --- |
+| **APKS 整合包** | [下载 APKS](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks)，使用 MT 管理器 / SAI 等分包安装器安装。 |
+| **单 APK 整合包（试验版）** | [下载单 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)，直接交给系统安装器安装，无需分包安装器。 |
+| **模块 APK** | [下载模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-module.apk)，供已有兼容模块环境或自行嵌入的进阶用户使用，不能单独作为 Apple Music 播放器使用。 |
 
-仍基于 Apple Music 6.5.3，包含 arm64-v8a / xxxhdpi 分包；模块内部版本为 1.6.3（113）。账号、订阅和播放权限仍按原服务规则。与官方 Apple Music 签名不同；如需卸载官方版，先确认本地数据和下载音乐会被删除。
+APKS 和单 APK 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**；选择其中一种即可。`.sha256` 文件只用于校验。
+
+### 新增单 APK（2026-10-02）
+
+从 v1.1 APKS 保留的原始分包合并后重新嵌入相同模块，沿用 NPatch 1.0.7（741）、现有配置及测试签名。只改变打包形态，模块功能与 v1.1 一致。单 APK 已通过静态校验，**尚未完成实机安装、登录、播放和歌词显示测试**。
+
+两种整合包仍基于 Apple Music 6.5.3（1599），要求 Android 11 及以上，只包含 arm64-v8a / xxxhdpi 变体，并非全架构通用包；模块内部版本为 1.6.3（113）。账号、订阅和播放权限仍按原服务规则。
+
+单 APK 与当前 APKS 签名一致，但分包切换到单 APK 的覆盖安装仍需实机验证，安装器必须完整替换应用并移除旧分包；不要仅替换 base.apk。与官方 Apple Music 签名不同，不能正常覆盖官方版。卸载会删除本地数据和下载音乐，请在切换前确认保留需求。安装后完全退出并重启 Apple Music。
 
 原 v1 及开发期历史版本保留。云端未连接手机，此次排序与刷新改动仍需实际播放验收。源码沿用 GPL-3.0；第三方内容权利归各自权利人。
+
+## 验证
+
+924 项单元测试、lint 与 APK 构建通过；三分包签名、内嵌模块与 APKS 归档完整性校验通过。
+
+单 APK 静态校验：APK v2 签名有效，签名证书与 APKS 一致；内嵌模块 SHA-256 与 v1.1 模块一致；NPatch 配置一致；包名 / 版本正确、无需分包，全部 arm64 原生库内容一致。构建脚本见主分支 `scripts/package-single-apk.py`。
+
+## SHA-256
+
+```text
+e08466d26ba06c55b8f491a52e4c7bd383602f68cb3ce06af1182c0167123f10  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks
+309062ad1c1987160e493277a396ab784b1c052e6bf96c68b8ba92a5188a5781  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk
+e14317e4faedd01a9131ff4258a2f0291e8d69a30fa22278962da027e6107873  AMPP-Lyrics-module.apk
+```
