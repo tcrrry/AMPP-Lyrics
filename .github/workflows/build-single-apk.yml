@@ -1,6 +1,10 @@
 name: 构建并发布 v1.1 单 APK（试验版）
 
 on:
+  push:
+    paths:
+      - .github/workflows/build-single-apk.yml
+      - docs/release-template.md
   workflow_dispatch:
 
 permissions:
@@ -61,3 +65,12 @@ jobs:
               gh release upload v1.1 "$file"
             fi
           done
+      - name: 更新三种下载入口的发布说明
+        run: |
+          set -euo pipefail
+          python3 - <<'PYNOTES'
+          from pathlib import Path
+          template = Path('docs/release-template.md').read_text()
+          Path('release-notes.md').write_text(template.split('\n---\n\n', 1)[1])
+          PYNOTES
+          gh release edit v1.1 --notes-file release-notes.md
