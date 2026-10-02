@@ -21,6 +21,9 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;35.0.0
+          log-accepted-android-sdk-licenses: false
       - name: 下载固定输入与工具
         run: |
           set -euo pipefail
@@ -29,7 +32,6 @@ jobs:
           (cd inputs && sha256sum -c AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks.sha256)
           gh release download V1.4.9 --repo REAndroid/APKEditor --pattern '*.jar' --dir inputs
           gh release download v1.0.7 --repo 7723mod/NPatch --pattern '*.jar' --dir inputs
-          sdkmanager 'build-tools;35.0.0'
       - name: 合并、嵌入并静态校验
         run: |
           set -euo pipefail
