@@ -11,6 +11,8 @@ class CoexistenceRoutingPolicyTest {
         assertEquals("content://$target.provider/item/7?token=a#part",
             CoexistenceRoutingPolicy.contentUri(
                 "content://com.apple.android.music.provider/item/7?token=a#part", target))
+        assertEquals("$target.provider.ArtworkProvider",
+            CoexistenceRoutingPolicy.authority("com.apple.android.music.provider.ArtworkProvider", target))
         assertEquals("$target.ams.stable",
             CoexistenceRoutingPolicy.authority("com.apple.android.music.ams.stable", target))
     }

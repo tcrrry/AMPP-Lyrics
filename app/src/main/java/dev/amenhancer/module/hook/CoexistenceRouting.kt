@@ -3,6 +3,7 @@ package dev.amenhancer.module.hook
 import android.content.ComponentName
 import android.content.ContentResolver
 import android.content.Intent
+import android.content.UriMatcher
 import android.content.res.Resources
 import java.lang.reflect.Executable
 import android.net.Uri
@@ -82,6 +83,11 @@ internal object CoexistenceRoutingRuntime {
                     }
                 })
             }
+        // Provider dispatch must use the same authority as the isolated manifest
+        // and redirected client URI (notably ArtworkContentProvider's matcher).
+        hook(UriMatcher::class.java, "addURI") { param ->
+            param.args[0] = CoexistenceRoutingPolicy.authority(param.args[0] as? String, target)
+        }
         hook(Uri::class.java, "parse") { param ->
             param.args[0] = CoexistenceRoutingPolicy.contentUri(param.args[0] as? String, target)
         }
