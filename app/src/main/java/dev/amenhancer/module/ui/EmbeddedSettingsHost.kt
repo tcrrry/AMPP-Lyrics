@@ -2237,8 +2237,6 @@ internal class EmbeddedSettingsHost private constructor(
         onChooseFont: () -> Unit,
         onClearFont: () -> Unit,
     ) {
-        parent.addView(SettingsUiTheme.appearanceCard(activity, onAppearanceChanged))
-        parent.addView(embeddedSpacer(activity, 12))
         parent.addView(embeddedCard(activity, "功能", outlined = false) {
             addView(embeddedSettingRow(
                 activity,
@@ -2414,6 +2412,8 @@ internal class EmbeddedSettingsHost private constructor(
             "重启提示\n字体、双栏播放器以及标记“需重启”的设置，需要完全停止并重新打开 Apple Music 后生效。",
             onClick = { showEmbeddedHelp(activity) },
         ))
+        parent.addView(embeddedSpacer(activity, 16))
+        parent.addView(SettingsUiTheme.appearanceCard(activity, onAppearanceChanged))
     }
 
     private fun renderEmbeddedCustomLyricsPage(

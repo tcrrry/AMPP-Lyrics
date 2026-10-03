@@ -72,8 +72,6 @@ internal object TcrrryLyricsSettingsUi {
             }, fullMargin(activity, 10))
         })
 
-        parent.addView(SettingsUiTheme.appearanceCard(activity, refreshAppearance), fullMargin(activity, 12))
-
         parent.addView(card(activity).apply {
             addView(title(activity, "歌词源", 18f))
             addView(label(activity, "默认自动匹配；这里的选择只对当前歌曲记忆。已有匹配可直接切换。", 12f, SettingsUiTheme.colors(activity).secondary))
@@ -177,6 +175,8 @@ internal object TcrrryLyricsSettingsUi {
                     .onFailure { toast(activity, "无法打开系统链接设置") }
             })
         }, fullMargin(activity, 12))
+
+        parent.addView(SettingsUiTheme.appearanceCard(activity, refreshAppearance), fullMargin(activity, 12))
 
         prepareRenderPresentation(parent)
         val initial = CurrentLyricsSourceStatus.description(activity, id)

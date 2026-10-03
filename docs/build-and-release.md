@@ -76,3 +76,9 @@ python3 scripts/package-coexist-apk.py input.apks app/build/outputs/apk/debug/ap
 模块构建使用 Java 17，NPatch 打包使用 Java 21。`CoexistenceManifest.java` 移除 shared UID、隔离 Provider 和自身权限、设置独立名称，并取消 BROWSABLE 外部链接注册。模块将安装身份与原始资源命名空间分开，并在共存进程内重定向自身 Intent / Provider URI。第二版还将共存包名的动态资源查找映射回原资源命名空间，并将自身 UriMatcher authority 与隔离 Provider 保持一致，保留独立安装身份。打包脚本校验资源、原始 DEX、原生库、签名、内嵌模块及隔离结构。
 
 也可运行 GitHub Actions“构建备用共存 APK（测试版）”；它分别测试默认与共存模块身份，仅上传共存测试 APK 及其校验文件，不替换原有附件。详细测试范围见[共存评估](coexistence-feasibility.md)。
+
+## v1.2 常规版本发布
+
+`publish-v1-2.yml` 在 `fix/v1-2-default-lyrics` 分支执行完整测试、Lint 和构建后，使用 v1.1 APKS 保留的原始宿主重新嵌入新模块，生成普通单 APK、APKS 和模块 APK。工具及输入均校验 SHA-256；APKS 保留原 ABI / 密度分包，只更新主包并核对签名。单 APK 进一步核对宿主代码、资源和原生库。发布不覆盖 v1 / v1.1 附件，共存 r2 下载固定指向 v1.1。
+
+`docs/v1.2-validation.json` 保存实际源码提交、Actions 运行编号、测试结果及附件校验和。发布成功后才将该分支以快进方式同步到 `main`；如有并发修改则停止同步，不强推。

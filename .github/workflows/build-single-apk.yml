@@ -1,10 +1,6 @@
 name: 构建并发布 v1.1 单 APK
 
 on:
-  push:
-    paths:
-      - .github/workflows/build-single-apk.yml
-      - docs/release-template.md
   workflow_dispatch:
 
 permissions:

@@ -11,11 +11,12 @@ import javax.xml.parsers.DocumentBuilderFactory
 import org.xml.sax.InputSource
 
 class DesktopLyricsTtmlConverterTest {
-    @Test fun positiveOffsetAdvancesBothLineAndWordTimes() {
+    @Test fun positiveOffsetAdvancesLineTimesWithoutSynthesizingWordTimes() {
         val result = DirectLyricsRepository.Result(lyrics = "[00:01.000]one")
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 3_000L, 100))
         assertTrue(ttml.contains("<p begin=\"0:00.900\" end=\"0:02.900\""))
-        assertTrue(ttml.contains("<span begin=\"0:00.900\" end=\"0:02.900\">one</span>"))
+        assertTrue(ttml.contains(">one</p>"))
+        assertFalse(ttml.contains("<span"))
     }
     @Test fun convertsWordTimingAndOfficialTranslation() {
         val result = DirectLyricsRepository.Result(
@@ -30,19 +31,30 @@ class DesktopLyricsTtmlConverterTest {
         assertEquals(TtmlTimingMode.WORD, dev.amenhancer.module.hook.TtmlTimingPolicy.modeOf(ttml))
     }
 
-    @Test fun lineTimingHasSingleTimedSpan() {
+    @Test fun lineTimingUsesNativeLineModeWithoutTimedSpans() {
         val result = DirectLyricsRepository.Result(lyrics = "[00:01.000]one\n[00:03.000]two")
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 5_000L))
         assertTrue(ttml.contains("<p begin=\"0:01.000\" end=\"0:03.000\""))
-        assertTrue(ttml.contains("<span begin=\"0:03.000\" end=\"0:05.000\">two</span>"))
+        assertTrue(ttml.contains("<p begin=\"0:03.000\" end=\"0:05.000\" itunes:key=\"L2\">two</p>"))
+        assertEquals(TtmlTimingMode.NON_WORD, dev.amenhancer.module.hook.TtmlTimingPolicy.modeOf(ttml))
+        assertFalse(ttml.contains("<span"))
     }
 
     @Test fun plainLyricsRemainAvailableWhenNoTimestampsExist() {
         val result = DirectLyricsRepository.Result(lyrics = "first line\nsecond line", durationMs = 6_000L)
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(result))
-        assertTrue(ttml.contains(">first line</span>"))
+        assertTrue(ttml.contains(">first line</p>"))
         assertTrue(ttml.contains("<p begin=\"0:03.000\""))
-        assertTrue(ttml.contains(">second line</span>"))
+        assertTrue(ttml.contains(">second line</p>"))
+        assertEquals(TtmlTimingMode.NON_WORD, dev.amenhancer.module.hook.TtmlTimingPolicy.modeOf(ttml))
+    }
+
+    @Test fun malformedWordTrackFallsBackToLineTiming() {
+        val result = DirectLyricsRepository.Result(lyrics = "[00:01]君", wordLyrics = "not timed words")
+        val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 3000))
+        assertEquals(TtmlTimingMode.NON_WORD, dev.amenhancer.module.hook.TtmlTimingPolicy.modeOf(ttml))
+        assertFalse(DesktopLyricsTtmlConverter.hasWordTiming(result))
+        assertFalse(ttml.contains("<span"))
     }
 
     @Test fun missingTranslationKeepsItsKeyedPlaceholder() {
@@ -62,6 +74,7 @@ class DesktopLyricsTtmlConverterTest {
             source = "网易云音乐",
         )
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 7000, 100))
+        assertEquals(TtmlTimingMode.NON_WORD, dev.amenhancer.module.hook.TtmlTimingPolicy.modeOf(ttml))
         assertTrue(ttml.contains("<transliterations><transliteration xml:lang=\"ko-Latn\">"))
         assertTrue(ttml.contains("<text for=\"L1\">kimi</text><text for=\"L2\"> </text><text for=\"L3\">sora &amp; a</text>"))
         assertTrue(ttml.contains("<translations>"))

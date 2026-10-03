@@ -69,7 +69,7 @@ internal object DesktopLyricsTtmlConverter {
             append(presentation.marker())
             append("<tt xmlns=\"http://www.w3.org/ns/ttml\" ")
             append("xmlns:itunes=\"http://music.apple.com/lyric-ttml-internal\" ")
-            append("itunes:timing=\"Word\"")
+            append("itunes:timing=\"${if (words.isNotEmpty()) "Word" else "Line"}\"")
             // Match the existing AMLL converter's language workaround: Android
             // Apple Music only exposes both auxiliary tracks under this profile.
             if (hasTranslation || hasPronunciation) append(" xml:lang=\"ko\"")
@@ -97,7 +97,9 @@ internal object DesktopLyricsTtmlConverter {
                 val lineBegin = (line.start - offsetMs).coerceAtLeast(0L)
                 val lineEnd = (line.end - offsetMs).coerceAtLeast(lineBegin + 1L)
                 append("<p begin=\"${stamp(lineBegin)}\" end=\"${stamp(lineEnd)}\" itunes:key=\"L${index + 1}\">")
-                line.words.forEach { word ->
+                if (words.isEmpty()) {
+                    append(escape(line.words.joinToString("") { it.text }))
+                } else line.words.forEach { word ->
                     val wordBegin = (word.start - offsetMs).coerceAtLeast(lineBegin)
                     val wordEnd = (word.end - offsetMs).coerceAtLeast(wordBegin + 1L)
                     append("<span begin=\"${stamp(wordBegin)}\" end=\"${stamp(wordEnd)}\">${escape(word.text)}</span>")

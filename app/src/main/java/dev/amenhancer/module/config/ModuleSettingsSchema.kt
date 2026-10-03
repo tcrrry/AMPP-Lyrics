@@ -54,7 +54,7 @@ internal object ModuleSettingsSchema {
         titleCorrectionMode = values.titleCorrectionMode(),
         customLyricsEnabled = values.boolean(
             KEY_CUSTOM_LYRICS_ENABLED,
-            default = values.boolean(KEY_LEGACY_ONLINE_LYRIC_REPLACEMENT, default = false),
+            default = values.boolean(KEY_LEGACY_ONLINE_LYRIC_REPLACEMENT, default = ModuleSettings.DEFAULT_CUSTOM_LYRICS_ENABLED),
         ),
         automaticLyricsEnabled = values.boolean(KEY_AUTOMATIC_LYRICS_ENABLED, default = true),
         fontManifest = values.fontManifest(),

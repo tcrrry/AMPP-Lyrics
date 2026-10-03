@@ -54,7 +54,7 @@ class ModuleSettingsSchemaTest {
                 "apple_music_dpi_override_dpi" to 0,
                 "title_correction_enabled" to false,
                 "title_correction_mode" to "original_hyper",
-                "custom_lyrics_enabled" to false,
+                "custom_lyrics_enabled" to ModuleSettings.DEFAULT_CUSTOM_LYRICS_ENABLED,
                 "automatic_lyrics_enabled" to true,
                 "lyrics_font_enabled" to false,
                 "lyrics_font_file_id" to "",
@@ -92,7 +92,7 @@ class ModuleSettingsSchemaTest {
                 "apple_music_dpi_override_dpi" to 0,
                 "title_correction_enabled" to false,
                 "title_correction_mode" to "original_hyper",
-                "custom_lyrics_enabled" to false,
+                "custom_lyrics_enabled" to ModuleSettings.DEFAULT_CUSTOM_LYRICS_ENABLED,
                 "automatic_lyrics_enabled" to true,
                 "lyrics_font_enabled" to false,
                 "lyrics_font_file_id" to "",
@@ -265,13 +265,13 @@ class ModuleSettingsSchemaTest {
     }
 
     @Test
-    fun `custom lyrics defaults to disabled and round trips`() {
+    fun `custom lyrics defaults on for standard host and round trips`() {
         assertEquals(
-            false,
+            ModuleSettings.DEFAULT_CUSTOM_LYRICS_ENABLED,
             ModuleSettingsSchema.decode(emptyMap<String, Any?>()).customLyricsEnabled,
         )
         assertEquals(
-            false,
+            ModuleSettings.DEFAULT_CUSTOM_LYRICS_ENABLED,
             ModuleSettingsSchema.decode(
                 mapOf("custom_lyrics_enabled" to "not-a-boolean"),
             ).customLyricsEnabled,
@@ -285,6 +285,13 @@ class ModuleSettingsSchemaTest {
             true,
             ModuleSettingsSchema.decode(encoded).customLyricsEnabled,
         )
+    }
+
+    @Test
+    fun `explicitly disabled current and legacy replacements remain disabled`() {
+        assertEquals(false, ModuleSettingsSchema.decode(mapOf("custom_lyrics_enabled" to false)).customLyricsEnabled)
+        assertEquals(false, ModuleSettingsSchema.decode(mapOf("online_lyric_replacement_enabled" to false)).customLyricsEnabled)
+        assertEquals(ModuleSettings.DEFAULT_CUSTOM_LYRICS_ENABLED, ModuleSettings().customLyricsEnabled)
     }
 
     @Test

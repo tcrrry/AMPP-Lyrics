@@ -1,0 +1,139 @@
+name: 构建并发布 AM++ Lyrics v1.2
+on:
+  push:
+    branches: [fix/v1-2-default-lyrics]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-v1-2
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 测试、Lint 与构建
+        id: validation
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-glass-reference.py
+          chmod +x gradlew
+          ./gradlew test :app:lintDebug :glass:lintDebug :glass-lab:lintDebug :app:assembleDebug :glass-lab:assembleDebug :glass-lab:assembleDebugAndroidTest --no-daemon 2>&1 | tee /tmp/v1.2-build.log
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;35.0.0
+          log-accepted-android-sdk-licenses: false
+      - name: 下载已发布输入与固定工具
+        id: inputs
+        run: |
+          set -euo pipefail
+          mkdir inputs dist
+          for tag in v1 v1.1; do
+            gh release view "$tag" --json assets --jq '.assets | map({id, name, digest, size}) | sort_by(.name)' > "/tmp/$tag-before.json"
+          done
+          gh release download v1.1 --pattern 'AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks*' --dir inputs
+          (cd inputs && sha256sum -c AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks.sha256)
+          echo 'e08466d26ba06c55b8f491a52e4c7bd383602f68cb3ce06af1182c0167123f10  inputs/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks' | sha256sum -c -
+          gh release download V1.4.9 --repo REAndroid/APKEditor --pattern '*.jar' --dir inputs
+          gh release download v1.0.7 --repo 7723mod/NPatch --pattern '*.jar' --dir inputs
+      - name: 打包普通 APK、APKS 与模块
+        id: package
+        run: |
+          set -euo pipefail
+          cp app/build/outputs/apk/debug/app-debug.apk dist/AMPP-Lyrics-module.apk
+          (cd dist && sha256sum AMPP-Lyrics-module.apk > AMPP-Lyrics-module.apk.sha256)
+          python3 scripts/package-updated-apks.py \
+            --source inputs/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks \
+            --module dist/AMPP-Lyrics-module.apk \
+            --output dist/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks \
+            --npatch inputs/jar-v1.0.7-741-release.jar \
+            --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          python3 scripts/package-single-apk.py \
+            dist/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks \
+            dist/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk \
+            --editor inputs/APKEditor-1.4.9.jar \
+            --npatch inputs/jar-v1.0.7-741-release.jar \
+            --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            --aapt2 "$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          (cd dist && sha256sum -c *.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AMPP-Lyrics-v1.2
+          path: dist/*
+          if-no-files-found: error
+      - name: 发布 v1.2 并保留历史文件
+        id: release
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          checksums = '\n'.join(p.read_text().strip() for p in sorted(Path('dist').glob('*.sha256')))
+          Path('/tmp/release-notes.md').write_text(Path('docs/release-v1.2.md').read_text() + '\n\n## 构建验证\n\n完整单元测试、三模块 Lint、模块及测试 APK 构建通过。签名、资源、宿主 DEX、原生库和嵌入模块已静态校验；手机实机效果仍需安装确认。\n\n## SHA-256\n\n```text\n' + checksums + '\n```\n')
+          PY
+          if ! git ls-remote --exit-code origin refs/tags/v1.2 >/dev/null; then
+            git tag v1.2 "$GITHUB_SHA"
+            git push origin refs/tags/v1.2
+          fi
+          if ! gh release view v1.2 >/dev/null 2>&1; then
+            gh release create v1.2 --target "$GITHUB_SHA" --draft --title 'AM++ Lyrics · 歌词增强版 v1.2' --notes-file /tmp/release-notes.md
+          fi
+          test "$(git ls-remote origin refs/tags/v1.2 | cut -f1)" = "$GITHUB_SHA"
+          gh release view v1.2 --json assets --jq .assets > /tmp/v1.2-assets.json
+          for file in dist/*; do
+            name=$(basename "$file")
+            if jq -e --arg name "$name" 'any(.[]; .name == $name)' /tmp/v1.2-assets.json >/dev/null; then
+              test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' /tmp/v1.2-assets.json)" = "sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
+            else
+              gh release upload v1.2 "$file"
+            fi
+          done
+          for tag in v1 v1.1; do
+            gh release view "$tag" --json assets --jq '.assets | map({id, name, digest, size}) | sort_by(.name)' > "/tmp/$tag-after.json"
+            cmp "/tmp/$tag-before.json" "/tmp/$tag-after.json"
+          done
+          gh release edit v1.2 --draft=false --prerelease=false --latest --notes-file /tmp/release-notes.md
+      - name: 保存验证记录并更新默认分支
+        if: always()
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, xml.etree.ElementTree as ET
+          steps = json.loads(os.environ['STEPS_JSON'])
+          data = {'source': os.environ['GITHUB_SHA'], 'run': os.environ['GITHUB_RUN_ID'], 'steps': {k: v.get('conclusion') for k,v in steps.items()}, 'tests': {}}
+          for module in ('app','glass'):
+              suites = [ET.parse(p).getroot() for p in pathlib.Path(module, 'build/test-results/testDebugUnitTest').glob('TEST-*.xml')]
+              data['tests'][module] = {k: sum(int(s.get(k,0)) for s in suites) for k in ('tests','failures','errors','skipped')}
+          data['checksums'] = [p.read_text().strip() for p in sorted(pathlib.Path('dist').glob('*.sha256'))]
+          pathlib.Path('docs/v1.2-validation.json').write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+          log = pathlib.Path('/tmp/v1.2-build.log')
+          if steps.get('validation',{}).get('conclusion') == 'failure' and log.exists():
+              pathlib.Path('docs/v1.2-build-failure.txt').write_text('\n'.join(log.read_text().splitlines()[-100:])+'\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/v1.2-validation.json
+          if test -f docs/v1.2-build-failure.txt; then git add docs/v1.2-build-failure.txt; fi
+          git commit -m 'docs: record v1.2 build and publication results [skip ci]'
+          git push origin "HEAD:refs/heads/$GITHUB_REF_NAME"
+          if test '${{ steps.release.conclusion }}' = success; then
+            git push origin HEAD:refs/heads/main
+          fi
