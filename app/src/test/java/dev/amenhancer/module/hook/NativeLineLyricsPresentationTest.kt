@@ -30,6 +30,8 @@ class NativeLineLyricsPresentationTest {
     private val translation = text()
     private fun params(view: View) = view.layoutParams as PronunciationHeaderLayoutTest.HostParams
     init {
+        pronunciation.setTextColor(Color.WHITE); translation.setTextColor(Color.WHITE)
+        pronunciation.alpha = 0.35f; translation.alpha = 0.35f
         params(original).apply { topToTop = 0; bottomToTop = pronunciation.id }
         params(pronunciation).apply { topToBottom = original.id; bottomToTop = translation.id }
         params(translation).apply { topToBottom = pronunciation.id; bottomToBottom = 0 }
@@ -90,5 +92,9 @@ class NativeLineLyricsPresentationTest {
         assertEquals(pronunciation.id, params(translation).topToBottom)
         assertEquals(0.35f, NativeLyricsPronunciationSubtitle.protectedAlpha(pronunciation, 0.35f), 0f)
         assertEquals(Color.WHITE, NativeLyricsPronunciationSubtitle.protectedColor(translation, Color.WHITE))
+        assertEquals(Color.WHITE, pronunciation.currentTextColor)
+        assertEquals(Color.WHITE, translation.currentTextColor)
+        assertEquals(0.35f, pronunciation.alpha, 0f)
+        assertEquals(0.35f, translation.alpha, 0f)
     }
 }

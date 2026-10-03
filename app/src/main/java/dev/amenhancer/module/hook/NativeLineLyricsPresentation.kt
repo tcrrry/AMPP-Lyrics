@@ -1,5 +1,6 @@
 package dev.amenhancer.module.hook
 
+import android.content.res.ColorStateList
 import android.view.View
 import android.widget.TextView
 import java.lang.ref.WeakReference
@@ -8,13 +9,15 @@ import java.util.WeakHashMap
 /** Line lyrics have three bound views. Preserve binding identities and change only anchors. */
 internal object NativeLineLyricsPresentation {
     private val names = listOf("topToTop", "topToBottom", "bottomToTop", "bottomToBottom")
-    private data class Saved(val view: WeakReference<TextView>, val anchors: List<Int>)
+    private data class Saved(val view: WeakReference<TextView>, val anchors: List<Int>, val colors: ColorStateList, val alpha: Float)
     private val rows = WeakHashMap<View, List<Saved>>()
 
     internal fun clear(root: View) {
         for (saved in rows.remove(root).orEmpty()) {
             val view = saved.view.get() ?: continue
             NativeLyricsPronunciationSubtitle.releaseAuxiliary(view)
+            view.setTextColor(saved.colors)
+            view.alpha = saved.alpha
             val params = view.layoutParams
             names.zip(saved.anchors).forEach { (name, value) -> PronunciationHeaderLayout.field(params.javaClass, name).setInt(params, value) }
             view.layoutParams = params
@@ -25,7 +28,7 @@ internal object NativeLineLyricsPresentation {
         check(original.parent === pronunciation.parent && original.parent === translation.parent)
         if (!rows.containsKey(root)) {
             rows[root] = listOf(original, pronunciation, translation).map { view ->
-                Saved(WeakReference(view), names.map { PronunciationHeaderLayout.field(view.layoutParams.javaClass, it).getInt(view.layoutParams) })
+                Saved(WeakReference(view), names.map { PronunciationHeaderLayout.field(view.layoutParams.javaClass, it).getInt(view.layoutParams) }, view.textColors, view.alpha)
             }
         }
         fun anchors(view: TextView, values: List<Int>) {

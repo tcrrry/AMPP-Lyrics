@@ -32,6 +32,7 @@ class PronunciationSubtitlePolicyTest {
         val pointer = Any()
         NativeLyricsPronunciationSubtitle.remember(pointer, "$marker<tt itunes:timing=\"Word\"></tt>")
         assertTrue(NativeLyricsPronunciationSubtitle.isManaged(pointer))
+        assertTrue(NativeLyricsPronunciationSubtitle.hasManagedPronunciation(pointer))
         assertFalse(NativeLyricsPronunciationSubtitle.isManaged(Any()))
         NativeLyricsPronunciationSubtitle.remember(pointer, "$marker<tt itunes:timing=\"Line\"></tt>")
         assertTrue(NativeLyricsPronunciationSubtitle.isManagedLine(pointer))
@@ -42,5 +43,6 @@ class PronunciationSubtitlePolicyTest {
         val pointer = Any()
         NativeLyricsPronunciationSubtitle.remember(pointer, "$marker<tt itunes:timing=\"Word\"></tt>")
         assertTrue(NativeLyricsPronunciationSubtitle.isManagedWord(pointer))
+        assertFalse(NativeLyricsPronunciationSubtitle.hasManagedPronunciation(pointer))
     }
 }

@@ -10,7 +10,8 @@ import java.util.WeakHashMap
 
 /** Keep managed auxiliary tracks ordered and outside original-lyrics highlighting. */
 internal object NativeLyricsPronunciationSubtitle {
-    private val managed = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
+    private data class Managed(val word: Boolean, val pronunciation: Boolean)
+    private val managed = Collections.synchronizedMap(WeakHashMap<Any, Managed>())
     internal data class Selection(val owner: Any, val lineId: Int, val pronunciation: Boolean, val translation: Boolean) {
         companion object {
             fun resolve(owner: Any, lineId: Int, pronunciation: Boolean, translation: Boolean, parent: Selection?): Selection {
@@ -94,15 +95,18 @@ internal object NativeLyricsPronunciationSubtitle {
     private val selection = ThreadLocal<Selection?>()
 
     fun remember(pointer: Any, ttml: String) {
-        if (DesktopLyricsPresentation.fromTtml(ttml) != null) {
-            managed[pointer] = TtmlTimingPolicy.isWord(ttml)
+        val presentation = DesktopLyricsPresentation.fromTtml(ttml)
+        if (presentation != null) {
+            managed[pointer] = Managed(TtmlTimingPolicy.isWord(ttml), presentation.pronunciation)
         } else managed.remove(pointer)
     }
 
     internal fun isManaged(pointer: Any?): Boolean = pointer != null && managed.containsKey(pointer)
 
-    internal fun isManagedWord(pointer: Any?): Boolean = pointer != null && managed[pointer] == true
-    internal fun isManagedLine(pointer: Any?): Boolean = pointer != null && managed[pointer] == false
+    internal fun isManagedWord(pointer: Any?): Boolean = pointer != null && managed[pointer]?.word == true
+    internal fun isManagedLine(pointer: Any?): Boolean = pointer != null && managed[pointer]?.word == false
+
+    internal fun hasManagedPronunciation(pointer: Any?): Boolean = pointer != null && managed[pointer]?.pronunciation == true
 
     fun install(loader: ClassLoader, build: TargetBuild = TargetBuild.UNKNOWN) {
         val modern = build.versionName == "7.0.0-beta" && build.versionCode == 1606L
@@ -167,7 +171,7 @@ internal object NativeLyricsPronunciationSubtitle {
                     val selected = selection.get() ?: return
                     if (!selected.pronunciation || param.throwable != null) return
                     runCatching {
-                        if (selected.owner !== param.thisObject) return@runCatching
+                        if (selected.owner !== param.thisObject || !hasManagedPronunciation(pointer.invoke(param.thisObject))) return@runCatching
                         val value = nativeLine.get() ?: return@runCatching
                         val container = param.args[2] as ViewGroup
                         if (!PronunciationHeaderLayout.supports(container)) return@runCatching
