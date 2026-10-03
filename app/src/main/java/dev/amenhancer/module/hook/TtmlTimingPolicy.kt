@@ -7,7 +7,7 @@ import java.util.LinkedHashMap
  * Keep the raw-TTML check small and deterministic so the parser seam can bind
  * the observed mode to the exact pointer later received by I2.
  */
-internal enum class TtmlTimingMode {
+enum class TtmlTimingMode {
     WORD,
     NON_WORD,
 }
@@ -18,7 +18,7 @@ internal enum class TtmlTimingMode {
  * be guessed from lyric text, but non-Word timing remains eligible regardless
  * of language.
  */
-internal data class TtmlDocumentMetadata(
+data class TtmlDocumentMetadata(
     val timingMode: TtmlTimingMode,
     val language: String?,
     val hasTranslation: Boolean,
@@ -56,7 +56,7 @@ internal data class TtmlDocumentMetadata(
     }
 }
 
-internal object TtmlTimingPolicy {
+object TtmlTimingPolicy {
     private val rootTag = Regex("""(?is)<tt\b[^>]*>""")
     private val timingAttribute = Regex(
         """(?is)(?:[A-Za-z_][\w.-]*:)?timing\s*=\s*(?:"([^"]*)"|'([^']*)')""",
@@ -122,7 +122,7 @@ internal object TtmlTimingPolicy {
  * retaining JavaCPP pointer wrappers (and their native addresses) after Apple
  * releases a lyric document.
  */
-internal class TtmlTimingObservationRegistry(
+class TtmlTimingObservationRegistry(
     private val maxEntries: Int = DEFAULT_MAX_ENTRIES,
 ) {
     private data class Observation(

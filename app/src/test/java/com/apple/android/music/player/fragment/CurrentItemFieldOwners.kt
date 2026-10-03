@@ -2,8 +2,13 @@ package com.apple.android.music.player.fragment
 
 import com.apple.android.music.model.BaseContentItem
 
-class e {
-    class c
+open class e : l() {
+    class c {
+        @JvmField var a = true
+        @JvmField var b = false
+        @JvmField var c = false
+    }
+    @JvmField var b0: BaseContentItem? = null
 }
 
 /**

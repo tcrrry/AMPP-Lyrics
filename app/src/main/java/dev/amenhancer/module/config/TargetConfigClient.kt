@@ -2,7 +2,6 @@ package dev.amenhancer.module.config
 
 import android.content.SharedPreferences
 import android.os.ParcelFileDescriptor
-import dev.amenhancer.module.hook.ModernXposedRuntime
 import dev.amenhancer.module.model.CustomLyricsManifest
 import dev.amenhancer.module.model.FeatureHealth
 import dev.amenhancer.module.model.ModuleSettings
@@ -12,6 +11,7 @@ class TargetConfigClient private constructor(
     private val valuesProvider: () -> Map<String, *>,
     private val fileOpener: ((String) -> InputStream)?,
     private val remoteFileOpener: ((String) -> ParcelFileDescriptor)?,
+    private val healthReporter: (FeatureHealth) -> Unit = {},
 ) {
     constructor(
         preferences: SharedPreferences,
@@ -24,8 +24,9 @@ class TargetConfigClient private constructor(
         remoteFileOpener = remoteFileOpener,
     )
 
-    internal constructor(reader: ConfigurationReader) : this(
+    constructor(reader: ConfigurationReader, healthReporter: (FeatureHealth) -> Unit = {}) : this(
         valuesProvider = reader::values,
+        healthReporter = healthReporter,
         fileOpener = { name -> reader.openFile(name) ?: error("Configuration file is unavailable: $name") },
         remoteFileOpener = { name ->
             reader.openFileDescriptor(name)
@@ -72,9 +73,7 @@ class TargetConfigClient private constructor(
         runCatching { remoteFileOpener?.invoke(name) }.getOrNull()
 
     fun reportHealth(health: FeatureHealth) {
-        ModernXposedRuntime.log(
-            "${health.feature}: ${health.state} - ${health.message} [${health.targetVersion}]",
-        )
+        healthReporter(health)
     }
 
     companion object {

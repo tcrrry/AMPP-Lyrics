@@ -51,24 +51,24 @@ class GlassGeometryTest {
     }
 
     @Test fun hostFormsShareOneSeamWhitelist() {
-        assertTrue(GlassPolicy.supports(33, 1586, "6.5.2", GlassHostForm.PhoneStacked))
-        assertTrue(GlassPolicy.supports(33, 1586, "6.5.2", GlassHostForm.TabletDualPane))
-        assertTrue(GlassPolicy.supports(36, 1599, "6.5.3", GlassHostForm.TabletDualPane))
-        assertFalse(GlassPolicy.supports(32, 1586, "6.5.2", GlassHostForm.TabletDualPane))
-        assertFalse(GlassPolicy.supports(32, 1599, "6.5.3", GlassHostForm.PhoneStacked))
-        assertFalse(GlassPolicy.supports(36, 1583, "6.5.1", GlassHostForm.PhoneStacked))
-        assertFalse(GlassPolicy.supports(36, 1587, "6.5.2", GlassHostForm.TabletDualPane))
-        assertFalse(GlassPolicy.supports(36, 1599, "6.5.4", GlassHostForm.TabletDualPane))
+        assertTrue(GlassPolicy.supports(33, true, GlassHostForm.PhoneStacked))
+        assertTrue(GlassPolicy.supports(33, true, GlassHostForm.TabletDualPane))
+        assertTrue(GlassPolicy.supports(36, true, GlassHostForm.TabletDualPane))
+        assertFalse(GlassPolicy.supports(32, true, GlassHostForm.TabletDualPane))
+        assertFalse(GlassPolicy.supports(32, true, GlassHostForm.PhoneStacked))
+        assertFalse(GlassPolicy.supports(36, false, GlassHostForm.PhoneStacked))
+        assertFalse(GlassPolicy.supports(36, false, GlassHostForm.TabletDualPane))
+        assertFalse(GlassPolicy.supports(36, false, GlassHostForm.TabletDualPane))
     }
 
     @Test fun legacyTabletFlagKeepsPhoneOnlySemantics() {
         // phone = !tablet: the legacy overload keeps rejecting tablets while delegating
         // the build check to the form overload.
-        assertTrue(GlassPolicy.supports(33, 1586, "6.5.2", false))
-        assertTrue(GlassPolicy.supports(36, 1599, "6.5.3", false))
-        assertFalse(GlassPolicy.supports(33, 1586, "6.5.2", true))
-        assertFalse(GlassPolicy.supports(36, 1599, "6.5.3", true))
-        assertFalse(GlassPolicy.supports(32, 1586, "6.5.2", false))
-        assertFalse(GlassPolicy.supports(36, 1587, "6.5.2", false))
+        assertTrue(GlassPolicy.supports(33, true, false))
+        assertTrue(GlassPolicy.supports(36, true, false))
+        assertFalse(GlassPolicy.supports(33, true, true))
+        assertFalse(GlassPolicy.supports(36, true, true))
+        assertFalse(GlassPolicy.supports(32, true, false))
+        assertFalse(GlassPolicy.supports(36, false, false))
     }
 }

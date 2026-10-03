@@ -19,6 +19,7 @@ import java.util.WeakHashMap
  */
 internal class AppleMusicCjkKaraokeAnimationTarget(
     private val symbols: TargetSymbolResolver,
+    private val foregroundTextField: String = "U",
 ) : CjkKaraokeAnimationTarget {
     private val a0Depth: ThreadLocal<Int> = ThreadLocal.withInitial { 0 }
     private val a0SingleWordStack: ThreadLocal<MutableList<CjkEntryState?>> =
@@ -126,7 +127,7 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
         }
 
         return TargetCapabilityInstall.Active(
-            "Installed exact 6.5.2/1586 single-unmerged-CJK glow end cleanup",
+            "Installed exact single-unmerged-CJK glow end cleanup: ${a0.toGenericString()}",
         )
     }
 
@@ -338,7 +339,7 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
         }
         val views = mutableListOf<Any>()
         bindings.forEach { binding ->
-            val view = binding?.let { readNamedField(it, "U") } ?: return@forEach
+            val view = binding?.let { readNamedField(it, foregroundTextField) } ?: return@forEach
             if (views.none { it === view }) views += view
         }
         return views
@@ -579,22 +580,6 @@ internal fun hasNewCjkGlowAnimator(
     before: Collection<Any>,
     after: Collection<Any>,
 ): Boolean = after.any { candidate -> before.none { previous -> previous === candidate } }
-
-/** Returns true for the CJK blocks used by the host's karaoke classifier. */
-internal fun containsCjkKaraokeScript(text: CharSequence): Boolean {
-    for (index in text.indices) {
-        when (Character.UnicodeBlock.of(text[index])) {
-            Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS,
-            Character.UnicodeBlock.HIRAGANA,
-            Character.UnicodeBlock.KATAKANA,
-            Character.UnicodeBlock.HANGUL_SYLLABLES,
-            Character.UnicodeBlock.HANGUL_JAMO,
-            Character.UnicodeBlock.HANGUL_COMPATIBILITY_JAMO,
-            -> return true
-        }
-    }
-    return false
-}
 
 private fun containsHangul(text: CharSequence): Boolean {
     for (index in text.indices) {

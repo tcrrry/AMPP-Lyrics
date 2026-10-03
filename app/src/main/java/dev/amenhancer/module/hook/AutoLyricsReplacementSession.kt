@@ -1,8 +1,19 @@
 package dev.amenhancer.module.hook
 
 import android.app.Application
+import dev.amenhancer.module.config.EmbeddedConfigurationSession
+import dev.amenhancer.module.config.EmbeddedContentManager
+import dev.amenhancer.module.config.HostPrivateEmbeddedStorage
+import dev.amenhancer.module.lyrics.CustomLyricsDraft
 import dev.amenhancer.module.lyrics.CustomLyricsFilePolicy
+import dev.amenhancer.module.lyrics.CustomLyricsSaveResult
 import dev.amenhancer.module.lyrics.TtmlInputPolicy
+import dev.amenhancer.module.lyrics.source.AmLyricsClient
+import dev.amenhancer.module.lyrics.source.AmllTtmlClient
+import dev.amenhancer.module.lyrics.source.AutoLyricsSourceResolver
+import dev.amenhancer.module.lyrics.source.FileLunabeatCatalogCache
+import dev.amenhancer.module.lyrics.source.HttpLyricTransport
+import dev.amenhancer.module.lyrics.source.LunabeatClient
 import dev.amenhancer.module.model.CustomLyricsSources
 import java.io.File
 import java.io.FileInputStream
@@ -11,57 +22,16 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.LinkedHashMap
-import java.util.concurrent.Executor
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.FutureTask
 import org.json.JSONArray
 
+
 private const val AUTO_CACHE_DIRECTORY = "ampp-auto-lyrics-desktop-v11"
-
-/** A validated candidate returned by one of the automatic lyric sources. */
-internal data class AutoLyricsCandidate(
-    val source: String,
-    val ttml: String,
-    val displayName: String? = null,
-)
-
-/** Persistent raw-TTML cache seam; all calls happen off the I2/main hot path. */
-internal interface AutoLyricsCache {
-    fun read(appleMusicId: Long): String?
-    fun write(appleMusicId: Long, ttml: String): Boolean
-    fun delete(appleMusicId: Long): Boolean = false
-    fun cachedIds(): List<Long> = emptyList()
-}
-
-internal enum class AutoLyricsPublishResult {
-    PUBLISHED,
-    ALREADY_CONFIGURED,
-    FAILED,
-}
-
-/** Publishes a validated automatic lyric into the normal configured index. */
-internal fun interface AutoLyricsPublisher {
-    fun publish(appleMusicId: Long, candidate: AutoLyricsCandidate): AutoLyricsPublishResult
-}
-
-/** No-op cache used when a target adapter cannot provide host-private storage. */
-internal object DisabledAutoLyricsCache : AutoLyricsCache {
-    override fun read(appleMusicId: Long): String? = null
-    override fun write(appleMusicId: Long, ttml: String): Boolean = false
-}
-
-/** Target-process wiring for the opt-in automatic resolver. */
-internal data class AutoLyricsRuntime(
-    val resolver: AutoLyricsSourceResolver,
-    val cache: AutoLyricsCache,
-    val executor: Executor,
-    val publisher: AutoLyricsPublisher? = null,
-    val suppressedIds: Set<Long> = emptySet(),
-    val invalidateSearch: (Long) -> Unit = {},
-)
 
 internal fun createAutoLyricsRuntime(
     application: Application,
@@ -113,7 +83,7 @@ internal fun createAutoLyricsRuntime(
         TimeUnit.MILLISECONDS,
         // Song changes must not wait for the previous song's fallback network requests.
         ArrayBlockingQueue(4),
-        { runnable -> Thread(runnable, "ampp-auto-lyrics").apply { isDaemon = true } },
+        { runnable -> Thread(runnable, "ampp-auto-lyrics-desktop-v11").apply { isDaemon = true } },
         // Rejection is handled by ensureRequested, which clears its pending marker.
         ThreadPoolExecutor.AbortPolicy(),
     )
@@ -127,13 +97,58 @@ internal fun createAutoLyricsRuntime(
     )
 }
 
+
+
+
+/** A validated candidate returned by one of the automatic lyric sources. */
+data class AutoLyricsCandidate(
+    val source: String,
+    val ttml: String,
+    val displayName: String? = null,
+)
+
+/** Persistent raw-TTML cache seam; all calls happen off the I2/main hot path. */
+interface AutoLyricsCache {
+    fun read(appleMusicId: Long): String?
+    fun write(appleMusicId: Long, ttml: String): Boolean
+    fun delete(appleMusicId: Long): Boolean = false
+    fun cachedIds(): List<Long> = emptyList()
+}
+
+enum class AutoLyricsPublishResult {
+    PUBLISHED,
+    ALREADY_CONFIGURED,
+    FAILED,
+}
+
+/** Publishes a validated automatic lyric into the normal configured index. */
+fun interface AutoLyricsPublisher {
+    fun publish(appleMusicId: Long, candidate: AutoLyricsCandidate): AutoLyricsPublishResult
+}
+
+/** No-op cache used when a target adapter cannot provide host-private storage. */
+object DisabledAutoLyricsCache : AutoLyricsCache {
+    override fun read(appleMusicId: Long): String? = null
+    override fun write(appleMusicId: Long, ttml: String): Boolean = false
+}
+
+/** Target-process wiring for the opt-in automatic resolver. */
+data class AutoLyricsRuntime(
+    val resolver: AutoLyricsSourceResolver,
+    val cache: AutoLyricsCache,
+    val executor: Executor,
+    val publisher: AutoLyricsPublisher? = null,
+    val suppressedIds: Set<Long> = emptySet(),
+    val invalidateSearch: (Long) -> Unit = {},
+)
+
 /**
  * Small atomic file cache kept outside the user-managed custom-lyrics index.
  * The raw TTML is useful across Apple Music process restarts; native pointers
  * are deliberately never persisted because their JavaCPP address is process
  * local. A compact ID index bounds disk growth and lets old files be removed.
  */
-internal class FileAutoLyricsCache(
+class FileAutoLyricsCache(
     private val directory: File,
     private val maxEntries: Int = MAX_ENTRIES,
     private val maxBytes: Long = MAX_CACHE_BYTES,
@@ -259,7 +274,7 @@ internal class FileAutoLyricsCache(
  * Prepares automatic replacements off-hook. The I2 path only checks the
  * bounded native-pointer cache and queues this session when it is cold.
  */
-internal class AutoLyricsReplacementSession(
+class AutoLyricsReplacementSession(
     private val fetchCandidate: (Long) -> AutoLyricsCandidate?,
     private val cache: AutoLyricsCache,
     private val parseTtml: (String) -> Any?,

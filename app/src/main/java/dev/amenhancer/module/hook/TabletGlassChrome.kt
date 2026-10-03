@@ -3,7 +3,7 @@ package dev.amenhancer.module.hook
 import android.view.View
 
 /** Single-writer arbitration between the dual-pane flat boundary sync and the tablet glass session. */
-internal object TabletGlassChrome {
+object TabletGlassChrome {
     private val activeRoots: MutableSet<View> =
         java.util.Collections.newSetFromMap(java.util.WeakHashMap())
 

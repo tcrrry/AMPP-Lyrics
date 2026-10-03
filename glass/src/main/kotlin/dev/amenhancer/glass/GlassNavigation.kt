@@ -3,6 +3,11 @@ package dev.amenhancer.glass
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -28,6 +33,8 @@ import com.kyant.backdrop.catalog.components.LiquidBottomTabs
 
 data class GlassTab(val id: Int, val title: String, val icon: Drawable?, val enabled: Boolean)
 
+enum class GlassNavigationStyle { Stacked, TabletLabels }
+
 @Composable
 fun GlassNavigation(
     tabs: List<GlassTab>,
@@ -38,6 +45,10 @@ fun GlassNavigation(
     onSelect: (Int) -> Int,
     panelHeight: Dp = GlassPolicy.NAV_HEIGHT_DP.dp,
     panelBlur: Dp = GlassPolicy.PANEL_BLUR_DP.dp,
+    style: GlassNavigationStyle = GlassNavigationStyle.Stacked,
+    drawerIcon: Drawable? = null,
+    drawerDescription: String = "",
+    onDrawer: (() -> Unit)? = null,
 ) {
     // The reference drag animation normalizes by tabsCount - 1. Keep a one-tab host native.
     if (tabs.size < 2) return
@@ -62,6 +73,19 @@ fun GlassNavigation(
             accentOverride = accent,
             panelHeight = panelHeight,
             panelBlur = panelBlur,
+            leadingWidth = if (onDrawer == null) 0.dp else panelHeight - 8.dp,
+            leadingContent = onDrawer?.let { open -> {
+                Box(Modifier.width(panelHeight - 8.dp).fillMaxHeight()
+                    .semantics { contentDescription = drawerDescription }
+                    .clickable(onClick = open), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.size(24.dp)) {
+                        drawerIcon?.let { icon ->
+                            icon.setBounds(0, 0, size.width.toInt(), size.height.toInt())
+                            icon.draw(drawContext.canvas.nativeCanvas)
+                        }
+                    }
+                }
+            } },
         ) {
             tabs.forEach { tab ->
                 LiquidBottomTab(
@@ -71,7 +95,7 @@ fun GlassNavigation(
                         contentDescription = tab.title
                     },
                 ) {
-                    Canvas(Modifier.size(24.dp)) {
+                    if (style == GlassNavigationStyle.Stacked || tab.icon != null) Canvas(Modifier.size(24.dp)) {
                         tab.icon?.let { icon ->
                             val save = drawContext.canvas.nativeCanvas.save()
                             try {
@@ -80,7 +104,10 @@ fun GlassNavigation(
                             } finally { drawContext.canvas.nativeCanvas.restoreToCount(save) }
                         }
                     }
-                    BasicText(tab.title, style = TextStyle(color = foreground, fontSize = 11.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (style == GlassNavigationStyle.Stacked || tab.icon == null)
+                        BasicText(tab.title, style = TextStyle(color = foreground,
+                            fontSize = if (style == GlassNavigationStyle.Stacked) 11.sp else 14.sp),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

@@ -8,7 +8,7 @@ package dev.amenhancer.module.font
  * retry, because retrying cannot repair corrupted data. Android-free so the
  * decision can be unit-tested directly.
  */
-internal object FontLoadRetryPolicy {
+object FontLoadRetryPolicy {
     /** Total attempts per process start, including the first one. */
     const val MAX_ATTEMPTS = 3
 

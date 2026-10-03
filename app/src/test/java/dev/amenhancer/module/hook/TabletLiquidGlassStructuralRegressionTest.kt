@@ -8,14 +8,32 @@ import org.junit.Test
 /**
  * Guards the tablet dual-pane + liquid-glass combination contract: the tablet session is
  * gated behind the dual-pane form and the shared toggle, the dual-pane boundary sync stays
- * muted while glass owns the collapsed geometry, and the configuration schema is untouched
- * (no new keys, no migration).
+ * muted while glass owns the collapsed geometry, and the tablet form continues to reuse
+ * the existing glass keys under the current configuration schema.
  */
 class TabletLiquidGlassStructuralRegressionTest {
     private fun source(relativePath: String): String = sequenceOf(
         File("src/main/java/$relativePath"),
         File("app/src/main/java/$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found from the unit-test working directory")
 
     /** Collapses line wraps so multi-line expressions can be matched as written prose. */
@@ -38,7 +56,10 @@ class TabletLiquidGlassStructuralRegressionTest {
             constructionSites.isNotEmpty(),
         )
         constructionSites.forEach { (build, text) ->
-            val gates = text.substring(maxOf(0, build - 600), build)
+            val gates = normalized(runtime).substringAfter("private fun desiredSessionType")
+                .substringBefore("private fun fail")
+            assertTrue(runtime.contains("val desired = desiredSessionType(activity, config)"))
+            assertTrue(text.substring(maxOf(0, build - 600), build).contains("if (desired == TabletDualPaneGlassSession::class.java)"))
             assertTrue(gates.contains("TabletModeQualifier.isEligible"))
             assertTrue(gates.contains("phoneLiquidGlassEnabled"))
         }
@@ -93,7 +114,7 @@ class TabletLiquidGlassStructuralRegressionTest {
         assertTrue(base.contains("restoreInteraction(nav)"))
         assertTrue(session.contains("!glassMenuReady"))
         assertTrue(session.contains("TabletGlassLayoutPolicy.containsEither"))
-        assertTrue(runtime.contains("it.shouldPassThroughTouch(root, event)"))
+        assertTrue(runtime.contains("it.shouldPassThroughTouch(view,event)"))
         assertTrue(runtime.contains("it.shouldBypassPlayerIntercept(event)"))
         // Apple binds both native click and long-click to mini_player_touch_panel.
         assertTrue(!session.contains("setOnClickListener"))
@@ -122,7 +143,7 @@ class TabletLiquidGlassStructuralRegressionTest {
     }
 
     @Test
-    fun `keeps the glass configuration keys and schema version unchanged`() {
+    fun `keeps the glass configuration keys under schema 15`() {
         val schema = source("dev/amenhancer/module/config/ModuleSettingsSchema.kt")
         val constants = source("dev/amenhancer/module/ModuleConstants.kt")
 
@@ -138,6 +159,7 @@ class TabletLiquidGlassStructuralRegressionTest {
             ),
             glassKeys,
         )
-        assertTrue(constants.contains("const val CONFIG_SCHEMA_VERSION = 14"))
+        // Schema 15 adds the independent cellular setting; glass still reuses its original keys.
+        assertTrue(constants.contains("const val CONFIG_SCHEMA_VERSION = 15"))
     }
 }

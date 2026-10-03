@@ -1,8 +1,12 @@
 package dev.amenhancer.module.hook
 
-import android.app.Application
-import dev.amenhancer.module.config.TargetConfigClient
-import dev.amenhancer.module.model.CustomLyricsEntry
+
+
+internal fun TargetCapabilityInstall.toFeatureInstallResult(): FeatureInstallResult = when (this) {
+    is TargetCapabilityInstall.Active -> FeatureInstallResult.active(message)
+    is TargetCapabilityInstall.Degraded -> FeatureInstallResult.degraded(message)
+    is TargetCapabilityInstall.Unsupported -> FeatureInstallResult.unsupported(message)
+}
 
 /**
  * The complete target-specific seam used by feature hooks.
@@ -10,8 +14,9 @@ import dev.amenhancer.module.model.CustomLyricsEntry
  * Each feature receives only its own capability, while symbol discovery and
  * reflective hook installation remain private to the Apple Music adapters.
  */
-internal data class TargetAdaptation(
+data class TargetAdaptation(
     val identity: String,
+    val build: TargetBuild = TargetBuild.UNKNOWN,
     val currentSong: CurrentSongIdentityCache = CurrentSongIdentityCache(),
     val dualPane: DualPaneTarget,
     val editorialVideo: EditorialVideoTarget,
@@ -35,135 +40,49 @@ internal data class TargetAdaptation(
     val hleMetadata: HleMetadataTarget = HleMetadataTarget {
         TargetCapabilityInstall.Degraded("HLE metadata target was not configured")
     },
+    val cellularDataEntry: CellularDataEntryTarget = CellularDataEntryTarget {
+        TargetCapabilityInstall.Degraded("Cellular data entry target was not configured")
+    },
 ) {
-    companion object {
-        fun appleMusic(
-            config: TargetConfigClient,
-            application: Application,
-            classLoader: ClassLoader,
-            lyricsTypefaceSession: LyricsTypefaceSession,
-            currentSong: CurrentSongIdentityCache = CurrentSongIdentityCache(),
-        ): TargetAdaptation {
-            val build = targetBuild(application)
-            val resolver = IndexedTargetSymbolResolver(
-                build = build,
-                source = ApkTargetClassSource(application, classLoader),
-            )
-            val settings = config.settings()
-            val autoLyricsRuntime = (settings.customLyricsEnabled && settings.automaticLyricsEnabled)
-                .takeIf { it }
-                ?.let {
-                    val suppressedAutoIds = runCatching {
-                        config.customLyricsManifest().entries
-                            .filterNot { entry -> entry.enabled }
-                            .mapTo(mutableSetOf(), CustomLyricsEntry::appleMusicId)
-                    }.getOrDefault(emptySet())
-                    createAutoLyricsRuntime(application, suppressedAutoIds)
-                }
-            return TargetAdaptation(
-                identity = build.displayName,
-                currentSong = currentSong,
-                dualPane = AppleMusicDualPaneTarget(resolver, build),
-                editorialVideo = AppleMusicEditorialVideoTarget(application, resolver),
-                bidirectionalLyricBlur = AppleMusicBidirectionalLyricBlurTarget(resolver),
-                cjkKaraokeAnimation = AppleMusicCjkKaraokeAnimationTarget(resolver),
-                lyricsTypeface = AppleMusicLyricsTypefaceTarget(
-                    symbols = resolver,
-                    session = lyricsTypefaceSession,
-                ),
-                customLyrics = AppleMusicCustomLyricsTarget(
-                    application = application,
-                    config = config,
-                    symbols = resolver,
-                    currentSong = currentSong,
-                    autoLyricsRuntime = autoLyricsRuntime,
-                ),
-                currentSongIdentity = AppleMusicCurrentSongIdentityTarget(
-                    resolver,
-                    currentSong,
-                ),
-                catalogLanguage = AppleMusicCatalogLanguageTarget(
-                    symbols = resolver,
-                    rawTargetLanguage = settings.titleCorrectionMode.catalogLanguage.orEmpty(),
-                ),
-                hleMetadata = HleMetadataTarget {
-                    val activeModule = ModernXposedRuntime.activeModule()
-                        ?: return@HleMetadataTarget TargetCapabilityInstall.Degraded(
-                            "Modern Xposed module was not attached",
-                        )
-                    runCatching {
-                        HleMetadataRuntime(
-                            module = activeModule,
-                            application = application,
-                            classLoader = classLoader,
-                            mode = settings.titleCorrectionMode,
-                        ).install()
-                    }.getOrElse { error ->
-                        ModernXposedRuntime.log("HLE metadata runtime install failed", error)
-                        TargetCapabilityInstall.Degraded(
-                            "HLE metadata runtime failed: ${error.message ?: error.javaClass.simpleName}",
-                        )
-                    }
-                },
-            )
-        }
-    }
 }
-internal fun interface DualPaneTarget {
+
+fun interface DualPaneTarget {
     fun install(): TargetCapabilityInstall
 }
 
-internal fun interface EditorialVideoTarget {
+fun interface EditorialVideoTarget {
     fun install(): TargetCapabilityInstall
 }
 
-internal fun interface BidirectionalLyricBlurTarget {
+fun interface BidirectionalLyricBlurTarget {
     fun install(): TargetCapabilityInstall
 }
 
-internal fun interface CjkKaraokeAnimationTarget {
+fun interface CjkKaraokeAnimationTarget {
     fun install(): TargetCapabilityInstall
 }
 
-internal fun interface LyricsTypefaceTarget {
+fun interface LyricsTypefaceTarget {
     fun install(): TargetCapabilityInstall
 }
 
-internal fun interface CustomLyricsTarget {
+fun interface CustomLyricsTarget {
     fun install(): TargetCapabilityInstall
 }
 
-internal fun interface CurrentSongIdentityTarget {
+fun interface CurrentSongIdentityTarget {
     fun install(): TargetCapabilityInstall
 }
 
-internal fun interface HleMetadataTarget {
+fun interface HleMetadataTarget {
     fun install(): TargetCapabilityInstall
 }
 
-internal class AppleMusicEditorialVideoTarget(
-    private val application: Application,
-    private val symbols: TargetSymbolResolver,
-) : EditorialVideoTarget {
-    override fun install(): TargetCapabilityInstall {
-        val resolution = symbols.resolve(AppleMusicSymbols.EditorialVideoUrlSelector)
-        val selector = resolution.valueOrNull()
-            ?: return TargetCapabilityInstall.Degraded(resolution.summary)
-
-        ModernXposedRuntime.hookMethod(selector, object : ModernMethodHook() {
-            override fun beforeHookedMethod(param: MethodHookParam) {
-                if (!TabletModeQualifier.isOfficialTabletLandscape(application)) return
-                param.result = null
-            }
-        })
-        return TargetCapabilityInstall.Active(
-            "Installed tablet-landscape Editorial Video URL suppression on " +
-                "${selector.declaringClass.name}.${selector.name}; ${resolution.summary}",
-        )
-    }
+fun interface CellularDataEntryTarget {
+    fun install(): TargetCapabilityInstall
 }
 
-internal sealed interface TargetCapabilityInstall {
+sealed interface TargetCapabilityInstall {
     val message: String
 
     data class Active(override val message: String) : TargetCapabilityInstall {
@@ -177,9 +96,10 @@ internal sealed interface TargetCapabilityInstall {
             require(message.isNotBlank()) { "Target capability diagnostic must not be blank" }
         }
     }
-}
 
-internal fun TargetCapabilityInstall.toFeatureInstallResult(): FeatureInstallResult = when (this) {
-    is TargetCapabilityInstall.Active -> FeatureInstallResult.active(message)
-    is TargetCapabilityInstall.Degraded -> FeatureInstallResult.degraded(message)
+    data class Unsupported(override val message: String) : TargetCapabilityInstall {
+        init {
+            require(message.isNotBlank()) { "Target capability diagnostic must not be blank" }
+        }
+    }
 }

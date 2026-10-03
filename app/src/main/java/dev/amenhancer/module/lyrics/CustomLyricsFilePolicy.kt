@@ -4,7 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.security.MessageDigest
 
-internal sealed interface CustomLyricsInspection {
+sealed interface CustomLyricsInspection {
     data class Accepted(
         val ttml: String,
         val bytes: ByteArray,
@@ -15,7 +15,7 @@ internal sealed interface CustomLyricsInspection {
 }
 
 /** Applies the same input bounds to pasted, imported, and target-side TTML. */
-internal object CustomLyricsFilePolicy {
+object CustomLyricsFilePolicy {
     fun inspect(ttml: String): CustomLyricsInspection {
         val bytes = ttml.toByteArray(Charsets.UTF_8)
         if (!TtmlInputPolicy.isAcceptable(ttml)) {

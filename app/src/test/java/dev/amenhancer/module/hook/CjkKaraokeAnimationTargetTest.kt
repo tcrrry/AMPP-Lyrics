@@ -53,7 +53,8 @@ class CjkKaraokeAnimationTargetTest {
     private fun targetSource(): String = sequenceOf(
         File("src/main/java/dev/amenhancer/module/hook/AppleMusicCjkKaraokeAnimationTarget.kt"),
         File("app/src/main/java/dev/amenhancer/module/hook/AppleMusicCjkKaraokeAnimationTarget.kt"),
-    ).firstOrNull(File::isFile)?.readText()?.replace("\r\n", "\n")
+        File("../app/src/main/java/dev/amenhancer/module/hook/AppleMusicCjkKaraokeAnimationTarget.kt"),
+    ).firstOrNull(File::isFile)?.readRefactorComponent()?.replace("\r\n", "\n")
         ?: error("AppleMusicCjkKaraokeAnimationTarget.kt was not found")
 
     @Test

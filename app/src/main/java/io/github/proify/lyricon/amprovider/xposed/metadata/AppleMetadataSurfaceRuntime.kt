@@ -63,17 +63,15 @@ internal class AppleMetadataSurfaceRuntime(
             ProviderLogger.error("Apple Music Activity 元数据生命周期 Hook 安装失败", it)
         }.isSuccess
         val fragmentInstalled = runCatching {
-            val fragmentClass = runtime.classLoader.loadClass("androidx.fragment.app.Fragment")
-            val fragmentResume = AppleReflection.findMethod(
-                fragmentClass,
-                "onResume",
-                parameterCount = 0,
+            val profiled = NativeMetadataLifecycleContract.resolve(
+                runtime.hookResolver.version,
+                runtime.classLoader::loadClass,
             )
-            val fragmentPause = AppleReflection.findMethod(
-                fragmentClass,
-                "onPause",
-                parameterCount = 0,
-            )
+            val (fragmentResume, fragmentPause) = profiled ?: run {
+                val fragmentClass = runtime.classLoader.loadClass("androidx.fragment.app.Fragment")
+                AppleReflection.findMethod(fragmentClass, "onResume", parameterCount = 0) to
+                    AppleReflection.findMethod(fragmentClass, "onPause", parameterCount = 0)
+            }
             runtime.hookRegistrar.installHook(fragmentResume, after = { chain, _ ->
                 chain.thisObject?.let(::onSurfaceResumed)
             })
@@ -82,7 +80,7 @@ internal class AppleMetadataSurfaceRuntime(
             })
         }.onFailure {
             ProviderLogger.info(
-                "Apple Music 未提供标准 Fragment 生命周期类，改用页面控制器边界"
+                "Apple Music Fragment 元数据生命周期契约不可用，改用页面控制器边界"
             )
         }.isSuccess
         ProviderLogger.info(

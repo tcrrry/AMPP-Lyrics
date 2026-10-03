@@ -2,7 +2,7 @@ package dev.amenhancer.module.hook
 
 import kotlin.math.roundToInt
 
-internal object TabletLyricAnchorPolicy {
+object TabletLyricAnchorPolicy {
     fun highlightOffset(currentOffset: Int, containerHeight: Int): Int {
         val stockAnchor = (containerHeight * STOCK_ANCHOR_FRACTION).roundToInt()
         val targetAnchor = (containerHeight * TARGET_ANCHOR_FRACTION).roundToInt()

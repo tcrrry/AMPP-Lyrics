@@ -6,7 +6,7 @@ object ModuleConstants {
     // Renaming the installed host does not rename its classes or resource table.
     const val RESOURCE_PACKAGE = "com.apple.android.music"
     const val REMOTE_PREFERENCES_GROUP = "settings"
-    const val CONFIG_SCHEMA_VERSION = 14
+    const val CONFIG_SCHEMA_VERSION = 15
 
     const val FEATURE_DUAL_PANE = "dual_pane"
     const val FEATURE_EDITORIAL_VIDEO = "editorial_video"
@@ -19,4 +19,5 @@ object ModuleConstants {
     const val FEATURE_CATALOG_LANGUAGE = "catalog_language"
     const val FEATURE_TITLE_CORRECTION = "title_correction"
     const val FEATURE_APPLE_MUSIC_DPI = "apple_music_dpi"
+    const val FEATURE_CELLULAR_DATA_ENTRY = "cellular_data_entry"
 }

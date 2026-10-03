@@ -1,5 +1,8 @@
 package dev.amenhancer.module.hook
 
+import dev.amenhancer.module.lyrics.source.LyricHttpTransport
+import dev.amenhancer.module.lyrics.source.AmllTtmlClient
+import dev.amenhancer.module.lyrics.source.AmLyricsClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

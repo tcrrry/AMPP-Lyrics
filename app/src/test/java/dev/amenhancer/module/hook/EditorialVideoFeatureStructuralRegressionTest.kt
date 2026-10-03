@@ -13,7 +13,25 @@ class EditorialVideoFeatureStructuralRegressionTest {
     private fun source(relativePath: String): String = sequenceOf(
         File("src/main/java/$relativePath"),
         File("app/src/main/java/$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found from the unit-test working directory")
 
     @Test
@@ -40,15 +58,19 @@ class EditorialVideoFeatureStructuralRegressionTest {
         assertTrue(storage.contains("ampp-embedded-settings"))
         assertTrue(client.contains("valuesProvider"))
         assertFalse(settings.contains("平板隐藏编辑视频"))
-        assertTrue(settings.contains("平板横屏启用双栏，同时停用 Editorial Video"))
+        // Copy is independent of the legacy key; the visible row controls dual pane.
+        assertTrue(settings.contains("settings.copy(dualPaneEnabled = it)"))
     }
 
     @Test
     fun `matches only the modified apk editorial video url selector contract`() {
         val symbols = source("dev/amenhancer/module/hook/TargetSymbols.kt")
-        val target = source("dev/amenhancer/module/hook/TargetAdaptation.kt")
+        val target = source("dev/amenhancer/module/hook/AppleMusicEditorialVideoTarget.kt")
 
-        assertTrue(symbols.contains("com.apple.android.music.player.c1"))
+        assertTrue(dev.amenhancer.host.applemusic.AppleMusicHostProfiles.all.any {
+            it.document.getJSONObject("indexed").getJSONObject("classes")
+                .optString("EDITORIAL_VIDEO_OWNER") == "com.apple.android.music.player.c1"
+        })
         assertTrue(symbols.contains("com.apple.android.music.model.Song"))
         assertTrue(symbols.contains("Float::class.javaPrimitiveType"))
         assertTrue(symbols.contains("EditorialVideo\\\$Flavor"))
@@ -62,7 +84,7 @@ class EditorialVideoFeatureStructuralRegressionTest {
     fun `suppresses only in official tablet landscape when dual pane is enabled`() {
         val qualifier = source("dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt")
         val feature = source("dev/amenhancer/module/hook/EditorialVideoFeature.kt")
-        val target = source("dev/amenhancer/module/hook/TargetAdaptation.kt")
+        val target = source("dev/amenhancer/module/hook/AppleMusicEditorialVideoTarget.kt")
 
         assertTrue(qualifier.contains("fun isOfficialTabletLandscape(context: Context): Boolean"))
         assertTrue(target.contains("TabletModeQualifier.isOfficialTabletLandscape(application)"))

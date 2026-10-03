@@ -1,13 +1,7 @@
 package dev.amenhancer.module.hook
 
 import android.app.Application
-import android.app.Activity
-import android.content.Intent
-import android.os.Bundle
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.config.EmbeddedConfigurationMigration
 import dev.amenhancer.module.config.EmbeddedConfigurationMigrationResult
@@ -23,80 +17,8 @@ import io.github.libxposed.service.XposedService
 import java.lang.reflect.Method
 import java.util.concurrent.atomic.AtomicBoolean
 
-internal object EmbeddedSettingsFragmentMethodResolver {
-    /**
-     * Finds the host PreferenceFragment method that creates/binds its
-     * PreferenceScreen.  The verified 6.5.1 and 6.5.2 builds keep the
-     * AndroidX owner but rename the method; prefer the stable method name and
-     * otherwise accept only a unique void(Int) candidate in that hierarchy.
-     */
-    fun findPreferenceSetup(type: Class<*>): Method? {
-        val candidates = buildList {
-            var current: Class<*>? = type
-            while (current != null) {
-                if (current.name.startsWith("androidx.preference.")) {
-                    runCatching {
-                        current.declaredMethods
-                            .filter { method ->
-                                method.parameterTypes.contentEquals(arrayOf(Int::class.javaPrimitiveType)) &&
-                                    method.returnType == Void.TYPE
-                            }
-                    }.getOrDefault(emptyList()).let(::addAll)
-                }
-                current = current.superclass
-            }
-        }.distinctBy(Method::toGenericString)
-
-        return candidates.firstOrNull { it.name == "setPreferences" }
-            ?: candidates.singleOrNull()
-    }
-
-    fun findOnResume(type: Class<*>): Method? {
-        var current: Class<*>? = type
-        while (current != null) {
-            runCatching { current.getDeclaredMethod("onResume") }
-                .getOrNull()
-                ?.let { return it }
-            current = current.superclass
-        }
-        return runCatching { type.getMethod("onResume") }.getOrNull()
-    }
-
-    fun findOnCreateView(type: Class<*>): Method? = findInherited(
-        type,
-        "onCreateView",
-        LayoutInflater::class.java,
-        ViewGroup::class.java,
-        Bundle::class.java,
-    )
-
-    fun findOnViewCreated(type: Class<*>): Method? = findInherited(
-        type,
-        "onViewCreated",
-        View::class.java,
-        Bundle::class.java,
-    )
-
-    private fun findInherited(
-        type: Class<*>,
-        name: String,
-        vararg parameterTypes: Class<*>,
-    ): Method? {
-        var current: Class<*>? = type
-        while (current != null) {
-            runCatching { current.getDeclaredMethod(name, *parameterTypes) }
-                .getOrNull()
-                ?.let { return it }
-            current = current.superclass
-        }
-        return runCatching { type.getMethod(name, *parameterTypes) }.getOrNull()
-    }
-}
-
 class HookEntry : XposedModule() {
     private val bootstrap = EmbeddedBootstrap()
-    private val resultBridgeInstalled = AtomicBoolean(false)
-    private val settingsFragmentHookInstalled = AtomicBoolean(false)
     private val applicationHooksInstalled = AtomicBoolean(false)
     private val resourcePreparationStarted = AtomicBoolean(false)
     private val resourcePreparationFailed = AtomicBoolean(false)
@@ -116,6 +38,10 @@ class HookEntry : XposedModule() {
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         ModernXposedRuntime.attach(this)
+        val moduleInfo = runCatching { getModuleApplicationInfo() }.getOrNull()
+        dev.amenhancer.host.applemusic.AppleMusicHostProfiles.initializeModulePaths(
+            listOfNotNull(moduleInfo?.sourceDir, moduleInfo?.publicSourceDir) + moduleInfo?.splitSourceDirs.orEmpty(),
+        )
         processName = param.processName
         log(
             Log.INFO,
@@ -164,7 +90,7 @@ class HookEntry : XposedModule() {
                         val build = targetBuild(application)
                         if (!bootstrap.supports(build)) {
                             ModernXposedRuntime.log(
-                                "embedded build ${build.displayName} is unsupported; expected 6.5.1 (1583), 6.5.2 (1586) or 6.5.3 (1599)",
+                                "embedded build ${build.displayName} is has no verified production profile",
                             )
                             return
                         }
@@ -192,8 +118,10 @@ class HookEntry : XposedModule() {
                                 resourcePreparationStarted.set(false)
                                 return
                             }
-                            val config = TargetConfigClient(bootstrap.reader)
-                            AppleMusicDpiOverrideRuntime.install(
+                            val config = TargetConfigClient(bootstrap.reader) { health ->
+                                ModernXposedRuntime.log("${health.feature}: ${health.state} - ${health.message} [${health.targetVersion}]")
+                            }
+                            AppleMusicHostFactory.installDensity(
                                 application = application,
                                 configuredDpi = config.settings().appleMusicDpiOverrideDpi,
                             )
@@ -227,7 +155,7 @@ class HookEntry : XposedModule() {
                         val currentSong = CurrentSongIdentityCache()
                         // Register before the tablet popup offset hook so it measures the added row.
                         runCatching {
-                            NativeLyricsSourceMenu.install(targetClassLoader,
+                            NativeLyricsSourceMenu.install(targetClassLoader, build = targetBuild(application),
                                 currentId = { currentSong.current()?.details?.appleMusicId },
                                 openSettings = { activity -> settingsHost?.openLyricsSettings(activity) },
                             )
@@ -252,11 +180,12 @@ class HookEntry : XposedModule() {
                                 session,
                                 currentSong = { currentSong.current()?.details },
                             ),
-                            playerActivityClass = playerActivityClass,
+                            activityMatcher = AppleMusicHostFactory.settingsActivityMatcher(application, playerActivityClass),
+                            nativeBridgeFactory = { onOpen -> AppleMusicHostFactory.settingsViewBridge(application, onOpen,
+                                onLyrics = { activity -> settingsHost?.openLyricsSettings(activity) }) },
                         )
                         settingsHost = host
-                        installActivityResultBridge(targetClassLoader, host)
-                        installSettingsFragmentHook(targetClassLoader, host)
+                        AppleMusicHostFactory.installSettingsEntry(application, targetClassLoader, host)
                     }.onFailure { error ->
                         ModernXposedRuntime.log("embedded initialization failed open: $error")
                     }
@@ -301,61 +230,6 @@ class HookEntry : XposedModule() {
         return result
     }
 
-    private fun installSettingsFragmentHook(
-        targetClassLoader: ClassLoader,
-        host: EmbeddedSettingsHost,
-    ) {
-        if (settingsFragmentHookInstalled.get()) return
-        val settingsFragmentClass = runCatching {
-            targetClassLoader.loadClass(SETTINGS_FRAGMENT_NAME)
-        }.getOrNull() ?: return
-        val preferenceSetupMethod = EmbeddedSettingsFragmentMethodResolver.findPreferenceSetup(
-            settingsFragmentClass,
-        )
-        val methods = listOfNotNull(
-            preferenceSetupMethod,
-            EmbeddedSettingsFragmentMethodResolver.findOnResume(settingsFragmentClass),
-            EmbeddedSettingsFragmentMethodResolver.findOnCreateView(settingsFragmentClass),
-            EmbeddedSettingsFragmentMethodResolver.findOnViewCreated(settingsFragmentClass),
-        ).distinctBy(Method::toGenericString)
-        if (methods.isEmpty()) return
-        if (!settingsFragmentHookInstalled.compareAndSet(false, true)) return
-        var hooked = false
-        val preferenceSetupSignature = preferenceSetupMethod?.toGenericString()
-        methods.forEach { method ->
-            val installed = runCatching {
-                ModernXposedRuntime.hookMethod(method, object : ModernMethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val fragment = param.thisObject ?: return
-                        if (!settingsFragmentClass.isInstance(fragment)) return
-                        val activity = runCatching {
-                            ModernXposedRuntime.callMethod(fragment, "getActivity") as? Activity
-                        }.getOrNull() ?: return
-                        when {
-                            method.toGenericString() == preferenceSetupSignature ->
-                                host.onSettingsPreferencesReady(fragment, activity)
-                            method.name == "onCreateView" -> host.onSettingsFragmentViewCreated(
-                                fragment,
-                                activity,
-                                param.result as? View,
-                            )
-                            method.name == "onViewCreated" -> host.onSettingsFragmentViewCreated(
-                                fragment,
-                                activity,
-                                param.args.getOrNull(0) as? View,
-                            )
-                            else -> host.onSettingsFragmentResumed(fragment, activity)
-                        }
-                    }
-                })
-            }.onFailure { error ->
-                ModernXposedRuntime.log("settings fragment hook failed for ${method.name}: $error")
-            }.getOrDefault(false)
-            hooked = hooked || installed
-        }
-        if (!hooked) settingsFragmentHookInstalled.set(false)
-    }
-
     private fun isTargetMainProcess(application: Application): Boolean =
         currentProcessName(application) == ModuleConstants.TARGET_PACKAGE
 
@@ -375,39 +249,4 @@ class HookEntry : XposedModule() {
             ?: application.packageName
     }
 
-    private fun installActivityResultBridge(
-        targetClassLoader: ClassLoader,
-        host: EmbeddedSettingsHost,
-    ) {
-        if (!resultBridgeInstalled.compareAndSet(false, true)) return
-        val signature = arrayOf(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Intent::class.java)
-        val methods = buildList {
-            runCatching {
-                targetClassLoader.loadClass(PLAYER_ACTIVITY_NAME).getDeclaredMethod(
-                    "onActivityResult",
-                    *signature,
-                )
-            }.getOrNull()?.let(::add)
-            runCatching {
-                Activity::class.java.getDeclaredMethod("onActivityResult", *signature)
-            }.getOrNull()?.let(::add)
-        }.distinctBy(Method::toGenericString)
-        methods.forEach { method ->
-            ModernXposedRuntime.hookMethod(method, object : ModernMethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val requestCode = param.args.getOrNull(0) as? Int ?: return
-                    val resultCode = param.args.getOrNull(1) as? Int ?: return
-                    val data = param.args.getOrNull(2) as? Intent
-                    val activity = param.thisObject as? Activity ?: return
-                    // Observe only. Never modify result/throwable or short-circuit Apple Music.
-                    host.onActivityResult(activity, requestCode, resultCode, data)
-                }
-            })
-        }
-    }
-
-    private companion object {
-        const val PLAYER_ACTIVITY_NAME = "com.apple.android.music.common.activity.PlayerActivity"
-        const val SETTINGS_FRAGMENT_NAME = "com.apple.android.music.settings.fragment.SettingsFragment"
-    }
 }

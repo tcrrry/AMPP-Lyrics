@@ -5,7 +5,7 @@ package dev.amenhancer.module.config
  * published atomically after the new index file is written; readers trust it
  * only when the file's size and SHA-256 match.
  */
-internal data class CustomLyricsIndexPointer(
+data class CustomLyricsIndexPointer(
     val fileId: String,
     val generation: Long,
     val sha256: String,

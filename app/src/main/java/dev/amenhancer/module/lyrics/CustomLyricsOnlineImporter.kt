@@ -2,7 +2,7 @@ package dev.amenhancer.module.lyrics
 
 import dev.amenhancer.module.model.CustomLyricsSources
 
-internal sealed interface CustomLyricsOnlineImportResult {
+sealed interface CustomLyricsOnlineImportResult {
     data class Imported(
         val ttml: String,
         val source: String,
@@ -14,7 +14,7 @@ internal sealed interface CustomLyricsOnlineImportResult {
 }
 
 /** User-triggered online imports. Playback hooks never call this class. */
-internal class CustomLyricsOnlineImporter(
+class CustomLyricsOnlineImporter(
     private val fetchAmll: (Long) -> String?,
     private val fetchAmLyrics: (Long) -> String?,
     private val fetchLunabeat: (Long) -> String?,

@@ -1,0 +1,113 @@
+name: 发布 v1.3（直接上传 Release）
+on:
+  push:
+    branches: [release/v1.3-700]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-v1-3
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        id: java17
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;37.0.0 platforms;android-37.0
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 测试、Lint 与构建普通及共存模块
+        run: |
+          set -euo pipefail
+          mkdir -p modules inputs
+          python3 scripts/verify-profile-data.py
+          python3 scripts/verify-glass-reference.py
+          bash gradlew test :app:lintDebug :glass:lintDebug :glass-lab:lintDebug :app:assembleDebug :glass-lab:assembleDebug :glass-lab:assembleDebugAndroidTest --no-daemon --max-workers=4
+          cp app/build/outputs/apk/debug/app-debug.apk modules/ordinary.apk
+          python3 - <<'PY'
+          import json, pathlib, xml.etree.ElementTree as ET
+          data = {}
+          for module in ('app', 'glass'):
+              suites = [ET.parse(p).getroot() for p in pathlib.Path(module, 'build/test-results/testDebugUnitTest').glob('TEST-*.xml')]
+              assert suites, module
+              data[module] = {k: sum(int(s.get(k, 0)) for s in suites) for k in ('tests','failures','errors','skipped')}
+              assert data[module]['tests'] > 0 and data[module]['failures'] == data[module]['errors'] == data[module]['skipped'] == 0
+          pathlib.Path('inputs/normal-tests.json').write_text(json.dumps(data))
+          PY
+          bash gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug -PamppCoexistence=true --no-daemon --max-workers=4
+          cp app/build/outputs/apk/debug/app-debug.apk modules/coexist.apk
+          python3 - <<'PY'
+          import json, pathlib, xml.etree.ElementTree as ET
+          suites = [ET.parse(p).getroot() for p in pathlib.Path('app/build/test-results/testDebugUnitTest').glob('TEST-*.xml')]
+          data = {k: sum(int(s.get(k, 0)) for s in suites) for k in ('tests','failures','errors','skipped')}
+          assert data['tests'] > 0 and data['failures'] == data['errors'] == data['skipped'] == 0
+          pathlib.Path('inputs/coexist-tests.json').write_text(json.dumps(data))
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: 下载固定输入并打包四种安装包
+        env:
+          JAVAC_17: ${{ steps.java17.outputs.path }}/bin/javac
+        run: |
+          set -euo pipefail
+          gh release download embedded-2026.08.10-r1 --repo Zennmn/AM-plus-plus --pattern '103-version-com.apple.android.music-npatched.apks' --dir inputs
+          gh release download V1.4.9 --repo REAndroid/APKEditor --pattern 'APKEditor-1.4.9.jar' --dir inputs
+          gh release download v1.0.7 --repo 7723mod/NPatch --pattern 'jar-v1.0.7-741-release.jar' --dir inputs
+          python3 scripts/package-700-release.py \
+            --input inputs/103-version-com.apple.android.music-npatched.apks \
+            --module modules/ordinary.apk --coexist-module modules/coexist.apk \
+            --output dist --editor inputs/APKEditor-1.4.9.jar \
+            --npatch inputs/jar-v1.0.7-741-release.jar \
+            --aapt2 "$ANDROID_HOME/build-tools/37.0.0/aapt2" \
+            --apksigner "$ANDROID_HOME/build-tools/37.0.0/apksigner" \
+            --javac "$JAVAC_17"
+          python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path('dist/v1.3-validation.json')
+          data = json.loads(p.read_text())
+          data['sourceCommit'] = os.environ['GITHUB_SHA']
+          data['actionsRun'] = os.environ['GITHUB_RUN_ID']
+          data['tests'] = {kind: json.loads(pathlib.Path(f'inputs/{kind}-tests.json').read_text()) for kind in ('normal', 'coexist')}
+          data['lintAndBuild'] = 'PASS normal and coexist'
+          p.write_text(json.dumps(data, indent=2) + '\n')
+          PY
+          (cd dist && sha256sum -c *.sha256)
+      - name: 直接上传发布草稿（不保存 Actions 产物）
+        run: |
+          set -euo pipefail
+          if ! gh release view v1.3 >/dev/null 2>&1; then
+            gh release create v1.3 --target "$GITHUB_SHA" --draft --title 'AM++ Lyrics v1.3 · Apple Music 7.0.0-beta' --notes-file docs/release-v1.3.md
+          fi
+          test "$(gh release view v1.3 --json isDraft --jq .isDraft)" = true
+          gh release edit v1.3 --target "$GITHUB_SHA" --notes-file docs/release-v1.3.md
+          gh release view v1.3 --json assets --jq .assets > /tmp/existing-assets.json
+          for file in dist/*; do
+            name=$(basename "$file")
+            if jq -e --arg name "$name" 'any(.[]; .name == $name)' /tmp/existing-assets.json >/dev/null; then
+              test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' /tmp/existing-assets.json)" = "sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
+            else
+              gh release upload v1.3 "$file"
+            fi
+          done
+          gh release view v1.3 --json assets --jq .assets > /tmp/uploaded-assets.json
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          assets = {a['name']: a for a in json.loads(pathlib.Path('/tmp/uploaded-assets.json').read_text())}
+          for p in pathlib.Path('dist').iterdir():
+              assert assets[p.name]['size'] == p.stat().st_size, p.name
+              assert assets[p.name]['digest'] == 'sha256:' + hashlib.file_digest(p.open('rb'), 'sha256').hexdigest(), p.name
+          print('All Release uploads verified; draft ready for publication.')
+          PY

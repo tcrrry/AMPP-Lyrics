@@ -33,6 +33,7 @@ jobs:
       - name: 保存已测试的共存模块
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: AMPP-Lyrics-coexist-module-tested
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
@@ -62,6 +63,7 @@ jobs:
       - name: 保存共存测试 APK
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: AMPP-Lyrics-coexist-test
           path: dist/*
           if-no-files-found: error

@@ -16,12 +16,12 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-internal sealed interface CustomLyricsBackupEncodeResult {
+sealed interface CustomLyricsBackupEncodeResult {
     data class Encoded(val entryCount: Int) : CustomLyricsBackupEncodeResult
     data class Failed(val message: String) : CustomLyricsBackupEncodeResult
 }
 
-internal sealed interface CustomLyricsBackupDecodeResult {
+sealed interface CustomLyricsBackupDecodeResult {
     data class Decoded(val backup: CustomLyricsBackup) : CustomLyricsBackupDecodeResult
     data class Rejected(val message: String) : CustomLyricsBackupDecodeResult
 }
@@ -30,7 +30,7 @@ internal sealed interface CustomLyricsBackupDecodeResult {
  * Decoded backup payload: the validated manifest; TTML bodies are delivered
  * one at a time by [CustomLyricsBackupCodec.decode] and never held together.
  */
-internal data class CustomLyricsBackup(
+data class CustomLyricsBackup(
     val manifest: CustomLyricsManifest,
 )
 
@@ -46,7 +46,7 @@ internal data class CustomLyricsBackup(
  * unsupported versions, missing or extra files, and anything exceeding the
  * resource guards below.
  */
-internal object CustomLyricsBackupCodec {
+object CustomLyricsBackupCodec {
 
     private const val MANIFEST_JSON_NAME = "manifest.json"
     private const val VERSION = 2

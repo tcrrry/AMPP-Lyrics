@@ -13,7 +13,7 @@ class HookEntryStructuralRegressionTest {
     private fun projectFile(relativePath: String): String = sequenceOf(
         File(relativePath),
         File("../$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found")
 
     @Test
@@ -106,7 +106,7 @@ class HookEntryStructuralRegressionTest {
 
     @Test
     fun `installs the early preference setup seam before lifecycle fallbacks`() {
-        val source = projectFile("app/src/main/java/dev/amenhancer/module/hook/HookEntry.kt")
+        val source = projectFile("app/src/main/java/dev/amenhancer/module/hook/LegacySettingsEntryInstaller.kt")
 
         assertTrue(source.contains("findPreferenceSetup"))
         assertTrue(source.contains("preferenceSetupMethod"))

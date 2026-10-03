@@ -14,7 +14,12 @@ import json
 import struct
 import sys
 import zipfile
+import importlib.util
 from pathlib import Path
+
+_manifest_spec = importlib.util.spec_from_file_location('android_manifest',Path(__file__).with_name('android-package-manifest.py'))
+_manifest_module = importlib.util.module_from_spec(_manifest_spec)
+_manifest_spec.loader.exec_module(_manifest_module)
 
 
 def _uleb(data, offset):
@@ -68,6 +73,8 @@ def dex_classes(data):
         offset = u32(base + 24)
         methods = set()
         fields = {}
+        method_access = {}
+        field_access = {}
         if offset:
             counts = []
             for _ in range(4):
@@ -78,210 +85,43 @@ def dex_classes(data):
                 for _ in range(section):
                     delta, offset = _uleb(data, offset)
                     index += delta
-                    _, offset = _uleb(data, offset)
+                    flags, offset = _uleb(data, offset)
                     fields[field_defs[index][0]] = field_defs[index][1]
+                    field_access[field_defs[index][0]] = flags
             for section in counts[2:]:
                 index = 0
                 for _ in range(section):
                     delta, offset = _uleb(data, offset)
                     index += delta
-                    _, offset = _uleb(data, offset)
+                    flags, offset = _uleb(data, offset)
                     _, offset = _uleb(data, offset)
                     methods.add(method_defs[index])
+                    method_access[method_defs[index]] = flags
         classes[class_name] = {
             "super": types[superclass] if superclass != 0xFFFFFFFF else None,
             "methods": methods,
             "fields": fields,
+            "method_access": method_access,
+            "field_access": field_access,
         }
     return classes
 
 
-LAYOUTS = [
-    "res/layout/bottom_navigation.xml",
-    "res/layout/mini_player.xml",
-    "res/layout/activity_main_content_layout.xml",
-]
+PROFILE_DIRECTORY = Path(__file__).resolve().parents[1] / "app/src/main/resources/host-profiles"
 
-# Apple Music ships androidx.lifecycle.LiveData obfuscated. The module accepts the host alias only
-# because it still declares the LiveData public surface, so verify that surface here.
-ALIASED_TYPES = {
-    "Landroidx/lifecycle/G;": [
-        "getValue()Ljava/lang/Object;",
-        "observe(Landroidx/lifecycle/B;Landroidx/lifecycle/K;)V",
-        "observeForever(Landroidx/lifecycle/K;)V",
-    ],
-}
 
-# The direct catalog query, as resolved by AppleCatalogQueryMethod: the module pins one preferred
-# name per hook table and only falls back to a verified rename per owner class.
-CATALOG_QUERY_SHAPE = (
-    "(Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;"
-)
+def load_profiles():
+    index = json.loads((PROFILE_DIRECTORY / "index.json").read_text(encoding="utf-8"))
+    profiles = {}
+    for filename in index["profiles"]:
+        data = json.loads((PROFILE_DIRECTORY / filename).read_text(encoding="utf-8"))
+        if data["productionEnabled"]:
+            profiles[(data["versionName"], str(data["versionCode"]))] = data["verification"]
+    return profiles
 
-# The content HTTP localization interceptor is where the module rewrites the storefront path
-# segment and the l parameter and strips its own request token before the request leaves the app.
-# Without it every storefront/language-scoped catalog lookup comes back empty, which silently
-# degrades original-title resolution to the disk cache only. 6.5.3 moved the whole content-API
-# family u8/a..u8/n to w8/a..w8/n, and 1599's own u8.a is an unrelated MediaApi model class.
-CONTENT_HTTP_INTERCEPTORS = {
-    "6.5.2": {
-        "owner": "Lu8/a;",
-        "signature": "a(LHi/f;)LCi/F;",
-    },
-    "6.5.3": {
-        "owner": "Lw8/a;",
-        "signature": "a(LLi/f;)LGi/D;",
-        "vacated": ("Lu8/a;", "a(LLi/f;)LGi/D;"),
-    },
-}
 
-# Glass seams: the phone navigation strip, the stacked holder translate entry point and the
-# material BottomNavigationView menu contract shared by every supported build.
-GLASS_METHODS = {
-    "Lcom/apple/android/music/common/activity/PlayerActivity$StackedBottomNavigationHolder;": [
-        "c(F)V",
-    ],
-    "Lcom/apple/android/music/player/PlayerBottomSheetBehavior;": ["F(IZ)V"],
-    "Lcom/google/android/material/bottomnavigation/BottomNavigationView;": [
-        "getMenu()Landroid/view/Menu;",
-        "getSelectedItemId()I",
-        "setSelectedItemId(I)V",
-    ],
-}
-
-PROFILES = {
-    "6.5.2": {
-        "version_code": "1586",
-        "methods": {
-            "Lcom/apple/android/music/common/activity/PlayerActivity;": [
-                "k1()Lcom/apple/android/music/common/activity/PlayerActivity$m;",
-            ],
-            "Lcom/apple/android/music/player/fragment/t0;": [],
-            "Lcom/apple/android/music/player/O;": [],
-            "Lcom/apple/android/music/player/e1;": [],
-            "Lcom/apple/android/music/player/f1;": [],
-            "Lcom/apple/android/music/player/fragment/e;": [],
-            "Lcom/apple/android/music/player/fragment/m;": [],
-            "Lcom/apple/android/music/player/fragment/d0;": ["onClick(Landroid/view/View;)V"],
-            "Lcom/apple/android/music/player/e;": ["onMediaMetadataChanged(Lv3/v;)V"],
-            "Lcom/apple/android/music/player/R0;": [],
-            "Lcom/apple/android/music/playback/player/ExoMediaPlayer;": ["onAudioSessionId(I)V"],
-            "Lcom/apple/android/music/playback/controller/LocalMediaPlayerController;": [
-                "onPlaybackAudioVariantChanged(Lcom/apple/android/music/playback/player/MediaPlayer;IJLcom/google/android/exoplayer2/Format;Lcom/google/android/exoplayer2/Format;)V",
-            ],
-            "Lcom/apple/android/music/library2/LibraryMainContentEpoxyController;": [
-                "buildModels(Lcom/apple/android/music/library2/M;Ljava/util/List;Ljava/util/List;Lcom/apple/android/music/library2/a;Lx6/c;)V",
-            ],
-            "Lcom/apple/android/music/common/L;": ["t(Lcom/apple/android/music/model/CollectionItemView;)V"],
-            "Lcom/apple/android/music/common/behavior/StaticCollapsedBottomSheetBehavior;": [
-                "h(Landroidx/coordinatorlayout/widget/CoordinatorLayout;Landroid/view/View;Landroid/view/MotionEvent;)Z",
-            ],
-            "LC1/w;": ["e(Landroidx/lifecycle/G;Lz0/n;)Lz0/p0;"],
-            "Lz0/s0;": ["a(Ljava/lang/Object;Ljava/lang/Object;)Z"],
-            # Content HTTP localization family: interceptor, chain, request/builder, headers,
-            # response. The module reads these exact member names at runtime.
-            "Lu8/a;": ["a(LHi/f;)LCi/F;"],
-            "Lcom/apple/android/music/library3/LibraryComposeContentFragment;": [
-                "B0()Lcom/apple/android/music/library2/LibraryViewModel;",
-            ],
-            "LCi/C;": ["b()LCi/C$a;"],
-            "LCi/C$a;": [
-                "b()LCi/C;",
-                "d(Ljava/lang/String;Ljava/lang/String;)V",
-                "h(Ljava/lang/String;)V",
-            ],
-            "LCi/v;": ["e(Ljava/lang/String;)Ljava/lang/String;"],
-            "LHd/b;": ["onMeasure(II)V", "e(Landroid/content/Context;)LHd/a;"],
-            "LJ5/a;": ["b(Landroid/content/Context;)[Ljava/lang/String;"],
-            "Ly8/B;": [
-                "b(Lcom/apple/android/music/mediaapi/models/Song;Landroid/os/Bundle;)Lcom/apple/android/music/model/Song;",
-            ],
-            "Lcom/apple/android/music/utils/I0$a;": ["a(Ljava/lang/CharSequence;Ljava/util/Set;)Z"],
-            "Lcom/apple/android/music/player/z;": ["a0(Lcom/apple/android/music/player/z$a;IIIZ)V"],
-        },
-        "fields": {
-            "Lcom/apple/android/music/common/activity/PlayerActivity;": ["c1"],
-            "Lz0/s0;": ["a"],
-            "LHi/f;": ["e"],
-            "LCi/C;": ["a", "c"],
-            "LCi/F;": ["a", "d", "f"],
-            "LCi/v;": ["a"],
-        },
-        # 6.5.2 is the build where the shared preferred name B still carries the query body.
-        "catalog_query": {"owner": "Ls8/F;", "verified": "B", "preferred": "B"},
-    },
-    "6.5.3": {
-        "version_code": "1599",
-        "methods": {
-            "Lcom/apple/android/music/common/activity/PlayerActivity;": [
-                "k1()Lcom/apple/android/music/common/activity/PlayerActivity$m;",
-            ],
-            "Lcom/apple/android/music/player/fragment/v0;": [],
-            "Lcom/apple/android/music/player/P;": [],
-            "Lcom/apple/android/music/player/e1;": [
-                "d(Lv3/v;Lcom/apple/android/music/model/PlaybackItem;Ldg/e;)Lcom/apple/android/music/model/PlaybackItem;",
-            ],
-            "Lcom/apple/android/music/player/f1;": [
-                "e(Lcom/apple/android/music/model/Song;F[Lcom/apple/android/music/mediaapi/models/internals/EditorialVideo$Flavor;)Ljava/lang/String;",
-            ],
-            "Lcom/apple/android/music/player/fragment/e;": [],
-            "Lcom/apple/android/music/player/fragment/m;": [],
-            "Lcom/apple/android/music/player/fragment/d0;": ["onClick(Landroid/view/View;)V"],
-            "Lcom/apple/android/music/player/e;": ["onMediaMetadataChanged(Lv3/v;)V"],
-            "Lcom/apple/android/music/player/R0;": [],
-            "Lcom/apple/android/music/playback/player/ExoMediaPlayer;": ["onAudioSessionId(I)V"],
-            "Lcom/apple/android/music/playback/controller/LocalMediaPlayerController;": [
-                "onPlaybackAudioVariantChanged(Lcom/apple/android/music/playback/player/MediaPlayer;IJLcom/google/android/exoplayer2/Format;Lcom/google/android/exoplayer2/Format;)V",
-            ],
-            "Lcom/apple/android/music/library2/LibraryMainContentEpoxyController;": [
-                "buildModels(Lcom/apple/android/music/library2/H;Ljava/util/List;Ljava/util/List;Lcom/apple/android/music/library2/a;Lz6/b;)V",
-            ],
-            "Lcom/apple/android/music/common/I;": ["t(Lcom/apple/android/music/model/CollectionItemView;)V"],
-            "Lcom/apple/android/music/common/behavior/StaticCollapsedBottomSheetBehavior;": [
-                "h(Landroidx/coordinatorlayout/widget/CoordinatorLayout;Landroid/view/View;Landroid/view/MotionEvent;)Z",
-            ],
-            "LDg/c;": ["l(Landroidx/lifecycle/G;Lz0/m;)Lz0/n0;"],
-            "Lz0/p0;": ["a(Ljava/lang/Object;Ljava/lang/Object;)Z"],
-            # The library Compose view-model getter was renamed again (6.5.0 B0, 6.5.1 A0 ->
-            # 6.5.3 F0); the return type is unchanged, so both halves are asserted below.
-            "Lcom/apple/android/music/library3/LibraryComposeContentFragment;": [
-                "F0()Lcom/apple/android/music/library2/LibraryViewModel;",
-            ],
-            # Content HTTP localization family after the u8 -> w8 move, plus the MediaApi
-            # parameter seam that owns the storefront field and the direct query method.
-            "Lw8/a;": ["a(LLi/f;)LGi/D;"],
-            "Lu8/E;": [
-                "c0(Ljava/util/Map;)Ljava/util/LinkedHashMap;",
-                "v(Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
-            ],
-            "LGi/A;": ["b()LGi/A$a;"],
-            "LGi/A$a;": [
-                "b()LGi/A;",
-                "d(Ljava/lang/String;Ljava/lang/String;)V",
-                "h(Ljava/lang/String;)V",
-            ],
-            "LGi/t;": ["e(Ljava/lang/String;)Ljava/lang/String;"],
-            "LKd/b;": ["onMeasure(II)V", "e(Landroid/content/Context;)LKd/a;"],
-            "LK5/a;": ["b(Landroid/content/Context;)[Ljava/lang/String;"],
-            "LA8/D;": [
-                "b(Lcom/apple/android/music/mediaapi/models/Song;Landroid/os/Bundle;)Lcom/apple/android/music/model/Song;",
-            ],
-            "Lcom/apple/android/music/utils/E0$a;": ["a(Ljava/lang/CharSequence;Ljava/util/Set;)Z"],
-            "Lcom/apple/android/music/player/A;": ["a0(Lcom/apple/android/music/player/A$a;IIIZ)V"],
-        },
-        "fields": {
-            "Lcom/apple/android/music/common/activity/PlayerActivity;": ["c1"],
-            "Lz0/p0;": ["a"],
-            "LLi/f;": ["e"],
-            "LGi/A;": ["a", "c"],
-            "LGi/D;": ["a", "d", "f"],
-            "LGi/t;": ["a"],
-        },
-        # The preferred name survives on 1599 but describes another method, so the module has to
-        # fall back to the verified rename v. Assert both halves of that claim.
-        "catalog_query": {"owner": "Lu8/E;", "verified": "v", "preferred": "B"},
-    },
-}
+PROFILES = load_profiles()
+CATALOG_QUERY_SHAPE = "(Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;"
 
 
 def find_method(classes, owner, signature):
@@ -295,9 +135,10 @@ def find_method(classes, owner, signature):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("package", type=Path, help="XAPK or base APK")
+    parser.add_argument("package", type=Path, help="APK, XAPK or APKS (all DEX splits are checked)")
     parser.add_argument("--version-name", default=None)
     parser.add_argument("--version-code", default=None)
+    parser.add_argument("--profile", type=Path, help="explicit profile, including a disabled research build")
     parser.add_argument("--glass", action="store_true", help="also verify the phone glass seams")
     args = parser.parse_args()
 
@@ -315,13 +156,29 @@ def main():
             apk = zipfile.ZipFile(args.package)
         else:
             apk = zipfile.ZipFile(io.BytesIO(package.read(base_name)))
-        version_name = args.version_name or (manifest or {}).get("version_name")
-        version_code = args.version_code or str((manifest or {}).get("version_code", ""))
-        profile = PROFILES.get(version_name or "")
+        package_name, actual_name, actual_code = _manifest_module.manifest_identity(apk.read('AndroidManifest.xml'))
+        if package_name != 'com.apple.android.music':
+            raise SystemExit('Unexpected manifest package: '+package_name)
+        version_name = args.version_name or actual_name
+        version_code = args.version_code or str(actual_code)
+        if (version_name,str(version_code)) != (actual_name,str(actual_code)):
+            raise SystemExit(f'Claimed tuple {version_name}/{version_code} differs from binary manifest {actual_name}/{actual_code}')
+        if manifest and ((manifest.get('version_name') and manifest['version_name'] != actual_name) or
+                         (manifest.get('version_code') and str(manifest['version_code']) != str(actual_code))):
+            raise SystemExit('Split package manifest disagrees with base Android manifest')
+        profile = PROFILES.get((version_name or "", str(version_code)))
+        document = None
+        if args.profile:
+            document = json.loads(args.profile.read_text(encoding="utf-8"))
+            if (document["packageName"], document["versionName"], int(document["versionCode"])) != (
+                package_name, actual_name, actual_code
+            ):
+                raise SystemExit("Explicit profile differs from binary manifest")
+            profile = document["verification"]
         if profile is None:
             raise SystemExit(
                 "Unsupported or undocumented version tuple: %s (%s). Known profiles: %s"
-                % (version_name, version_code, ", ".join(sorted(PROFILES))),
+                % (version_name, version_code, ", ".join("%s (%s)" % key for key in sorted(PROFILES))),
             )
         if version_code != profile["version_code"]:
             raise SystemExit(
@@ -329,13 +186,49 @@ def main():
                 % (version_name, version_code, profile["version_code"]),
             )
 
+        ALIASED_TYPES = profile.get("aliases", {})
+        GLASS_METHODS = profile.get("glass_methods", {})
+        LAYOUTS = profile.get("layouts", [])
         classes = {}
         for name in apk.namelist():
             if name.endswith(".dex"):
                 classes.update(dex_classes(apk.read(name)))
+        available_layouts = set(apk.namelist())
+        for split_name in names:
+            if not split_name.endswith(".apk") or split_name == base_name:
+                continue
+            with zipfile.ZipFile(io.BytesIO(package.read(split_name))) as split:
+                available_layouts.update(split.namelist())
+                for name in split.namelist():
+                    if name.endswith(".dex"):
+                        classes.update(dex_classes(split.read(name)))
 
         failures = []
         checks = 0
+
+        if document is None:
+            candidate = PROFILE_DIRECTORY / f"{actual_name}-{actual_code}.json"
+            if candidate.is_file():
+                document = json.loads(candidate.read_text(encoding="utf-8"))
+        if document:
+            def descriptor(name):
+                primitive = {'void':'V','int':'I','long':'J','float':'F','boolean':'Z',
+                             'double':'D','byte':'B','short':'S','char':'C'}
+                return primitive.get(name, name.replace('.', '/') if name.startswith('[')
+                                     else 'L' + name.replace('.', '/') + ';')
+            for symbol, contract in document['indexed'].get('methodContracts', {}).items():
+                checks += 1
+                owner = descriptor(contract['owner'])
+                signature = contract['name'] + '(' + ''.join(map(descriptor, contract['parameters'])) + ')' + descriptor(contract['returns'])
+                flags = classes.get(owner, {}).get('method_access', {}).get(signature)
+                if flags is None or bool(flags & 8) != contract['static'] or flags & (0x400 | 0x40 | 0x1000):
+                    failures.append(f'invalid exact method contract {symbol}: {owner} {signature}')
+            for symbol, contract in document['indexed'].get('fieldContracts', {}).items():
+                checks += 1
+                owner = descriptor(contract['owner'])
+                native = classes.get(owner, {})
+                if native.get('fields', {}).get(contract['name']) != descriptor(contract['type']) or native.get('field_access', {}).get(contract['name'], 8) & 8:
+                    failures.append(f'invalid exact field contract {symbol}: {owner} {contract["name"]}')
 
         for owner, signatures in profile["methods"].items():
             if owner not in classes:
@@ -353,6 +246,13 @@ def main():
                     failures.append("missing class %s" % owner)
                 elif field_name not in classes[owner]["fields"]:
                     failures.append("missing field %s %s" % (owner, field_name))
+
+        for owner, fields in profile.get("fieldTypes", {}).items():
+            for name, expected in fields.items():
+                checks += 1
+                native = classes.get(owner, {})
+                if native.get("fields", {}).get(name) != expected or native.get("field_access", {}).get(name, 8) & 8:
+                    failures.append("invalid native field descriptor %s %s:%s" % (owner, name, expected))
 
         for owner, signatures in ALIASED_TYPES.items():
             for signature in signatures:
@@ -388,7 +288,7 @@ def main():
                         )
                     )
 
-        interceptor = CONTENT_HTTP_INTERCEPTORS.get(version_name)
+        interceptor = profile.get("content_http_interceptor")
         if interceptor:
             owner = interceptor["owner"]
             checks += 1
@@ -419,7 +319,7 @@ def main():
                         failures.append("missing glass hook %s %s" % (owner, signature))
             for layout in LAYOUTS:
                 checks += 1
-                if layout not in apk.namelist():
+                if layout not in available_layouts:
                     failures.append("missing layout %s" % layout)
 
         print("package: %s" % args.package)

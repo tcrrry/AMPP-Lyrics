@@ -3,11 +3,8 @@ package dev.amenhancer.module.hook
 import dev.amenhancer.module.ModuleConstants
 
 /**
- * Mirrors the modified APK's c1.e(...) prefix, but only while Apple Music's
- * own tablet resource qualifier is active in landscape and the tablet
- * dual-pane player is enabled. Returning null here
- * suppresses the Editorial Video URL while preserving its static preview
- * frame and the separate Music Video playback path.
+ * The host capability preserves native dynamic covers on 7.0. Legacy 6.5 hosts retain
+ * their tablet-landscape URL suppression, static preview and separate Music Video path.
  */
 internal class EditorialVideoFeature : FeatureHook {
     override val key: String = ModuleConstants.FEATURE_EDITORIAL_VIDEO

@@ -75,6 +75,7 @@ jobs:
           (cd dist && sha256sum -c *.sha256)
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: AMPP-Lyrics-v1.2
           path: dist/*
           if-no-files-found: error

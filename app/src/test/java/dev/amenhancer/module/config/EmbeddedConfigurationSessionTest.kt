@@ -85,10 +85,14 @@ class EmbeddedConfigurationSessionTest {
         )
         val session = EmbeddedConfigurationSession(storage)
 
-        assertTrue(session.saveSettings(session.settings().copy(dualPaneEnabled = false)))
+        assertTrue(session.saveSettings(session.settings().copy(
+            dualPaneEnabled = false,
+            forceCellularDataEntryEnabled = true,
+        )))
         val target = TargetConfigClient(session)
 
         assertFalse(target.settings().dualPaneEnabled)
+        assertTrue(target.settings().forceCellularDataEntryEnabled)
         assertEquals(font, target.settings().fontManifest)
         assertEquals(pointer, ModuleSettingsSchema.decodeIndexPointer(storage.values()))
     }

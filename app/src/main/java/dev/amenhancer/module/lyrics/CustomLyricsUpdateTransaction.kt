@@ -5,13 +5,13 @@ import dev.amenhancer.module.model.CustomLyricsEntry
 import dev.amenhancer.module.model.CustomLyricsManifest
 
 /** Why a remote source could not replace a local mapping. */
-internal enum class CustomLyricsUpdateFailureKind {
+enum class CustomLyricsUpdateFailureKind {
     NETWORK,
     SOURCE_MISSING,
     INVALID_TTML,
 }
 
-internal data class CustomLyricsUpdateIssue(
+data class CustomLyricsUpdateIssue(
     val appleMusicId: Long,
     val source: String,
     val kind: CustomLyricsUpdateFailureKind,
@@ -19,7 +19,7 @@ internal data class CustomLyricsUpdateIssue(
 )
 
 /** Progress emitted while the coordinator scans the current manifest. */
-internal data class CustomLyricsUpdateProgress(
+data class CustomLyricsUpdateProgress(
     val checkedEntries: Int,
     val totalEntries: Int,
     val updatedEntries: Int,
@@ -28,7 +28,7 @@ internal data class CustomLyricsUpdateProgress(
     val failedEntries: Int,
 )
 
-internal data class CustomLyricsUpdateSummary(
+data class CustomLyricsUpdateSummary(
     val checked: Int = 0,
     val updated: Int = 0,
     val unchanged: Int = 0,
@@ -36,7 +36,7 @@ internal data class CustomLyricsUpdateSummary(
     val failed: Int = 0,
 )
 
-internal sealed interface CustomLyricsUpdateResult {
+sealed interface CustomLyricsUpdateResult {
     val summary: CustomLyricsUpdateSummary
 
     data class Updated(
@@ -67,7 +67,7 @@ internal sealed interface CustomLyricsUpdateResult {
  * every local entry, including entries which are unchanged, skipped, or failed.
  * Only [Changed] items can cause a remote file write.
  */
-internal sealed interface CustomLyricsUpdateItem {
+sealed interface CustomLyricsUpdateItem {
     val appleMusicId: Long
     val source: String
 
@@ -103,7 +103,7 @@ internal sealed interface CustomLyricsUpdateItem {
  * body has been staged and immediately before publication; a concurrent edit
  * therefore fails closed without replacing the user's newer manifest.
  */
-internal class CustomLyricsUpdateTransaction(
+class CustomLyricsUpdateTransaction(
     private val fileIdFactory: () -> String,
     private val writeRemoteFile: (String, ByteArray) -> Boolean,
     private val publishManifest: (CustomLyricsManifest) -> Boolean,

@@ -14,7 +14,7 @@ import org.junit.Test
  */
 class LyricBlurClearAlphaStructuralRegressionTest {
     private val rendererSource: String by lazy {
-        sourceFile("LyricBlurRenderer.kt").readText()
+        sourceFile("LyricBlurRenderer.kt").readRefactorComponent()
     }
 
     private val clearBody: String by lazy {
@@ -39,5 +39,11 @@ class LyricBlurClearAlphaStructuralRegressionTest {
     private fun sourceFile(name: String): File = sequenceOf(
         File("src/main/java/dev/amenhancer/module/hook/$name"),
         File("app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+
     ).firstOrNull(File::isFile) ?: error("$name was not found from the unit-test working directory")
 }

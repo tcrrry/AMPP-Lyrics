@@ -9,7 +9,7 @@ import java.util.Locale
  * HLE's own original-metadata requests do not use this value: they carry a
  * request token and are localized to the detected source language instead.
  */
-internal object CatalogLanguagePolicy {
+object CatalogLanguagePolicy {
     /** An empty value deliberately means "leave Apple Music's request language alone". */
     const val DISABLED_TARGET_LANGUAGE = ""
 

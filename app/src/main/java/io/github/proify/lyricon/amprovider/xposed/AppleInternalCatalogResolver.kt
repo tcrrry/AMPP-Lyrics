@@ -27,9 +27,9 @@ private fun sanitizeCacheNamespace(raw: String): String = raw
 
 internal class AppleInternalCatalogResolver(
     context: Context,
-    private val classLoader: ClassLoader,
-    private val hookResolver: AppleMusicHookResolver,
-    private val mainHandler: Handler,
+    internal val classLoader: ClassLoader,
+    internal val hookResolver: AppleMusicHookResolver,
+    internal val mainHandler: Handler,
     cacheNamespace: String = "original_hyper_v1",
 ) {
     /**
@@ -37,95 +37,95 @@ internal class AppleInternalCatalogResolver(
      * Keep this executor private to the resolver so no host object or UI callback escapes the
      * explicit main/CPU boundary.
      */
-    private val catalogBackgroundExecutor: Executor = Executors.newFixedThreadPool(
+    internal val catalogBackgroundExecutor: Executor = Executors.newFixedThreadPool(
         2,
     ) { task ->
         Thread(task, "AM++ Catalog CPU").apply { isDaemon = true }
     }
-    private val catalogResponseDispatcher = AppleCatalogResponseWorkDispatcher(
+    internal val catalogResponseDispatcher = AppleCatalogResponseWorkDispatcher(
         mainExecutor = Executor { runnable ->
             mainHandler.post(runnable)
         },
         backgroundExecutor = catalogBackgroundExecutor,
         isMainThread = { Looper.myLooper() == Looper.getMainLooper() },
     )
-    private val cacheNamespace = sanitizeCacheNamespace(cacheNamespace)
-    private val persistentLocalizedCache = AppleLocalizedMetadataCache(
+    internal val cacheNamespace = sanitizeCacheNamespace(cacheNamespace)
+    internal val persistentLocalizedCache = AppleLocalizedMetadataCache(
         context = context,
         mainHandler = mainHandler,
         databaseName = "hyperlyricsenhanced_apple_metadata_${this.cacheNamespace}.db",
     )
-    private val persistentOriginalCache = AppleOriginalMetadataCache(
+    internal val persistentOriginalCache = AppleOriginalMetadataCache(
         context = context,
         mainHandler = mainHandler,
         databaseName = "hyperlyricsenhanced_apple_original_metadata_${this.cacheNamespace}.db",
         artistRegionPreferencesName =
             "hyperlyricsenhanced_apple_original_artist_regions_${this.cacheNamespace}",
     )
-    private val resolvedCatalogHolder by lazy {
+    internal val resolvedCatalogHolder by lazy {
         hookResolver.resolveClass(AppleMusicHookPoint.MEDIA_API_REPOSITORY_HOLDER_CLASS)
     }
-    private val cache = object : LinkedHashMap<String, Alias>(32, 0.75f, true) {
+    internal val cache = object : LinkedHashMap<String, Alias>(32, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Alias>?): Boolean =
             size > CACHE_SIZE
     }
-    private val inFlight = mutableMapOf<String, MutableList<(OriginalResolution) -> Unit>>()
-    private val originalCandidateCallbacks =
+    internal val inFlight = mutableMapOf<String, MutableList<(OriginalResolution) -> Unit>>()
+    internal val originalCandidateCallbacks =
         mutableMapOf<String, MutableList<(Alias) -> Unit>>()
-    private val catalogIdentityCache = ConcurrentHashMap<String, CatalogIdentity>()
-    private val catalogIdentityInFlight =
+    internal val catalogIdentityCache = ConcurrentHashMap<String, CatalogIdentity>()
+    internal val catalogIdentityInFlight =
         mutableMapOf<String, MutableList<(CatalogIdentity) -> Unit>>()
     /**
      * Artist-region evidence is shared only after a confirmed song resolution.
      * Storefront-localized artist display names are not original-region evidence.
      */
-    private val originalArtistLanguageCache = ConcurrentHashMap<String, String>()
-    private val originalEntityPending = LinkedHashMap<String, OriginalEntityRequest>()
-    private var originalEntityBatchScheduled = false
-    private var originalEntityBatchesRunning = 0
-    private var originalEntityBackgroundBatchesRunning = 0
-    private val localizedCache = object : LinkedHashMap<String, Alias>(32, 0.75f, true) {
+    internal val originalArtistLanguageCache = ConcurrentHashMap<String, String>()
+    internal val originalEntityPending = LinkedHashMap<String, OriginalEntityRequest>()
+    internal var originalEntityBatchScheduled = false
+    internal var originalEntityBatchesRunning = 0
+    internal var originalEntityBackgroundBatchesRunning = 0
+    internal val localizedCache = object : LinkedHashMap<String, Alias>(32, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Alias>?): Boolean =
             size > LOCALIZED_CACHE_SIZE
     }
-    private val localizedArtistAliasCache =
+    internal val localizedArtistAliasCache =
         object : LinkedHashMap<String, Alias>(32, 0.75f, true) {
             override fun removeEldestEntry(
                 eldest: MutableMap.MutableEntry<String, Alias>?,
             ): Boolean = size > LOCALIZED_ARTIST_ALIAS_CACHE_SIZE
         }
-    private val localizedInFlight =
+    internal val localizedInFlight =
         mutableMapOf<String, MutableList<(Alias?) -> Unit>>()
-    private val localizedPending = LinkedHashMap<String, LocalizedRequest>()
-    private var localizedBatchScheduled = false
-    private var localizedBatchesRunning = 0
-    private var localizedBackgroundBatchesRunning = 0
+    internal val localizedPending = LinkedHashMap<String, LocalizedRequest>()
+    internal var localizedBatchScheduled = false
+    internal var localizedBatchesRunning = 0
+    internal var localizedBackgroundBatchesRunning = 0
     /**
      * Fixed-region ID misses use a two-step identity/ISRC chain.  Keep that chain behind its own
      * small queue so a 50-item localized batch cannot turn into 50 simultaneous host requests.
      */
-    private val lockedIsrcFallbackPending = mutableListOf<LockedIsrcFallbackTask>()
-    private var lockedIsrcFallbackRunning = 0
-    private val requestPriorityByMediaId =
+    internal val lockedIsrcFallbackPending = mutableListOf<LockedIsrcFallbackTask>()
+    internal var lockedIsrcFallbackRunning = 0
+    internal val requestPriorityByMediaId =
         object : LinkedHashMap<String, RequestPriority>(256, 0.75f, true) {
             override fun removeEldestEntry(
                 eldest: MutableMap.MutableEntry<String, RequestPriority>?,
             ): Boolean = size > REQUEST_PRIORITY_CACHE_SIZE
         }
     @Volatile
-    private var requestScopeActive = false
-    private var requestScopeRevision = -1L
-    private val warmedSelections = mutableSetOf<Int>()
-    private val warmingSelections = mutableSetOf<Int>()
+    internal var requestScopeActive = false
+    internal var requestScopeRevision = -1L
+    internal val warmedSelections = mutableSetOf<Int>()
+    internal val warmingSelections = mutableSetOf<Int>()
     @Volatile
-    private var persistentLocalizedCacheEnabled = true
-    private var catalogAccess: CatalogAccess? = null
-    private val activeCatalogRequest = ThreadLocal<CatalogRequestLocalization?>()
-    private val pendingCatalogRequests = ConcurrentHashMap<String, CatalogRequestLocalization>()
-    private val catalogRequestSequence = AtomicLong()
-    private val catalogDiagnosticSequence = AtomicLong()
+    internal var persistentLocalizedCacheEnabled = true
+    internal var catalogAccess: CatalogAccess? = null
+    internal val activeCatalogRequest = ThreadLocal<CatalogRequestLocalization?>()
+    internal val pendingCatalogRequests = ConcurrentHashMap<String, CatalogRequestLocalization>()
+    internal val catalogRequestSequence = AtomicLong()
+    internal val catalogDiagnosticSequence = AtomicLong()
     @Volatile
-    private var contentUiLanguageSelection =
+    internal var contentUiLanguageSelection =
         RootConstants.DEFAULT_HOOK_APPLE_MUSIC_CONTENT_UI_LANGUAGE
 
     /**
@@ -157,17 +157,6 @@ internal class AppleInternalCatalogResolver(
                 }
             }
             warmPersistentLocalizedCache(contentUiLanguageSelection)
-        }
-    }
-
-    private fun warmPersistentOriginalCache() {
-        if (!persistentLocalizedCacheEnabled) return
-        persistentOriginalCache.warmRecentAsync { count ->
-            if (count != null) {
-                ProviderLogger.info("Apple 原地区元数据缓存预热完成: entries=$count")
-            } else {
-                ProviderLogger.info("Apple 原地区元数据缓存预热延后")
-            }
         }
     }
 
@@ -220,43 +209,6 @@ internal class AppleInternalCatalogResolver(
                 .also(localizedArtistAliasCache::putAll)
         }
         persistentLocalizedCache.putMany(changedEntries)
-    }
-
-    private fun warmPersistentLocalizedCache(selection: Int) {
-        if (!persistentLocalizedCacheEnabled) return
-        if (storefrontForContentUiLanguage(selection) == null) return
-        val shouldWarm = synchronized(warmedSelections) {
-            if (selection in warmedSelections) false
-            else synchronized(warmingSelections) { warmingSelections.add(selection) }
-        }
-        if (!shouldWarm) return
-        val prefix = "$selection:"
-        persistentLocalizedCache.warmRecentAsync(prefix) { delayedAliases ->
-            if (delayedAliases != null) {
-                finishPersistentCacheWarm(selection, delayedAliases)
-            } else {
-                synchronized(warmingSelections) { warmingSelections.remove(selection) }
-                ProviderLogger.info("Apple 地区元数据缓存预热延后: selection=$selection")
-            }
-        }
-    }
-
-    private fun finishPersistentCacheWarm(selection: Int, aliases: Map<String, Alias>) {
-        val artistAliases = aliases.filterKeys(::isLocalizedArtistAliasCacheKey)
-        val metadataAliases = aliases.filterKeys { key ->
-            !isLocalizedArtistAliasCacheKey(key)
-        }
-        synchronized(localizedCache) { localizedCache.putAll(metadataAliases) }
-        synchronized(localizedArtistAliasCache) {
-            localizedArtistAliasCache.putAll(artistAliases)
-        }
-        synchronized(warmedSelections) { warmedSelections.add(selection) }
-        synchronized(warmingSelections) { warmingSelections.remove(selection) }
-        ProviderLogger.info(
-            "Apple 地区元数据缓存预热完成: selection=$selection, " +
-                "metadata=${metadataAliases.size}, artistAlias=${artistAliases.size}, " +
-                "entries=${aliases.size}"
-        )
     }
 
     fun languageTagForCurrentRequest(selection: Int): String? =
@@ -374,127 +326,6 @@ internal class AppleInternalCatalogResolver(
         }
     }
 
-    private fun resolveOriginalMetadataFromCatalog(
-        metadata: MediaMetadataCache.Metadata,
-        allowEmptyIdentityRetry: Boolean = true,
-        priority: RequestPriority = RequestPriority.ACTIVE_PAGE,
-    ) {
-        val fallbackLanguages = if (AppleOriginalMetadataPolicy.isCjkGenre(metadata.genre)) {
-            languageTagsForGenre(metadata.genre)
-        } else {
-            emptyList()
-        }
-        resolveCatalogIdentity(metadata.id, fallbackLanguages) { identity ->
-            identity.fallbackAliases.firstOrNull()?.let { alias ->
-                publishOriginalCandidate(metadata.id, alias)
-            }
-            if (allowEmptyIdentityRetry && shouldRetryEmptyCatalogIdentity(
-                    mediaId = metadata.id,
-                    title = metadata.title,
-                    artist = metadata.artist,
-                    genre = metadata.genre,
-                    isrc = identity.isrc,
-                    catalogGenres = identity.genres,
-                )
-            ) {
-                ProviderLogger.info(
-                    "Apple 内部歌曲空身份重试: id=${metadata.id}, " +
-                        "title=${metadata.title}, artist=${metadata.artist}"
-                )
-                mainHandler.post {
-                    resolveOriginalMetadataFromCatalog(
-                        metadata = metadata,
-                        allowEmptyIdentityRetry = false,
-                        priority = currentRequestPriority(metadata.id, priority),
-                    )
-                }
-                return@resolveCatalogIdentity
-            }
-            val results = identity.fallbackAliases.toMutableList()
-            val isrc = identity.isrc
-            val languages = languageTagsForOriginalMetadata(
-                genre = metadata.genre,
-                catalogGenres = identity.genres,
-                isrc = isrc,
-            )
-            if (languages.isEmpty()) {
-                finishResolve(
-                    metadata = metadata,
-                    languages = languages,
-                    results = results,
-                    originKnown = isrc != null,
-                    artistIds = identity.artistIds,
-                )
-                return@resolveCatalogIdentity
-            }
-            fun queryNext(index: Int) {
-                if (index >= languages.size) {
-                    finishResolve(
-                        metadata = metadata,
-                        languages = languages,
-                        results = results,
-                        originKnown = isrc != null,
-                        artistIds = identity.artistIds,
-                    )
-                    return
-                }
-                val language = languages[index]
-                selectExactIdentityAlias(identity.fallbackAliases, language)?.let { exactAlias ->
-                    finishResolve(
-                        metadata = metadata,
-                        languages = listOf(language),
-                        results = listOf(exactAlias),
-                        originKnown = true,
-                        artistIds = identity.artistIds,
-                    )
-                    return
-                }
-                resolveOriginalEntityForLanguage(
-                    mediaId = metadata.id,
-                    lookupIds = listOf(metadata.id),
-                    entityType = LocalizedEntityType.SONG,
-                    language = language,
-                    priority = currentRequestPriority(metadata.id, priority),
-                ) { resolvedAlias ->
-                    val exactAlias = resolvedAlias?.takeIf { alias ->
-                        (alias.title.isNotBlank() || alias.artist.isNotBlank()) &&
-                            isConfidentOriginalSongAlias(
-                                alias = alias,
-                                localizedTitle = metadata.title.orEmpty(),
-                                localizedArtist = metadata.artist.orEmpty(),
-                            )
-                    }
-                    if (exactAlias != null) {
-                        val regionalArtistIds =
-                            catalogIdentityCache[metadata.id]?.artistIds.orEmpty()
-                        finishResolve(
-                            metadata = metadata,
-                            languages = listOf(language),
-                            results = listOf(exactAlias),
-                            originKnown = true,
-                            artistIds = (
-                                identity.artistIds + regionalArtistIds
-                            ).distinct(),
-                        )
-                    } else {
-                        if (resolvedAlias != null) {
-                            invalidateOriginalEntity(metadata.id, LocalizedEntityType.SONG)
-                        }
-                        if (isrc == null) {
-                            queryNext(index + 1)
-                        } else {
-                            queryByIsrc(isrc, language) { song ->
-                                song?.alias?.let(results::add)
-                                queryNext(index + 1)
-                            }
-                        }
-                    }
-                }
-            }
-            queryNext(0)
-        }
-    }
-
     fun resolveOriginalEntityForLanguage(
         mediaId: String,
         lookupIds: Collection<String>,
@@ -562,154 +393,6 @@ internal class AppleInternalCatalogResolver(
 
     fun invalidateOriginalEntity(mediaId: String, entityType: LocalizedEntityType) {
         persistentOriginalCache.remove(originalDirectEntityCacheKey(entityType, mediaId))
-    }
-
-    private fun enqueueOriginalEntityRequest(request: OriginalEntityRequest) {
-        val prioritized = request.copy(
-            priority = currentRequestPriority(request.mediaId, request.priority),
-        )
-        val shouldSchedule = synchronized(originalEntityPending) {
-            val existing = originalEntityPending[prioritized.requestKey]
-            originalEntityPending[prioritized.requestKey] = if (existing == null) {
-                prioritized
-            } else {
-                existing.copy(
-                    priority = higherPriority(existing.priority, prioritized.priority),
-                    callbacks = existing.callbacks + prioritized.callbacks,
-                )
-            }
-            if (
-                originalEntityBatchScheduled ||
-                !canStartOriginalEntityBatchLocked()
-            ) {
-                false
-            } else {
-                originalEntityBatchScheduled = true
-                true
-            }
-        }
-        if (shouldSchedule) {
-            mainHandler.postDelayed(::processOriginalEntityBatch, ORIGINAL_ENTITY_BATCH_DELAY_MS)
-        }
-    }
-
-    private fun processOriginalEntityBatch() {
-        val batch = synchronized(originalEntityPending) {
-            originalEntityBatchScheduled = false
-            if (
-                originalEntityPending.isEmpty() ||
-                !canStartOriginalEntityBatchLocked()
-            ) return
-            val pendingValues = originalEntityPending.values.toList()
-            val first = pendingValues[
-                selectNextRequestIndex(pendingValues.map(OriginalEntityRequest::priority))
-                    ?: return
-            ]
-            val selected = mutableListOf<OriginalEntityRequest>()
-            val selectedIds = linkedSetOf<String>()
-            originalEntityPending.values.forEach { request ->
-                if (
-                    request.priority == first.priority &&
-                    request.storefront == first.storefront &&
-                    request.language == first.language &&
-                    request.entityType == first.entityType
-                ) {
-                    val newIds = request.lookupIds.filterNot(selectedIds::contains)
-                    if (
-                        selected.isNotEmpty() &&
-                        selectedIds.size + newIds.size > ORIGINAL_ENTITY_BATCH_SIZE
-                    ) return@forEach
-                    selected += request
-                    selectedIds += request.lookupIds
-                }
-            }
-            selected.forEach { originalEntityPending.remove(it.requestKey) }
-            originalEntityBatchesRunning += 1
-            if (first.priority == RequestPriority.BACKGROUND) {
-                originalEntityBackgroundBatchesRunning += 1
-            }
-            selected
-        }
-
-        val first = batch.first()
-        queryByConfiguredRegion(
-            mediaIds = batch.flatMap(OriginalEntityRequest::lookupIds).distinct(),
-            entityType = first.entityType,
-            storefront = first.storefront,
-            language = first.language,
-        ) { resolved ->
-            // Matching IDs and validating language/alias candidates are pure CPU work.  Keep the
-            // mutable caches and resolver callbacks on the main executor after this pre-processing.
-            catalogBackgroundExecutor.execute {
-                val matches = runCatching {
-                    val resolvedAliases = resolved.mapValues { it.value.alias }
-                    batch.map { request ->
-                        request to selectExactOriginalEntityAlias(
-                            mediaId = request.mediaId,
-                            lookupIds = request.lookupIds,
-                            resolved = resolvedAliases,
-                            sourceLanguage = request.language,
-                        )
-                    }
-                }.onFailure { error ->
-                    ProviderLogger.error("Apple 原地区实体后台候选匹配失败", error)
-                }.getOrElse {
-                    batch.map { request -> request to null }
-                }
-                mainHandler.post {
-                    matches.forEach { (request, alias) ->
-                        if (alias != null) {
-                            persistentOriginalCache.put(request.directCacheKey, alias)
-                        }
-                        ProviderLogger.info(
-                            "Apple 原地区实体查询完成: id=${request.mediaId}, " +
-                                "entityType=${request.entityType}, language=${request.language}, " +
-                                "batch=${batch.size}, priority=${request.priority}, hit=${alias != null}, " +
-                                "value=${alias?.title}/${alias?.artist}/${alias?.album}"
-                        )
-                        request.callbacks.forEach { callback -> callback(alias) }
-                    }
-                    synchronized(originalEntityPending) {
-                        originalEntityBatchesRunning -= 1
-                        if (first.priority == RequestPriority.BACKGROUND) {
-                            originalEntityBackgroundBatchesRunning -= 1
-                        }
-                    }
-                    scheduleOriginalEntityBatchIfCapacity()
-                }
-            }
-        }
-        scheduleOriginalEntityBatchIfCapacity()
-    }
-
-    private fun scheduleOriginalEntityBatchIfCapacity() {
-        val shouldSchedule = synchronized(originalEntityPending) {
-            if (
-                originalEntityPending.isEmpty() ||
-                originalEntityBatchScheduled ||
-                !canStartOriginalEntityBatchLocked()
-            ) {
-                false
-            } else {
-                originalEntityBatchScheduled = true
-                true
-            }
-        }
-        if (shouldSchedule) mainHandler.post(::processOriginalEntityBatch)
-    }
-
-    private fun canStartOriginalEntityBatchLocked(): Boolean {
-        val nextPriority = originalEntityPending.values
-            .maxByOrNull { request -> request.priority.ordinal }
-            ?.priority
-            ?: return false
-        return canStartRequest(
-            priority = nextPriority,
-            totalRunning = originalEntityBatchesRunning,
-            backgroundRunning = originalEntityBackgroundBatchesRunning,
-            maxRunning = MAX_ORIGINAL_ENTITY_BATCHES_RUNNING,
-            maxBackgroundRunning = MAX_BACKGROUND_ORIGINAL_ENTITY_BATCHES_RUNNING,
-        )
     }
 
     fun resolveCachedOriginalEntity(
@@ -902,360 +585,6 @@ internal class AppleInternalCatalogResolver(
         resolveLanguage(0, validLookups)
     }
 
-    private fun resolveManyForContentUiLanguageSingleLanguage(
-        lookups: Collection<LocalizedLookup>,
-        selection: Int,
-        priority: RequestPriority,
-        storefront: String,
-        language: String,
-        onResolved: (mediaId: String, alias: Alias?) -> Unit,
-        onComplete: () -> Unit = {},
-    ) {
-        val requests = lookups.asSequence()
-            .mapNotNull { lookup ->
-                val mediaId = lookup.mediaId.trim()
-                if (mediaId.isEmpty() || !mediaId.all(Char::isDigit)) return@mapNotNull null
-                val normalizedLookupIds = sequenceOf(mediaId)
-                    .plus(lookup.lookupIds.asSequence())
-                    .map(String::trim)
-                    .filter { it.isNotEmpty() && it.all(Char::isDigit) }
-                    .distinct()
-                    .take(LOCALIZED_BATCH_SIZE)
-                    .toList()
-                val cacheKey = localizedMetadataCacheKey(
-                    selection,
-                    lookup.entityType,
-                    mediaId,
-                    language,
-                )
-                rememberRequestPriority(mediaId, priority)
-                LocalizedRequest(
-                    cacheKey = cacheKey,
-                    requestKey = "$cacheKey:${normalizedLookupIds.joinToString(",")}".trim(),
-                    mediaId = mediaId,
-                    lookupIds = normalizedLookupIds,
-                    entityType = lookup.entityType,
-                    selection = selection,
-                    storefront = storefront,
-                    language = language,
-                    priority = currentRequestPriority(mediaId, priority),
-                )
-            }
-            .distinctBy(LocalizedRequest::requestKey)
-            .toList()
-        if (requests.isEmpty()) {
-            onComplete()
-            return
-        }
-
-        val requestCompletionCount = AtomicLong(requests.size.toLong())
-        val complete: (LocalizedRequest, Alias?) -> Unit = { request, alias ->
-            onResolved(request.mediaId, alias)
-            if (requestCompletionCount.decrementAndGet() == 0L) onComplete()
-        }
-        val uncached = mutableListOf<LocalizedRequest>()
-        requests.forEach { request ->
-            val cached = synchronized(localizedCache) { localizedCache[request.cacheKey] }
-            if (cached != null) {
-                complete(request, cached)
-                return@forEach
-            }
-            val ownsRequest = synchronized(localizedInFlight) {
-                val callbacks = localizedInFlight[request.requestKey]
-                if (callbacks != null) {
-                    callbacks += { alias -> complete(request, alias) }
-                    promotePendingRequests(listOf(request.mediaId), request.priority)
-                    false
-                } else {
-                    localizedInFlight[request.requestKey] =
-                        mutableListOf({ alias -> complete(request, alias) })
-                    true
-                }
-            }
-            if (ownsRequest) uncached += request
-        }
-        if (uncached.isEmpty()) return
-        persistentLocalizedCache.getMany(uncached.map(LocalizedRequest::cacheKey)) { cached ->
-            uncached.forEach { request ->
-                val alias = cached[request.cacheKey]
-                if (alias != null) finishLocalizedCacheHit(request, alias)
-                else enqueueLocalizedRequest(request)
-            }
-        }
-    }
-
-    private fun finishLocalizedCacheHit(request: LocalizedRequest, alias: Alias) {
-        synchronized(localizedCache) { localizedCache[request.cacheKey] = alias }
-        val callbacks = synchronized(localizedInFlight) {
-            localizedInFlight.remove(request.requestKey).orEmpty()
-        }
-        ProviderLogger.info(
-            "Apple 地区元数据持久缓存命中: id=${request.mediaId}, " +
-                "entityType=${request.entityType}, selection=${request.selection}"
-        )
-        callbacks.forEach { callback -> callback(alias) }
-    }
-
-    private fun enqueueLocalizedRequest(request: LocalizedRequest) {
-        val prioritized = request.copy(
-            priority = currentRequestPriority(request.mediaId, request.priority),
-        )
-        val shouldSchedule = synchronized(localizedPending) {
-            val existing = localizedPending[prioritized.requestKey]
-            localizedPending[prioritized.requestKey] = if (existing == null) {
-                prioritized
-            } else {
-                existing.copy(
-                    priority = higherPriority(existing.priority, prioritized.priority),
-                )
-            }
-            if (
-                localizedBatchScheduled ||
-                !canStartLocalizedBatchLocked()
-            ) {
-                false
-            } else {
-                localizedBatchScheduled = true
-                true
-            }
-        }
-        if (shouldSchedule) {
-            mainHandler.postDelayed(::processLocalizedBatch, LOCALIZED_BATCH_DELAY_MS)
-        }
-    }
-
-    private fun processLocalizedBatch() {
-        val batch = synchronized(localizedPending) {
-            localizedBatchScheduled = false
-            if (
-                localizedPending.isEmpty() ||
-                !canStartLocalizedBatchLocked()
-            ) return
-            val pendingValues = localizedPending.values.toList()
-            val first = pendingValues[
-                selectNextRequestIndex(pendingValues.map(LocalizedRequest::priority))
-                    ?: return
-            ]
-            val selected = mutableListOf<LocalizedRequest>()
-            val selectedIds = linkedSetOf<String>()
-            localizedPending.values.forEach { request ->
-                if (
-                    request.priority == first.priority &&
-                    request.storefront == first.storefront &&
-                    request.language == first.language &&
-                    request.entityType == first.entityType
-                ) {
-                    val newIds = request.lookupIds.filterNot(selectedIds::contains)
-                    if (selected.isNotEmpty() && selectedIds.size + newIds.size > LOCALIZED_BATCH_SIZE) {
-                        return@forEach
-                    }
-                    selected += request
-                    selectedIds += request.lookupIds
-                }
-            }
-            selected.forEach { localizedPending.remove(it.requestKey) }
-            localizedBatchesRunning += 1
-            if (first.priority == RequestPriority.BACKGROUND) {
-                localizedBackgroundBatchesRunning += 1
-            }
-            selected
-        }
-
-        queryByConfiguredRegion(
-            mediaIds = batch.flatMap(LocalizedRequest::lookupIds).distinct(),
-            entityType = batch.first().entityType,
-            storefront = batch.first().storefront,
-            language = batch.first().language,
-        ) { songs ->
-            // Candidate ID matching and empty-alias filtering do not touch host objects.  Keep
-            // them off the main thread, then publish the bounded cache/callback mutations there.
-            catalogBackgroundExecutor.execute {
-                val matches = runCatching {
-                    batch.map { request ->
-                        val resolvedEntry = request.lookupIds.firstNotNullOfOrNull { lookupId ->
-                            songs?.get(lookupId)?.let { lookupId to it }
-                        }
-                        val alias = resolvedEntry?.second?.alias?.takeIf {
-                            it.title.isNotBlank() || it.artist.isNotBlank()
-                        }
-                        Triple(request, resolvedEntry?.first, alias)
-                    }
-                }.onFailure { error ->
-                    ProviderLogger.error("Apple 地区批量元数据后台候选匹配失败", error)
-                }.getOrElse {
-                    batch.map { request -> Triple(request, null, null) }
-                }
-                mainHandler.post {
-                    var remaining = matches.size
-                    fun finishBatch() {
-                        remaining -= 1
-                        if (remaining > 0) return
-                        synchronized(localizedPending) {
-                            localizedBatchesRunning -= 1
-                            if (batch.first().priority == RequestPriority.BACKGROUND) {
-                                localizedBackgroundBatchesRunning -= 1
-                            }
-                        }
-                        scheduleLocalizedBatchIfCapacity()
-                    }
-                    matches.forEach { (request, resolvedLookupId, alias) ->
-                        if (alias != null) {
-                            finishLocalizedRequest(request, resolvedLookupId, alias)
-                            finishBatch()
-                        } else if (request.entityType == LocalizedEntityType.SONG) {
-                            // A storefront can assign a different catalog ID to the same song.
-                            // Reuse the original HLE identity/ISRC lookup as a fallback, but keep
-                            // this second query on the fixed profile's storefront and language.
-                            enqueueLockedIsrcFallback(request) { fallbackLookupId, fallbackAlias ->
-                                finishLocalizedRequest(request, fallbackLookupId, fallbackAlias)
-                                finishBatch()
-                            }
-                        } else {
-                            finishLocalizedRequest(request, null, null)
-                            finishBatch()
-                        }
-                    }
-                }
-            }
-        }
-        scheduleLocalizedBatchIfCapacity()
-    }
-
-    /** Enqueues one fixed-region miss for the bounded identity/ISRC fallback scheduler. */
-    private fun enqueueLockedIsrcFallback(
-        request: LocalizedRequest,
-        onResolved: (resolvedLookupId: String?, alias: Alias?) -> Unit,
-    ) {
-        lockedIsrcFallbackPending += LockedIsrcFallbackTask(
-            request = request,
-            onResolved = onResolved,
-        )
-        scheduleLockedIsrcFallbacks()
-    }
-
-    private fun scheduleLockedIsrcFallbacks() {
-        while (
-            lockedIsrcFallbackRunning < MAX_LOCKED_ISRC_FALLBACK_RUNNING &&
-                lockedIsrcFallbackPending.isNotEmpty()
-        ) {
-            val task = nextLockedIsrcFallbackTask() ?: break
-            lockedIsrcFallbackRunning += 1
-            resolveLocalizedRequestByLockedIsrc(task.request) { resolvedLookupId, alias ->
-                lockedIsrcFallbackRunning = (lockedIsrcFallbackRunning - 1).coerceAtLeast(0)
-                task.onResolved(resolvedLookupId, alias)
-                scheduleLockedIsrcFallbacks()
-            }
-        }
-    }
-
-    /**
-     * Selects the highest effective priority at dispatch time.  The effective value is read from
-     * [requestPriorityByMediaId], so a visible-page promotion or a request-scope update also
-     * reorders tasks that are already waiting in this fallback queue.  Equal priorities retain
-     * insertion order to avoid unnecessary churn.
-     */
-    private fun nextLockedIsrcFallbackTask(): LockedIsrcFallbackTask? {
-        val priorities = lockedIsrcFallbackPending.map { task ->
-            currentRequestPriority(task.request.mediaId, task.request.priority)
-        }
-        val index = selectNextRequestIndex(priorities) ?: return null
-        return lockedIsrcFallbackPending.removeAt(index)
-    }
-
-    /**
-     * Resolves a fixed-region song missed by the ID batch through the same identity/ISRC fallback
-     * used by the original-region HLE path.  The identity probe is only a module-owned metadata
-     * lookup; the follow-up song query still uses [request.language]'s locked storefront.
-     */
-    private fun resolveLocalizedRequestByLockedIsrc(
-        request: LocalizedRequest,
-        onResolved: (resolvedLookupId: String?, alias: Alias?) -> Unit,
-    ) {
-        val candidateIds = (listOf(request.mediaId) + request.lookupIds)
-            .map(String::trim)
-            .filter { it.isNotEmpty() && it.all(Char::isDigit) }
-            .distinct()
-        if (candidateIds.isEmpty()) {
-            onResolved(null, null)
-            return
-        }
-
-        val attemptedIsrcs = mutableSetOf<String>()
-        fun queryNext(index: Int) {
-            if (index >= candidateIds.size) {
-                onResolved(null, null)
-                return
-            }
-            val identityId = candidateIds[index]
-            fun queryIdentity(identity: CatalogIdentity?) {
-                val isrc = identity?.isrc?.trim()?.takeIf(String::isNotEmpty)
-                if (isrc == null || !attemptedIsrcs.add(isrc)) {
-                    queryNext(index + 1)
-                    return
-                }
-                ProviderLogger.info(
-                    "Apple 固定地区歌曲启用 ISRC 备用查询: id=${request.mediaId}, " +
-                        "identityId=$identityId, isrc=$isrc, storefront=${request.storefront}, " +
-                        "language=${request.language}",
-                )
-                queryByIsrc(
-                    isrc = isrc,
-                    language = request.language,
-                    storefrontOverride = request.storefront,
-                ) { song ->
-                    val alias = song?.alias?.takeIf {
-                        it.title.isNotBlank() || it.artist.isNotBlank()
-                    }
-                    if (alias != null) {
-                        onResolved(song?.id, alias)
-                    } else {
-                        queryNext(index + 1)
-                    }
-                }
-            }
-            catalogIdentityCache[identityId]?.let { cached ->
-                queryIdentity(cached)
-                return
-            }
-            // Keep the identity probe region-neutral.  It obtains only ISRC/relationship facts;
-            // no alias from this account-region response is ever published for fixed mode.
-            resolveCatalogIdentity(identityId, emptyList()) { identity ->
-                queryIdentity(identity)
-            }
-        }
-        queryNext(0)
-    }
-
-    private fun scheduleLocalizedBatchIfCapacity() {
-        val shouldSchedule = synchronized(localizedPending) {
-            if (
-                localizedPending.isEmpty() ||
-                localizedBatchScheduled ||
-                !canStartLocalizedBatchLocked()
-            ) {
-                false
-            } else {
-                localizedBatchScheduled = true
-                true
-            }
-        }
-        if (shouldSchedule) mainHandler.post(::processLocalizedBatch)
-    }
-
-    private fun canStartLocalizedBatchLocked(): Boolean {
-        val nextPriority = localizedPending.values
-            .maxByOrNull { request -> request.priority.ordinal }
-            ?.priority
-            ?: return false
-        return canStartRequest(
-            priority = nextPriority,
-            totalRunning = localizedBatchesRunning,
-            backgroundRunning = localizedBackgroundBatchesRunning,
-            maxRunning = MAX_LOCALIZED_BATCHES_RUNNING,
-            maxBackgroundRunning = MAX_BACKGROUND_LOCALIZED_BATCHES_RUNNING,
-        )
-    }
-
     fun promotePendingRequests(
         mediaIds: Collection<String>,
         priority: RequestPriority,
@@ -1338,1164 +667,7 @@ internal class AppleInternalCatalogResolver(
         scheduleOriginalEntityBatchIfCapacity()
     }
 
-    private fun updatePendingRequestPriorities(
-        scopedPriorities: Map<String, RequestPriority>,
-        onlyMediaIds: Set<String>? = null,
-    ): Int {
-        var changed = 0
-        synchronized(localizedPending) {
-            localizedPending.entries.forEach { entry ->
-                val request = entry.value
-                if (onlyMediaIds != null && request.mediaId !in onlyMediaIds) {
-                    return@forEach
-                }
-                val next = scopedPriorities[request.mediaId] ?: RequestPriority.BACKGROUND
-                if (request.priority != next) {
-                    entry.setValue(request.copy(priority = next))
-                    changed += 1
-                }
-            }
-        }
-        synchronized(originalEntityPending) {
-            originalEntityPending.entries.forEach { entry ->
-                val request = entry.value
-                if (onlyMediaIds != null && request.mediaId !in onlyMediaIds) {
-                    return@forEach
-                }
-                val next = scopedPriorities[request.mediaId] ?: RequestPriority.BACKGROUND
-                if (request.priority != next) {
-                    entry.setValue(request.copy(priority = next))
-                    changed += 1
-                }
-            }
-        }
-        // Fallback tasks read their effective priority when a slot is selected.  Rescheduling
-        // here also wakes the queue when a completed task left capacity available during a scope
-        // update or explicit promotion.
-        scheduleLockedIsrcFallbacks()
-        return changed
-    }
-
-    private fun currentScopedPriority(mediaId: String): RequestPriority =
-        synchronized(requestPriorityByMediaId) {
-            requestPriorityByMediaId[mediaId.trim()] ?: RequestPriority.BACKGROUND
-        }
-
-    private fun rememberRequestPriority(mediaId: String, priority: RequestPriority) {
-        val normalizedId = mediaId.trim()
-        if (normalizedId.isEmpty()) return
-        synchronized(requestPriorityByMediaId) {
-            if (requestScopeActive) {
-                requestPriorityByMediaId.putIfAbsent(
-                    normalizedId,
-                    RequestPriority.BACKGROUND,
-                )
-                return
-            }
-            requestPriorityByMediaId[normalizedId] = higherPriority(
-                requestPriorityByMediaId[normalizedId] ?: RequestPriority.BACKGROUND,
-                priority,
-            )
-        }
-    }
-
-    private fun currentRequestPriority(
-        mediaId: String,
-        fallback: RequestPriority,
-    ): RequestPriority = synchronized(requestPriorityByMediaId) {
-        if (requestScopeActive) {
-            requestPriorityByMediaId[mediaId.trim()] ?: RequestPriority.BACKGROUND
-        } else {
-            higherPriority(requestPriorityByMediaId[mediaId.trim()] ?: fallback, fallback)
-        }
-    }
-
-    private fun finishLocalizedRequest(
-        request: LocalizedRequest,
-        resolvedLookupId: String?,
-        alias: Alias?,
-    ) {
-        if (alias != null) {
-            synchronized(localizedCache) { localizedCache[request.cacheKey] = alias }
-            persistentLocalizedCache.put(request.cacheKey, alias)
-        }
-        val callbacks = synchronized(localizedInFlight) {
-            localizedInFlight.remove(request.requestKey).orEmpty()
-        }
-        ProviderLogger.info(
-                "Apple 播放元数据地区查询完成: id=${request.mediaId}, " +
-                "lookupIds=${request.lookupIds}, resolvedBy=$resolvedLookupId, " +
-                "entityType=${request.entityType}, " +
-                "selection=${request.selection}, storefront=${request.storefront}, " +
-                "language=${request.language}, priority=${request.priority}, " +
-                "value=${alias?.title}/${alias?.artist}"
-        )
-        callbacks.forEach { callback -> callback(alias) }
-    }
-
-    private fun finishResolve(
-        metadata: MediaMetadataCache.Metadata,
-        languages: List<String>,
-        results: List<Alias>,
-        originKnown: Boolean,
-        artistIds: List<String>,
-    ) {
-        // Canonical language filtering and alias confidence checks are pure operations over
-        // immutable DTOs.  Keep cache mutation and completion publication on the host main thread,
-        // but do not make the UI wait for this potentially multi-candidate selection pass.
-        catalogBackgroundExecutor.execute {
-            val prepared = runCatching {
-                prepareOriginalResolution(
-                    metadata = metadata,
-                    languages = languages,
-                    results = results,
-                    originKnown = originKnown,
-                    artistIds = artistIds,
-                )
-            }.onFailure { error ->
-                ProviderLogger.error(
-                    "Apple 内部原名候选后台匹配失败: id=${metadata.id}",
-                    error,
-                )
-            }.getOrElse {
-                PreparedOriginalResolution(
-                    canonicalLanguages = languages.map(String::trim).filter(String::isNotEmpty),
-                    sourceLanguage = languages.singleOrNull(),
-                    originalAlias = null,
-                    resolvedAlbum = null,
-                    originKnown = originKnown,
-                    artistIds = artistIds,
-                )
-            }
-            mainHandler.post {
-                publishOriginalResolution(metadata, prepared)
-            }
-        }
-    }
-
-    private fun prepareOriginalResolution(
-        metadata: MediaMetadataCache.Metadata,
-        languages: List<String>,
-        results: List<Alias>,
-        originKnown: Boolean,
-        artistIds: List<String>,
-    ): PreparedOriginalResolution {
-        val canonicalLanguages = languages.map(::canonicalOriginalLanguage).distinct()
-        val sourceLanguage = canonicalLanguages.singleOrNull()
-        val acceptableResults = regionalOriginalAliases(results, canonicalLanguages)
-        val selected = selectOriginalAlias(
-            variants = acceptableResults,
-            localizedTitle = metadata.title.orEmpty(),
-            localizedArtist = metadata.artist.orEmpty()
-        )
-        val confirmedRegionalAlias = if (originKnown) {
-            acceptableResults.lastOrNull { alias ->
-                canonicalOriginalLanguage(alias.language) in canonicalLanguages &&
-                    isConfidentOriginalSongAlias(
-                        alias = alias,
-                        localizedTitle = metadata.title.orEmpty(),
-                        localizedArtist = metadata.artist.orEmpty(),
-                    )
-            }
-        } else {
-            null
-        }
-        val originalAlias = selected ?: confirmedRegionalAlias
-        val resolvedAlbum = originalAlbumFromResolution(
-            alias = originalAlias,
-            acceptableResults = acceptableResults,
-        )
-        return PreparedOriginalResolution(
-            canonicalLanguages = canonicalLanguages,
-            sourceLanguage = sourceLanguage,
-            originalAlias = originalAlias,
-            resolvedAlbum = resolvedAlbum,
-            originKnown = originKnown,
-            artistIds = artistIds,
-        )
-    }
-
-    private fun publishOriginalResolution(
-        metadata: MediaMetadataCache.Metadata,
-        prepared: PreparedOriginalResolution,
-    ) {
-        val originalAlias = prepared.originalAlias
-        if (originalAlias != null) {
-            synchronized(cache) { cache[metadata.id] = originalAlias }
-            persistentOriginalCache.put(originalSongCacheKey(metadata.id), originalAlias)
-        }
-        discardOriginalCandidates(metadata.id)
-        val callbacks = synchronized(inFlight) { inFlight.remove(metadata.id).orEmpty() }
-        ProviderLogger.info(
-            "Apple 内部原名查询完成: id=${metadata.id}, genre=${metadata.genre}, " +
-                "languages=${prepared.canonicalLanguages}, " +
-                "selected=${originalAlias?.title}/${originalAlias?.artist}"
-        )
-        val resolution = OriginalResolution(
-            alias = originalAlias,
-            language = originalAlias?.language?.takeIf(String::isNotBlank)
-                ?: prepared.sourceLanguage,
-            originKnown = prepared.originKnown,
-            artistIds = prepared.artistIds,
-            album = prepared.resolvedAlbum,
-        )
-        callbacks.forEach { callback -> callback(resolution) }
-    }
-
-    private fun finishCachedOriginalResolve(mediaId: String, alias: Alias) {
-        discardOriginalCandidates(mediaId)
-        val callbacks = synchronized(inFlight) { inFlight.remove(mediaId).orEmpty() }
-        ProviderLogger.info(
-            "Apple 原地区元数据缓存命中: id=$mediaId, language=${alias.language}"
-        )
-        val resolution = OriginalResolution(
-            alias = alias,
-            language = alias.language.takeIf(String::isNotBlank),
-            originKnown = true,
-            artistIds = emptyList(),
-            album = alias.album,
-        )
-        callbacks.forEach { callback -> callback(resolution) }
-    }
-
-    private fun registerOriginalCandidateCallback(
-        mediaId: String,
-        callback: (Alias) -> Unit,
-    ) {
-        synchronized(originalCandidateCallbacks) {
-            originalCandidateCallbacks.getOrPut(mediaId) { mutableListOf() }.add(callback)
-        }
-        catalogIdentityCache[mediaId]
-            ?.fallbackAliases
-            ?.firstOrNull()
-            ?.let { alias -> publishOriginalCandidate(mediaId, alias) }
-    }
-
-    private fun publishOriginalCandidate(mediaId: String, alias: Alias) {
-        if (alias.title.isBlank() && alias.artist.isBlank()) return
-        val callbacks = synchronized(originalCandidateCallbacks) {
-            originalCandidateCallbacks.remove(mediaId).orEmpty()
-        }
-        callbacks.forEach { callback -> callback(alias) }
-    }
-
-    private fun discardOriginalCandidates(mediaId: String) {
-        synchronized(originalCandidateCallbacks) {
-            originalCandidateCallbacks.remove(mediaId)
-        }
-    }
-
-    private fun resolveCatalogIdentity(
-        mediaId: String,
-        languages: List<String>,
-        onResult: (CatalogIdentity) -> Unit
-    ) {
-        catalogIdentityCache[mediaId]?.takeIf(::isUsefulCatalogIdentity)?.let {
-            onResult(it)
-            return
-        }
-        catalogIdentityCache.remove(mediaId)
-        val ownsRequest = synchronized(catalogIdentityInFlight) {
-            val callbacks = catalogIdentityInFlight[mediaId]
-            if (callbacks != null) {
-                callbacks += onResult
-                false
-            } else {
-                catalogIdentityInFlight[mediaId] = mutableListOf(onResult)
-                true
-            }
-        }
-        if (!ownsRequest) return
-
-        queryById(mediaId, null) { currentSong ->
-            currentSong?.isrc?.let { isrc ->
-                ProviderLogger.info("Apple 内部歌曲 ISRC: id=$mediaId, isrc=$isrc")
-                finishCatalogIdentity(
-                    mediaId,
-                    CatalogIdentity(
-                        isrc = isrc,
-                        fallbackAliases = listOfNotNull(currentSong.alias),
-                        genres = currentSong.genres,
-                        artistIds = currentSong.artistIds,
-                    ),
-                )
-                return@queryById
-            }
-
-            val fallbackAliases = mutableListOf<Alias>().apply {
-                currentSong?.alias?.let(::add)
-            }
-            val fallbackGenres = mutableListOf<String>().apply {
-                currentSong?.genres?.let(::addAll)
-            }
-            fun queryNext(index: Int) {
-                if (index >= languages.size) {
-                    finishCatalogIdentity(
-                        mediaId,
-                        CatalogIdentity(
-                            isrc = null,
-                            fallbackAliases = fallbackAliases,
-                            genres = fallbackGenres,
-                            artistIds = currentSong?.artistIds.orEmpty(),
-                        ),
-                    )
-                    return
-                }
-                val language = languages[index]
-                queryById(mediaId, language) { song ->
-                    song?.alias?.let(fallbackAliases::add)
-                    song?.genres?.let(fallbackGenres::addAll)
-                    val isrc = song?.isrc
-                    if (isrc != null) {
-                        ProviderLogger.info(
-                            "Apple 内部歌曲 ISRC: id=$mediaId, language=$language, isrc=$isrc"
-                        )
-                        finishCatalogIdentity(
-                            mediaId,
-                            CatalogIdentity(
-                                isrc = isrc,
-                                fallbackAliases = fallbackAliases,
-                                genres = fallbackGenres.distinct(),
-                                artistIds = (
-                                    currentSong?.artistIds.orEmpty() + song.artistIds
-                                ).distinct(),
-                            ),
-                        )
-                    } else {
-                        queryNext(index + 1)
-                    }
-                }
-            }
-            queryNext(0)
-        }
-    }
-
-    private fun rememberCatalogIdentity(mediaId: String, song: CatalogSong) {
-        val isrc = song.isrc ?: return
-        val identity = CatalogIdentity(
-            isrc = isrc,
-            fallbackAliases = listOfNotNull(song.alias),
-            genres = song.genres,
-            artistIds = song.artistIds,
-        )
-        finishCatalogIdentity(mediaId, identity)
-    }
-
-    private fun finishCatalogIdentity(mediaId: String, identity: CatalogIdentity) {
-        val merged = synchronized(catalogIdentityCache) {
-            val previous = catalogIdentityCache[mediaId]
-            val next = if (previous == null) identity else {
-                CatalogIdentity(
-                    isrc = previous.isrc ?: identity.isrc,
-                    fallbackAliases = (previous.fallbackAliases + identity.fallbackAliases).distinct(),
-                    genres = (previous.genres + identity.genres).distinct(),
-                    artistIds = (previous.artistIds + identity.artistIds).distinct(),
-                )
-            }
-            if (isUsefulCatalogIdentity(next)) {
-                catalogIdentityCache[mediaId] = next
-            } else {
-                catalogIdentityCache.remove(mediaId)
-            }
-            next
-        }
-        val cacheable = isUsefulCatalogIdentity(merged)
-        // The resolver may finish after a different metadata profile has become active. Keep
-        // catalog identity facts in this resolver's namespace instead of letting a late callback
-        // mutate whichever profile happens to be globally selected at that moment.
-        MediaMetadataCache.updateCatalogGenres(
-            mediaId = mediaId,
-            genres = merged.genres,
-            profile = cacheNamespace,
-        )
-        // Remove and drain the in-flight callbacks on main together with their publication. This
-        // prevents a new request from observing a removed key while the background preprocessing
-        // result is still waiting in the main queue.
-        fun publish() {
-            val callbacks = synchronized(catalogIdentityInFlight) {
-                catalogIdentityInFlight.remove(mediaId).orEmpty()
-            }
-            if (callbacks.isNotEmpty()) {
-                ProviderLogger.info(
-                    "Apple 内部歌曲身份已就绪: id=$mediaId, isrc=${merged.isrc}, " +
-                        "genres=${merged.genres}, " +
-                        "artistIds=${merged.artistIds}, candidates=${merged.fallbackAliases.size}, " +
-                        "cached=$cacheable"
-                )
-                callbacks.forEach { callback -> callback(merged) }
-            }
-        }
-        if (Looper.myLooper() == Looper.getMainLooper()) publish() else mainHandler.post(::publish)
-    }
-
-    private fun isUsefulCatalogIdentity(identity: CatalogIdentity): Boolean =
-        shouldCacheCatalogIdentity(identity.isrc, identity.genres)
-
-    private fun queryById(
-        mediaId: String,
-        language: String?,
-        onResult: (CatalogSong?) -> Unit
-    ) {
-        val queryParams = linkedMapOf(
-            "ids" to mediaId,
-            "platform" to "android",
-            "include[songs]" to "artists"
-        )
-        language?.let { queryParams["l"] = it }
-        query(
-            storefront = language?.let(::storefrontForLanguage),
-            language = language,
-            description = "id=$mediaId",
-            path = "songs",
-            queryParams = queryParams,
-            onResult = onResult
-        )
-    }
-
-    private fun queryByConfiguredRegion(
-        mediaIds: List<String>,
-        entityType: LocalizedEntityType,
-        storefront: String,
-        language: String,
-        onResult: (Map<String, CatalogSong>) -> Unit,
-    ) {
-        val queryParams = linkedMapOf(
-            "ids" to mediaIds.joinToString(","),
-            "l" to language,
-            "platform" to "android",
-        )
-        if (entityType != LocalizedEntityType.ARTIST) {
-            queryParams["include[${entityType.path}]"] = "artists"
-        }
-        queryResponse(
-            storefront = storefront,
-            language = language,
-            description = "localized-${entityType.path}-ids=${mediaIds.size}",
-            path = entityType.path,
-            queryParams = queryParams,
-            snapshotEntityType = entityType,
-            transformOffMain = { snapshot ->
-                runCatching {
-                    snapshot
-                        ?.let { parseCatalogEntities(it, language, entityType) }
-                        .orEmpty()
-                        .mapNotNull { song -> song.id?.let { it to song } }
-                        .toMap()
-                }.onFailure { error ->
-                    ProviderLogger.error(
-                        "Apple 地区批量元数据响应解析失败: entityType=$entityType, " +
-                            "ids=${mediaIds.size}, storefront=$storefront, language=$language",
-                        error,
-                    )
-                }.getOrDefault(emptyMap())
-            },
-        ) { songs ->
-            val byId = songs.orEmpty()
-            // Identity cache writes are bounded but may fan out over a 50-item response.  Keep
-            // that preprocessing off the UI thread and publish only the immutable map/callback.
-            catalogBackgroundExecutor.execute {
-                runCatching {
-                    byId.forEach(::rememberCatalogIdentity)
-                }.onFailure { error ->
-                    ProviderLogger.error(
-                        "Apple 地区批量元数据缓存预处理失败: entityType=$entityType, " +
-                            "ids=${mediaIds.size}, storefront=$storefront, language=$language",
-                        error,
-                    )
-                }
-                mainHandler.post {
-                    ProviderLogger.info(
-                        "Apple 地区批量元数据候选: entityType=$entityType, " +
-                            "requested=${mediaIds.size}, resolved=${byId.size}, " +
-                            "storefront=$storefront, language=$language"
-                    )
-                    onResult(byId)
-                }
-            }
-        }
-    }
-
-    private fun queryByIsrc(
-        isrc: String,
-        language: String,
-        storefrontOverride: String? = null,
-        onResult: (CatalogSong?) -> Unit
-    ) {
-        val queryParams = linkedMapOf(
-            "filter[isrc]" to isrc,
-            "l" to language,
-            "platform" to "android",
-            "include[songs]" to "artists",
-            "limit" to "1"
-        )
-        query(
-            storefront = storefrontOverride ?: storefrontForLanguage(language),
-            language = language,
-            description = "isrc=$isrc",
-            path = "songs",
-            queryParams = queryParams,
-            onResult = onResult
-        )
-    }
-
-    private fun query(
-        storefront: String?,
-        language: String?,
-        description: String,
-        path: String,
-        queryParams: Map<String, String>,
-        onResult: (CatalogSong?) -> Unit
-    ) {
-        queryResponse(
-            storefront = storefront,
-            language = language,
-            description = description,
-            path = path,
-            queryParams = queryParams,
-            transformOffMain = { snapshot ->
-                runCatching {
-                    snapshot?.let {
-                        parseCatalogSong(it, language ?: CURRENT_LANGUAGE)
-                    }
-                }.onFailure { error ->
-                    ProviderLogger.error(
-                        "Apple 内部原名响应解析失败: $description, language=$language",
-                        error,
-                    )
-                }.getOrNull()
-            },
-        ) { song ->
-            ProviderLogger.info(
-                "Apple 内部原名候选: $description, storefront=$storefront, " +
-                    "language=$language, value=${song?.alias?.title}/${song?.alias?.artist}, " +
-                    "isrc=${song?.isrc}"
-            )
-            onResult(song)
-        }
-    }
-
-    /**
-     * The host query itself intentionally remains in the main adapter: Apple Music's MediaApi,
-     * storefront mutation, and Continuation contract are not proven thread-safe.  After a result
-     * arrives, [AppleCatalogResponseWorkDispatcher] copies host values on main and runs
-     * [transformOffMain] on the Catalog CPU executor before publishing the existing main-thread
-     * callback.
-     */
-    private fun <Result> queryResponse(
-        storefront: String?,
-        language: String?,
-        description: String,
-        path: String,
-        queryParams: Map<String, String>,
-        snapshotEntityType: LocalizedEntityType = LocalizedEntityType.SONG,
-        transformOffMain: (CatalogResponseSnapshot?) -> Result,
-        onResult: (Result?) -> Unit,
-    ) {
-        val diagnosticRequestId = catalogDiagnosticSequence.incrementAndGet().toString(36)
-        val queuedAtMs = SystemClock.uptimeMillis()
-        logCatalogRequestDiagnostic(
-            requestId = diagnosticRequestId,
-            event = "queued",
-            description = description,
-            storefront = storefront,
-            language = language,
-            elapsedMs = 0L,
-        )
-        mainHandler.post {
-            var requestToken: String? = null
-            val completed = AtomicBoolean(false)
-            var slowResponse: Runnable? = null
-            var timeout: Runnable? = null
-
-            val responseDiagnostic = AtomicReference<String?>(null)
-            val responseTask = catalogResponseDispatcher.newTask<Any, CatalogResponseSnapshot, Result>(
-                snapshotOnMain = { response ->
-                    val snapshot = response?.let {
-                        snapshotCatalogResponse(it, snapshotEntityType)
-                    }
-                    responseDiagnostic.set(catalogResponseDiagnostic(response, snapshot))
-                    snapshot
-                },
-                transformOffMain = transformOffMain,
-                publishOnMain = { result ->
-                    logCatalogRequestDiagnostic(
-                        requestId = diagnosticRequestId,
-                        event = "response",
-                        description = description,
-                        storefront = storefront,
-                        language = language,
-                        requestToken = requestToken,
-                        elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                        detail = responseDiagnostic.get(),
-                    )
-                    onResult(result)
-                },
-                failOnMain = { error ->
-                    ProviderLogger.error(
-                        "Apple 内部目录响应后台处理失败: $description, language=$language",
-                        error,
-                    )
-                    logCatalogRequestDiagnostic(
-                        requestId = diagnosticRequestId,
-                        event = "transform_failed",
-                        description = description,
-                        storefront = storefront,
-                        language = language,
-                        requestToken = requestToken,
-                        elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                        detail = "error=${error.javaClass.name}:${error.message}",
-                    )
-                    onResult(null)
-                },
-            )
-
-            fun finish(response: Any?, event: String = "response") {
-                if (!completed.compareAndSet(false, true)) {
-                    logCatalogRequestDiagnostic(
-                        requestId = diagnosticRequestId,
-                        event = "late_$event",
-                        description = description,
-                        storefront = storefront,
-                        language = language,
-                        requestToken = requestToken,
-                        elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                        detail = "late_response_callback",
-                    )
-                    return
-                }
-                slowResponse?.let(mainHandler::removeCallbacks)
-                timeout?.let(mainHandler::removeCallbacks)
-                requestToken?.let(pendingCatalogRequests::remove)
-                if (!responseTask.submit(response)) {
-                    logCatalogRequestDiagnostic(
-                        requestId = diagnosticRequestId,
-                        event = "late_$event",
-                        description = description,
-                        storefront = storefront,
-                        language = language,
-                        requestToken = requestToken,
-                        elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                        detail = "response_task_rejected",
-                    )
-                }
-            }
-
-            fun fail(event: String, error: Throwable) {
-                if (!completed.compareAndSet(false, true)) {
-                    logCatalogRequestDiagnostic(
-                        requestId = diagnosticRequestId,
-                        event = "late_$event",
-                        description = description,
-                        storefront = storefront,
-                        language = language,
-                        requestToken = requestToken,
-                        elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                        detail = "error=${error.javaClass.name}:${error.message}",
-                    )
-                    return
-                }
-                slowResponse?.let(mainHandler::removeCallbacks)
-                timeout?.let(mainHandler::removeCallbacks)
-                requestToken?.let(pendingCatalogRequests::remove)
-                ProviderLogger.error(
-                    "Apple 内部目录直连查询失败: $description, language=$language",
-                    error,
-                )
-                logCatalogRequestDiagnostic(
-                    requestId = diagnosticRequestId,
-                    event = event,
-                    description = description,
-                    storefront = storefront,
-                    language = language,
-                    requestToken = requestToken,
-                    elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                    detail = "error=${error.javaClass.name}:${error.message}",
-                )
-                // Continuations may resume from an Apple network thread.  Preserve the resolver
-                // callback contract by publishing failures on the host main executor as well.
-                mainHandler.post { onResult(null) }
-            }
-
-            runCatching {
-                val access = catalogAccess ?: createCatalogAccess().also { catalogAccess = it }
-                val localization = if (storefront != null && language != null) {
-                    CatalogRequestLocalization(storefront, language)
-                } else {
-                    null
-                }
-                if (localization != null) {
-                    requestToken = catalogRequestSequence.incrementAndGet().toString(36)
-                    pendingCatalogRequests[requestToken] = localization
-                }
-                val directQueryParams = LinkedHashMap(queryParams)
-                requestToken?.let { token ->
-                    directQueryParams[CATALOG_REQUEST_TOKEN_PARAM] = token
-                }
-                slowResponse = Runnable {
-                    if (completed.get()) return@Runnable
-                    logCatalogRequestDiagnostic(
-                        requestId = diagnosticRequestId,
-                        event = "slow_response",
-                        description = description,
-                        storefront = storefront,
-                        language = language,
-                        requestToken = requestToken,
-                        elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                        detail = "mode=direct-network, slowMs=$QUERY_SLOW_RESPONSE_MS",
-                    )
-                }.also { mainHandler.postDelayed(it, QUERY_SLOW_RESPONSE_MS) }
-                timeout = Runnable {
-                    if (!completed.compareAndSet(false, true)) return@Runnable
-                    responseTask.cancel()
-                    requestToken?.let(pendingCatalogRequests::remove)
-                    logCatalogRequestDiagnostic(
-                        requestId = diagnosticRequestId,
-                        event = "timeout",
-                        description = description,
-                        storefront = storefront,
-                        language = language,
-                        requestToken = requestToken,
-                        elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                        detail = "mode=direct-network, timeoutMs=$QUERY_TIMEOUT_MS",
-                    )
-                    onResult(null)
-                }.also { mainHandler.postDelayed(it, QUERY_TIMEOUT_MS) }
-
-                val continuation = createDirectCatalogContinuation(
-                    access = access,
-                    onSuccess = { response -> finish(response) },
-                    onFailure = { error -> fail("request_failed", error) },
-                )
-                val previousStorefront = access.storefrontField.get(access.mediaApi) as? String
-                val directResult = try {
-                    activeCatalogRequest.set(localization)
-                    localization?.let {
-                        access.storefrontField.set(access.mediaApi, it.storefront)
-                    }
-                    access.directQueryMethod.invoke(
-                        access.mediaApi,
-                        path,
-                        directQueryParams,
-                        continuation,
-                    )
-                } finally {
-                    activeCatalogRequest.remove()
-                    if (localization != null) {
-                        access.storefrontField.set(access.mediaApi, previousStorefront)
-                    }
-                }
-                logCatalogRequestDiagnostic(
-                    requestId = diagnosticRequestId,
-                    event = "observing",
-                    description = description,
-                    storefront = storefront,
-                    language = language,
-                    requestToken = requestToken,
-                    elapsedMs = SystemClock.uptimeMillis() - queuedAtMs,
-                    detail = "mode=direct-network, path=$path, " +
-                        "suspended=${isCoroutineSuspended(directResult)}",
-                )
-                if (!isCoroutineSuspended(directResult)) {
-                    finish(directResult)
-                }
-            }.onFailure { error ->
-                activeCatalogRequest.remove()
-                fail("start_failed", error)
-            }
-        }
-    }
-
-    private fun createDirectCatalogContinuation(
-        access: CatalogAccess,
-        onSuccess: (Any?) -> Unit,
-        onFailure: (Throwable) -> Unit,
-    ): Any = Proxy.newProxyInstance(
-        access.continuationType.classLoader ?: classLoader,
-        arrayOf(access.continuationType),
-    ) { proxy, method, args ->
-        when (method.name) {
-            "getContext" -> access.emptyCoroutineContext
-            "resumeWith" -> {
-                val result = args?.firstOrNull()
-                val failure = coroutineResultFailure(result)
-                if (failure != null) onFailure(failure) else onSuccess(result)
-                null
-            }
-            "equals" -> proxy === args?.firstOrNull()
-            "hashCode" -> System.identityHashCode(proxy)
-            "toString" -> "AppleCatalogContinuation"
-            else -> null
-        }
-    }
-
-    private fun coroutineResultFailure(result: Any?): Throwable? {
-        if (result is Throwable) return result
-        val value = result ?: return null
-        // Kotlin's Result.Failure is the only wrapper whose field we need to inspect.  Do not
-        // reflect arbitrary Apple response objects from a continuation/network thread.
-        if (value.javaClass.name != "kotlin.Result\$Failure") return null
-        val fields = value.javaClass.declaredFields.filterNot { field ->
-            Modifier.isStatic(field.modifiers)
-        }
-        if (fields.size != 1) return null
-        val field = fields.single()
-        if (!Throwable::class.java.isAssignableFrom(field.type)) return null
-        field.isAccessible = true
-        return field.get(value) as? Throwable
-    }
-
-    private fun createCatalogAccess(): CatalogAccess {
-        val resolvedHolder = resolvedCatalogHolder
-        val holderClass = resolvedHolder.clazz
-        val companionField = holderClass.declaredFields.firstOrNull { field ->
-            Modifier.isStatic(field.modifiers) &&
-                field.type.name == "${holderClass.name}\$Companion"
-        } ?: error("MediaApiRepositoryHolder companion unavailable")
-        companionField.isAccessible = true
-        val companion = requireNotNull(companionField.get(null))
-        val mediaApi = AppleReflection.call(
-            companion,
-            resolvedHolder.target.runtimeMemberName(
-                AppleMusicRuntimeMember.MEDIA_API_HOLDER_GET_MEDIA_API_METHOD
-            ),
-        )
-            ?: error("Apple MediaApi without HTTP cache unavailable")
-        val storefrontField = findField(
-            mediaApi,
-            resolvedHolder.target.runtimeMemberName(
-                AppleMusicRuntimeMember.MEDIA_API_STOREFRONT_FIELD
-            ),
-        ).also { field ->
-            if (field.type != String::class.java) {
-                error("Apple MediaApi storefront field has unexpected type")
-            }
-        }
-        val directQueryMethod = findDirectCatalogQueryMethod(
-            clazz = mediaApi.javaClass,
-            methodName = resolvedHolder.target.runtimeMemberName(
-                AppleMusicRuntimeMember.MEDIA_API_DIRECT_QUERY_METHOD
-            ),
-        )
-        val continuationType = directQueryMethod.parameterTypes[2]
-        val coroutineContextType = continuationType.methods.firstOrNull { method ->
-            method.name == "getContext" && method.parameterCount == 0
-        }?.returnType ?: error("Apple Continuation context type unavailable")
-        val emptyCoroutineContext = createEmptyCoroutineContext(coroutineContextType)
-        return CatalogAccess(
-            mediaApi = mediaApi,
-            storefrontField = storefrontField,
-            directQueryMethod = directQueryMethod,
-            continuationType = continuationType,
-            emptyCoroutineContext = emptyCoroutineContext,
-        )
-    }
-
-    private fun findDirectCatalogQueryMethod(clazz: Class<*>, methodName: String): Method {
-        return AppleCatalogQueryMethod.resolve(clazz, methodName)
-    }
-
-    private fun createEmptyCoroutineContext(contextType: Class<*>): Any =
-        Proxy.newProxyInstance(
-            contextType.classLoader ?: classLoader,
-            arrayOf(contextType),
-        ) { proxy, method, args ->
-            when (method.name) {
-                "fold" -> args?.firstOrNull()
-                "get" -> null
-                "minusKey" -> proxy
-                "plus" -> args?.firstOrNull()
-                "equals" -> proxy === args?.firstOrNull()
-                "hashCode" -> 0
-                "toString" -> "EmptyCoroutineContext"
-                else -> null
-            }
-        }
-
-    private fun findField(instance: Any, name: String): Field {
-        var current: Class<*>? = instance.javaClass
-        while (current != null) {
-            current.declaredFields.firstOrNull { field -> field.name == name }?.let { field ->
-                field.isAccessible = true
-                return field
-            }
-            current = current.superclass
-        }
-        error("${instance.javaClass.name}#$name unavailable")
-    }
-
-    private fun logCatalogRequestDiagnostic(
-        requestId: String,
-        event: String,
-        description: String,
-        storefront: String?,
-        language: String?,
-        elapsedMs: Long,
-        requestToken: String? = null,
-        detail: String? = null,
-    ) {
-        if (!BuildConfig.DEBUG) return
-        val localizedState = synchronized(localizedPending) {
-            "${localizedPending.size}/$localizedBatchesRunning"
-        }
-        val originalState = synchronized(originalEntityPending) {
-            "${originalEntityPending.size}/$originalEntityBatchesRunning"
-        }
-        ProviderLogger.diagnostic(
-            "AppleCatalogRequest: id=$requestId, token=${requestToken ?: "none"}, " +
-                "event=$event, description=$description, storefront=$storefront, " +
-                "language=$language, elapsedMs=$elapsedMs, " +
-                "localizedPendingRunning=$localizedState, " +
-                "originalPendingRunning=$originalState" +
-                detail?.let { ", $it" }.orEmpty()
-        )
-    }
-
-    private fun catalogResponseDiagnostic(
-        response: Any?,
-        snapshot: CatalogResponseSnapshot?,
-    ): String {
-        if (response == null) return "value=null"
-        // This diagnostic intentionally avoids touching the host response.  The snapshot has
-        // already copied the only useful cardinality while all reflection was on the main thread.
-        return "valueClass=${response.javaClass.name}, " +
-            "dataSize=${snapshot?.entities?.size ?: "unknown"}"
-    }
-
-    private fun storefrontForLanguage(language: String): String =
-        storefrontForOriginalLanguage(language)
-            ?: error("Unsupported Apple storefront language: $language")
-
-    /**
-     * Copies the host response while still on the host's required main thread.  Nothing returned
-     * from this method retains a reference to an Apple Music response/entity/attributes object;
-     * parsing, language selection, and candidate matching consume only these immutable values on
-     * the Catalog CPU executor.
-     */
-    private fun snapshotCatalogResponse(
-        response: Any,
-        entityType: LocalizedEntityType,
-    ): CatalogResponseSnapshot {
-        val data = AppleReflection.call(
-            response,
-            catalogMember(AppleMusicRuntimeMember.CATALOG_RESPONSE_DATA_METHOD),
-        )
-        return CatalogResponseSnapshot(
-            entities = collectionValues(data).mapNotNull { entity ->
-                snapshotCatalogEntity(entity, entityType)
-            }.toList(),
-        )
-    }
-
-    private fun snapshotCatalogEntity(
-        entity: Any,
-        entityType: LocalizedEntityType,
-    ): CatalogEntitySnapshot? {
-        val id = (AppleReflection.call(
-            entity,
-            catalogMember(AppleMusicRuntimeMember.CATALOG_ENTITY_ID_METHOD),
-        ) as? String)
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
-        val attributes = AppleReflection.call(
-            entity,
-            catalogMember(AppleMusicRuntimeMember.CATALOG_ENTITY_ATTRIBUTES_METHOD),
-        ) ?: return null
-        val rawAttributes = AppleMediaApiAttributeSnapshots.get(attributes)
-        val title = if (rawAttributes != null) {
-            rawAttributes.name?.trim().orEmpty()
-        } else {
-            (AppleReflection.call(
-                attributes,
-                catalogMember(AppleMusicRuntimeMember.CATALOG_ATTRIBUTES_NAME_METHOD),
-            ) as? String)?.trim().orEmpty()
-        }
-        val attributeArtist = if (rawAttributes != null) {
-            rawAttributes.artistName?.trim().orEmpty()
-        } else runCatching {
-            (AppleReflection.call(
-                attributes,
-                catalogMember(AppleMusicRuntimeMember.CATALOG_ATTRIBUTES_ARTIST_NAME_METHOD),
-            ) as? String)?.trim().orEmpty()
-        }.getOrDefault("")
-        val albumName = if (entityType == LocalizedEntityType.ARTIST) {
-            ""
-        } else if (rawAttributes != null) {
-            rawAttributes.albumName?.trim().orEmpty()
-        } else runCatching {
-            (AppleReflection.call(
-                attributes,
-                catalogMember(AppleMusicRuntimeMember.CATALOG_ATTRIBUTES_ALBUM_NAME_METHOD),
-            ) as? String)?.trim().orEmpty()
-        }.getOrDefault("")
-        val relationshipArtists = if (entityType == LocalizedEntityType.ARTIST) {
-            emptyList()
-        } else runCatching {
-            @Suppress("UNCHECKED_CAST")
-            val relationships = AppleReflection.call(
-                entity,
-                catalogMember(AppleMusicRuntimeMember.CATALOG_ENTITY_RELATIONSHIPS_METHOD),
-            ) as? Map<String, Any?>
-            val artistRelationship = relationships?.get("artists")
-                ?: relationships?.get("artist")
-            val artistEntities = collectionValues(
-                artistRelationship?.let {
-                    AppleReflection.call(
-                        it,
-                        catalogMember(
-                            AppleMusicRuntimeMember.CATALOG_RELATIONSHIP_ENTITIES_METHOD,
-                        ),
-                    ) ?: AppleReflection.call(
-                        it,
-                        catalogMember(AppleMusicRuntimeMember.CATALOG_RELATIONSHIP_DATA_METHOD),
-                    )
-                },
-            )
-            artistEntities.mapNotNull { artistEntity ->
-                val artistAttributes = AppleReflection.call(
-                    artistEntity,
-                    catalogMember(AppleMusicRuntimeMember.CATALOG_ENTITY_ATTRIBUTES_METHOD),
-                )
-                val rawArtistAttributes = artistAttributes?.let(
-                    AppleMediaApiAttributeSnapshots::get,
-                )
-                val artistName = if (rawArtistAttributes != null) {
-                    rawArtistAttributes.name
-                } else artistAttributes?.let {
-                    AppleReflection.call(
-                        it,
-                        catalogMember(AppleMusicRuntimeMember.CATALOG_ATTRIBUTES_NAME_METHOD),
-                    ) as? String
-                }
-                    ?.trim()
-                    ?.takeIf(String::isNotEmpty)
-                val artistId = (AppleReflection.call(
-                    artistEntity,
-                    catalogMember(AppleMusicRuntimeMember.CATALOG_ENTITY_ID_METHOD),
-                ) as? String)
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
-                if (artistName == null && artistId == null) null
-                else CatalogArtistSnapshot(id = artistId, name = artistName)
-            }
-        }.getOrDefault(emptyList())
-        val isrc = if (entityType == LocalizedEntityType.SONG) {
-            runCatching {
-                (AppleReflection.call(
-                    attributes,
-                    catalogMember(AppleMusicRuntimeMember.CATALOG_ATTRIBUTES_ISRC_METHOD),
-                ) as? String)
-                    ?.trim()
-                    ?.takeIf(String::isNotEmpty)
-            }.getOrNull()
-        } else {
-            null
-        }
-        val genres = if (entityType != LocalizedEntityType.ARTIST) {
-            runCatching {
-                collectionValues(
-                    AppleReflection.call(
-                        attributes,
-                        catalogMember(AppleMusicRuntimeMember.CATALOG_ATTRIBUTES_GENRE_NAMES_METHOD),
-                    ),
-                ).mapNotNull { value ->
-                    value.toString().trim().takeIf(String::isNotEmpty)
-                }
-            }.getOrDefault(emptyList()).ifEmpty {
-                runCatching {
-                    (AppleReflection.call(
-                        attributes,
-                        catalogMember(AppleMusicRuntimeMember.CATALOG_ATTRIBUTES_GENRE_NAME_METHOD),
-                    ) as? String)
-                        ?.trim()
-                        ?.takeIf(String::isNotEmpty)
-                        ?.let(::listOf)
-                        .orEmpty()
-                }.getOrDefault(emptyList())
-            }
-        } else {
-            emptyList()
-        }
-        if (title.isEmpty() && attributeArtist.isEmpty() && isrc == null) return null
-        return CatalogEntitySnapshot(
-            id = id,
-            title = title,
-            attributeArtist = attributeArtist,
-            albumName = albumName,
-            isrc = isrc,
-            genres = genres.toList(),
-            relationshipArtists = relationshipArtists.toList(),
-        )
-    }
-
-    private fun parseCatalogSong(response: CatalogResponseSnapshot, language: String): CatalogSong? =
-        parseCatalogSongs(response, language).firstOrNull()
-
-    private fun parseCatalogSongs(
-        response: CatalogResponseSnapshot,
-        language: String,
-    ): List<CatalogSong> = parseCatalogEntities(response, language, LocalizedEntityType.SONG)
-
-    private fun parseCatalogEntities(
-        response: CatalogResponseSnapshot,
-        language: String,
-        entityType: LocalizedEntityType,
-    ): List<CatalogSong> = response.entities.mapNotNull { entity ->
-        parseCatalogEntity(entity, language, entityType)
-    }
-
-    /** Pure conversion from the immutable host snapshot; safe to run off the main thread. */
-    private fun parseCatalogEntity(
-        entity: CatalogEntitySnapshot,
-        language: String,
-        entityType: LocalizedEntityType,
-    ): CatalogSong? {
-        val album = when (entityType) {
-            LocalizedEntityType.SONG -> entity.albumName
-            LocalizedEntityType.ALBUM -> entity.title
-            LocalizedEntityType.ARTIST -> ""
-        }
-        val relationshipArtists = entity.relationshipArtists.mapNotNull(CatalogArtistSnapshot::name)
-        val relationshipArtistIds = entity.relationshipArtists.mapNotNull(CatalogArtistSnapshot::id)
-            .distinct()
-        val artist = when (entityType) {
-            LocalizedEntityType.ARTIST -> entity.title
-            else -> selectLocalizedArtistName(
-                attributeArtist = entity.attributeArtist,
-                relationshipArtists = relationshipArtists,
-                language = language,
-            )
-        }
-        if (relationshipArtists.isNotEmpty() && artist != entity.attributeArtist) {
-            ProviderLogger.info(
-                "Apple 歌手关系名称已优先: attributes=${entity.attributeArtist}, relationship=$artist",
-            )
-        }
-        val isrc = entity.isrc.takeIf { entityType == LocalizedEntityType.SONG }
-        if (entity.title.isEmpty() && artist.isEmpty() && isrc == null) return null
-        return CatalogSong(
-            id = entity.id,
-            alias = Alias(entity.title, artist, language, album),
-            isrc = isrc,
-            genres = if (entityType == LocalizedEntityType.ARTIST) emptyList() else entity.genres,
-            artistIds = if (entityType == LocalizedEntityType.ARTIST) {
-                emptyList()
-            } else {
-                relationshipArtistIds
-            },
-        )
-    }
-
-    private fun collectionValues(value: Any?): List<Any> = when (value) {
-        is Array<*> -> value.filterNotNull()
-        is Iterable<*> -> value.filterNotNull()
-        is Map<*, *> -> value.values.filterNotNull()
-        else -> emptyList()
-    }
-
-    private fun catalogMember(member: AppleMusicRuntimeMember): String =
-        resolvedCatalogHolder.target.runtimeMemberName(member)
-
-    private data class CatalogAccess(
+    internal data class CatalogAccess(
         val mediaApi: Any,
         val storefrontField: Field,
         val directQueryMethod: Method,
@@ -2504,11 +676,11 @@ internal class AppleInternalCatalogResolver(
     )
 
     /** Immutable values copied from Apple Music's reflective response on the main thread. */
-    private data class CatalogResponseSnapshot(
+    internal data class CatalogResponseSnapshot(
         val entities: List<CatalogEntitySnapshot>,
     )
 
-    private data class CatalogEntitySnapshot(
+    internal data class CatalogEntitySnapshot(
         val id: String?,
         val title: String,
         val attributeArtist: String,
@@ -2518,19 +690,19 @@ internal class AppleInternalCatalogResolver(
         val relationshipArtists: List<CatalogArtistSnapshot>,
     )
 
-    private data class CatalogArtistSnapshot(
+    internal data class CatalogArtistSnapshot(
         val id: String?,
         val name: String?,
     )
 
-    private data class CatalogIdentity(
+    internal data class CatalogIdentity(
         val isrc: String?,
         val fallbackAliases: List<Alias>,
         val genres: List<String>,
         val artistIds: List<String>,
     )
 
-    private data class PreparedOriginalResolution(
+    internal data class PreparedOriginalResolution(
         val canonicalLanguages: List<String>,
         val sourceLanguage: String?,
         val originalAlias: Alias?,
@@ -2539,7 +711,7 @@ internal class AppleInternalCatalogResolver(
         val artistIds: List<String>,
     )
 
-    private data class CatalogSong(
+    internal data class CatalogSong(
         val id: String?,
         val alias: Alias,
         val isrc: String?,
@@ -2547,7 +719,7 @@ internal class AppleInternalCatalogResolver(
         val artistIds: List<String>,
     )
 
-    private data class LocalizedRequest(
+    internal data class LocalizedRequest(
         val cacheKey: String,
         val requestKey: String,
         val mediaId: String,
@@ -2559,12 +731,12 @@ internal class AppleInternalCatalogResolver(
         val priority: RequestPriority,
     )
 
-    private data class LockedIsrcFallbackTask(
+    internal data class LockedIsrcFallbackTask(
         val request: LocalizedRequest,
         val onResolved: (resolvedLookupId: String?, alias: Alias?) -> Unit,
     )
 
-    private data class OriginalEntityRequest(
+    internal data class OriginalEntityRequest(
         val requestKey: String,
         val mediaId: String,
         val lookupIds: List<String>,
@@ -2615,12 +787,12 @@ internal class AppleInternalCatalogResolver(
     }
 
     companion object {
-        private const val CURRENT_LANGUAGE = "current"
-        private const val CACHE_SIZE = 64
-        private const val LOCALIZED_CACHE_SIZE = 4_096
-        private const val LOCALIZED_ARTIST_ALIAS_CACHE_SIZE = 2_048
-        private const val REQUEST_PRIORITY_CACHE_SIZE = 2_048
-        private const val ORIGINAL_METADATA_CACHE_SCHEMA = "V2"
+        internal const val CURRENT_LANGUAGE = "current"
+        internal const val CACHE_SIZE = 64
+        internal const val LOCALIZED_CACHE_SIZE = 4_096
+        internal const val LOCALIZED_ARTIST_ALIAS_CACHE_SIZE = 2_048
+        internal const val REQUEST_PRIORITY_CACHE_SIZE = 2_048
+        internal const val ORIGINAL_METADATA_CACHE_SCHEMA = "V2"
 
         internal fun isCoroutineSuspended(value: Any?): Boolean =
             value is Enum<*> && value.name == "COROUTINE_SUSPENDED"
@@ -2638,7 +810,7 @@ internal class AppleInternalCatalogResolver(
                 "$ORIGINAL_METADATA_CACHE_SCHEMA:$entityType:${mediaId.trim()}"
         }
 
-        private fun legacyAmbiguousSongCacheKey(mediaId: String): String =
+        internal fun legacyAmbiguousSongCacheKey(mediaId: String): String =
             "SONG:${mediaId.trim()}"
 
         internal fun originalEntityCacheKey(
@@ -2700,20 +872,20 @@ internal class AppleInternalCatalogResolver(
         internal fun isLocalizedArtistAliasCacheKey(key: String): Boolean =
             ":ARTIST_ALIAS:" in key
 
-        private const val LOCALIZED_BATCH_SIZE = 50
-        private const val MAX_LOCALIZED_BATCHES_RUNNING = 4
-        private const val MAX_BACKGROUND_LOCALIZED_BATCHES_RUNNING = 2
-        private const val MAX_LOCKED_ISRC_FALLBACK_RUNNING = 2
-        private const val LOCALIZED_BATCH_DELAY_MS = 32L
-        private const val ORIGINAL_ENTITY_BATCH_SIZE = 50
-        private const val MAX_ORIGINAL_ENTITY_BATCHES_RUNNING = 3
-        private const val MAX_BACKGROUND_ORIGINAL_ENTITY_BATCHES_RUNNING = 2
-        private const val ORIGINAL_ENTITY_BATCH_DELAY_MS = 32L
-        private const val QUERY_SLOW_RESPONSE_MS = 6_000L
-        private const val QUERY_TIMEOUT_MS = 30_000L
-        private const val ARTIST_ALIAS_CACHE_SCHEMA = "V2"
+        internal const val LOCALIZED_BATCH_SIZE = 50
+        internal const val MAX_LOCALIZED_BATCHES_RUNNING = 4
+        internal const val MAX_BACKGROUND_LOCALIZED_BATCHES_RUNNING = 2
+        internal const val MAX_LOCKED_ISRC_FALLBACK_RUNNING = 2
+        internal const val LOCALIZED_BATCH_DELAY_MS = 32L
+        internal const val ORIGINAL_ENTITY_BATCH_SIZE = 50
+        internal const val MAX_ORIGINAL_ENTITY_BATCHES_RUNNING = 3
+        internal const val MAX_BACKGROUND_ORIGINAL_ENTITY_BATCHES_RUNNING = 2
+        internal const val ORIGINAL_ENTITY_BATCH_DELAY_MS = 32L
+        internal const val QUERY_SLOW_RESPONSE_MS = 6_000L
+        internal const val QUERY_TIMEOUT_MS = 30_000L
+        internal const val ARTIST_ALIAS_CACHE_SCHEMA = "V2"
         internal const val CATALOG_REQUEST_TOKEN_PARAM = "hle_catalog_request"
-        private val ORIGINAL_LANGUAGE_PROBE_ORDER = listOf(
+        internal val ORIGINAL_LANGUAGE_PROBE_ORDER = listOf(
             "ja-JP",
             "ko-KR",
             "zh-Hans-CN",
@@ -2727,7 +899,7 @@ internal class AppleInternalCatalogResolver(
             "bg-BG",
         )
 
-        private fun originalLanguageCacheKeyVariants(language: String): List<String> = when (
+        internal fun originalLanguageCacheKeyVariants(language: String): List<String> = when (
             canonicalOriginalLanguage(language)
         ) {
             "zh-Hans-CN" -> listOf("zh-Hans-CN", "zh-CN", "zh-cn", "zh-hans-cn")
@@ -2775,7 +947,7 @@ internal class AppleInternalCatalogResolver(
             else -> RequestPriority.BACKGROUND
         }
 
-        private fun normalizeRequestScopeIds(mediaIds: Collection<String>): Set<String> =
+        internal fun normalizeRequestScopeIds(mediaIds: Collection<String>): Set<String> =
             mediaIds.asSequence()
                 .map(String::trim)
                 .filter { it.isNotEmpty() && it.all(Char::isDigit) }
@@ -2787,7 +959,7 @@ internal class AppleInternalCatalogResolver(
             }
         }
 
-        private fun knownLanguageTagsForGenre(genre: String?): List<String> {
+        internal fun knownLanguageTagsForGenre(genre: String?): List<String> {
             val normalized = genre.orEmpty().trim().lowercase()
             return when {
                 "j-pop" in normalized || "japanese" in normalized ||
@@ -2950,7 +1122,7 @@ internal class AppleInternalCatalogResolver(
             }
         }
 
-        private fun containsHanCharacters(value: String): Boolean {
+        internal fun containsHanCharacters(value: String): Boolean {
             var index = 0
             while (index < value.length) {
                 val codePoint = value.codePointAt(index)
@@ -2976,11 +1148,11 @@ internal class AppleInternalCatalogResolver(
             }
         }
 
-        private fun containsJapaneseKana(value: String): Boolean = value.any { character ->
+        internal fun containsJapaneseKana(value: String): Boolean = value.any { character ->
             character.code in 0x3040..0x30ff
         }
 
-        private fun containsHangul(value: String): Boolean = value.any { character ->
+        internal fun containsHangul(value: String): Boolean = value.any { character ->
             character.code in 0xac00..0xd7af
         }
 
@@ -3039,7 +1211,7 @@ internal class AppleInternalCatalogResolver(
             .lowercase()
             .replace(Regex("\\s+"), " ")
 
-        private fun artistCacheKey(
+        internal fun artistCacheKey(
             selection: Int,
             key: String,
             language: String? = null,
@@ -3144,7 +1316,7 @@ internal class AppleInternalCatalogResolver(
                 genre = metadata.genre,
             )
 
-        private fun nonLatinLetterCount(value: String): Int {
+        internal fun nonLatinLetterCount(value: String): Int {
             var count = 0
             var index = 0
             while (index < value.length) {
@@ -3159,12 +1331,12 @@ internal class AppleInternalCatalogResolver(
             return count
         }
 
-        private fun normalize(value: String): String = value
+        internal fun normalize(value: String): String = value
             .trim()
             .lowercase()
             .replace(Regex("[\\s\\p{Punct}]+"), "")
 
-        private val COLLABORATION_ARTIST_PATTERNS = listOf(
+        internal val COLLABORATION_ARTIST_PATTERNS = listOf(
             Regex(
                 "(?:^|[\\s(\\[])(?:feat\\.?|ft\\.?|featuring|with)(?:\\s|[:.)\\]])",
                 RegexOption.IGNORE_CASE,
@@ -3174,7 +1346,7 @@ internal class AppleInternalCatalogResolver(
             Regex("[,、;/／]"),
         )
 
-        private val collaborationArtistCache = AppleCollaborationArtistCache { credit ->
+        internal val collaborationArtistCache = AppleCollaborationArtistCache { credit ->
             COLLABORATION_ARTIST_PATTERNS.any { pattern -> pattern.containsMatchIn(credit) }
         }
 

@@ -16,12 +16,13 @@ class RightLyricsPaneStructuralRegressionTest {
         sequenceOf(
             File("src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
             File("app/src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
-        ).firstOrNull(File::isFile)?.readText()
+        File("../app/src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
+        ).firstOrNull(File::isFile)?.readRefactorComponent()
             ?: error("AppleMusicDualPaneTarget.kt was not found from the unit-test working directory")
     }
     private val compactSource: String by lazy { source.replace(Regex("\\s+"), " ") }
     private val paneSource: String by lazy {
-        source.substringAfter("private object RightLyricsPaneLayout")
+        source.substringAfter("internal object RightLyricsPaneLayout")
             .substringBefore("internal data class AlphaGradientEdgeFieldProfile")
     }
 
@@ -43,8 +44,8 @@ class RightLyricsPaneStructuralRegressionTest {
         assertTrue(source.contains("val bottomFadeColors = intArrayOf("))
         assertTrue(source.contains("val bottomFadePositions = floatArrayOf("))
         assertTrue(source.contains("1f - TOP_CLEAR_WITHIN_FADE_FRACTION"))
-        assertTrue(source.contains("findField(gradients.javaClass, \"b\")"))
-        assertTrue(source.contains("findField(gradients.javaClass, \"f\")"))
+        assertTrue(source.contains("dualPaneField(gradients.javaClass, \"b\")"))
+        assertTrue(source.contains("dualPaneField(gradients.javaClass, \"f\")"))
         assertTrue(source.contains("bottomFadeColorsField.set(gradients, bottomFadeColors)"))
         assertTrue(source.contains("bottomFadePositionsField.set(gradients, bottomFadePositions)"))
         assertTrue(source.contains("topFadeColorsField.set(gradients, topFadeColors)"))

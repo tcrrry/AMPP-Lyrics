@@ -42,9 +42,9 @@ internal object NativeLyricsSourceMenu {
         anchorPages[button]?.get()?.let(CurrentLyricsSourceStatus::rememberVisiblePage)
     }
 
-    fun install(loader: ClassLoader, currentId: () -> Long?, openSettings: (Activity) -> Unit) {
+    fun install(loader: ClassLoader, currentId: () -> Long?, openSettings: (Activity) -> Unit, build: TargetBuild = TargetBuild.UNKNOWN) {
         NativeLyricsPronunciation.install(loader)
-        NativeLyricsPronunciationSubtitle.install(loader)
+        NativeLyricsPronunciationSubtitle.install(loader, build)
         val fragment = loader.loadClass("com.apple.android.music.player.fragment.PlayerLyricsViewFragment")
         fun bind(root: View?, fragment: Any?) {
             root ?: return

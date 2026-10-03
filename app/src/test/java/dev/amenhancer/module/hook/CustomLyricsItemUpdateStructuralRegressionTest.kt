@@ -1,5 +1,6 @@
 package dev.amenhancer.module.hook
 
+import dev.amenhancer.module.lyrics.source.HttpLyricTransport
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,7 +18,7 @@ class CustomLyricsItemUpdateStructuralRegressionTest {
     private fun projectFile(relativePath: String): String = sequenceOf(
         File(relativePath),
         File("../$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found from the unit-test working directory")
 
     @Test
@@ -40,7 +41,10 @@ class CustomLyricsItemUpdateStructuralRegressionTest {
         assertEquals(
             // One pin per exact host profile: 6.5.0, 6.5.1, 6.5.2 and 6.5.3.
             4,
-            Regex("TargetSymbolId\\.LYRICS_ITEM_UPDATE_METHOD to \"o2\"").findAll(symbols).count(),
+            dev.amenhancer.host.applemusic.AppleMusicHostProfiles.all.count {
+                it.document.getJSONObject("indexed").getJSONObject("methods")
+                    .optString("LYRICS_ITEM_UPDATE_METHOD") == "o2"
+            },
         )
     }
 

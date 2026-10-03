@@ -66,7 +66,7 @@ internal sealed interface LyricsTypefacePreparation {
  *   under the same lock and no-op while it is not ready, which keeps the
  *   original font on any failure (fail-open).
  */
-internal class LyricsTypefaceSession {
+internal class LyricsTypefaceSession : LyricsTypefaceResourceBinding {
     private val lock = Any()
     private val loadController = LyricsTypefaceLoadController<Typeface>()
     private val observedRecyclers = Collections.synchronizedMap(WeakHashMap<ViewGroup, Boolean>())
@@ -89,7 +89,7 @@ internal class LyricsTypefaceSession {
         }
     }
 
-    fun registerResources(config: TargetConfigClient) {
+    override fun registerResources(config: TargetConfigClient) {
         synchronized(lock) {
             this.config = config
             if (resourcesRegistered) return
@@ -134,6 +134,7 @@ internal class LyricsTypefaceSession {
     /** Marks the feature installed; applies stay gated on a ready load. */
     fun activate() {
         active = true
+        reportReadiness()
     }
 
     fun attachToFragment(fragment: Any, recyclerClass: Class<*>) {
@@ -162,6 +163,7 @@ internal class LyricsTypefaceSession {
                             "Lyrics font ${manifest.displayName} loaded in attempt ${attempt + 1}",
                         )
                         scheduleReapplyPendingRoots()
+                        reportReadiness()
                         return@execute
                     }
                     is LyricsFontLoadOutcome.Permanent -> {
@@ -185,6 +187,26 @@ internal class LyricsTypefaceSession {
         loadController.fail(message)
         // Fail-open: the original font stays in place; the diagnostic is logged.
         ModernXposedRuntime.log("Lyrics font left at the original typeface: $message")
+        reportReadiness()
+    }
+
+    private fun reportReadiness() {
+        mainHandler.post {
+            if (!active) return@post
+            val state = when (loadController.phase()) {
+                LyricsTypefaceLoadController.Phase.READY -> dev.amenhancer.module.model.FeatureState.ACTIVE
+                LyricsTypefaceLoadController.Phase.FAILED -> dev.amenhancer.module.model.FeatureState.FAILED
+                else -> dev.amenhancer.module.model.FeatureState.DEGRADED
+            }
+            val message = when (state) {
+                dev.amenhancer.module.model.FeatureState.ACTIVE -> "歌词字体已加载并可应用"
+                dev.amenhancer.module.model.FeatureState.FAILED -> "保留原字体：${loadController.failureMessage()}"
+                else -> "Hook 已安装，等待后台字体加载"
+            }
+            config?.reportHealth(dev.amenhancer.module.model.FeatureHealth(
+                dev.amenhancer.module.ModuleConstants.FEATURE_LYRICS_TYPEFACE, state, message,
+            ))
+        }
     }
 
     private fun loadOnce(
@@ -292,6 +314,7 @@ internal class LyricsTypefaceSession {
     }
 
     private fun applyToLyricsLayout(root: View) {
+        if (!active) return
         synchronized(lock) {
             val importedBase = loadController.readyValue()
             if (importedBase != null) {

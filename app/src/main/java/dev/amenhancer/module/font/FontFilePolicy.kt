@@ -4,7 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.security.MessageDigest
 
-internal sealed interface FontInspection {
+sealed interface FontInspection {
     data class Accepted(
         val sizeBytes: Long,
         val sha256: String,
@@ -14,7 +14,7 @@ internal sealed interface FontInspection {
 }
 
 /** Validates only portable file facts; Android Typeface parsing stays at the Android seams. */
-internal object FontFilePolicy {
+object FontFilePolicy {
     private val ttfMagic = byteArrayOf(0, 1, 0, 0)
     private val ottoMagic = byteArrayOf('O'.code.toByte(), 'T'.code.toByte(), 'T'.code.toByte(), 'O'.code.toByte())
     private val ttcMagic = byteArrayOf('t'.code.toByte(), 't'.code.toByte(), 'c'.code.toByte(), 'f'.code.toByte())

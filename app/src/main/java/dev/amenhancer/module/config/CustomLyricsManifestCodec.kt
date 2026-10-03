@@ -12,7 +12,7 @@ import org.json.JSONObject
  * `custom_lyrics_manifest` preference string and stay readable until the
  * first write migrates them.
  */
-internal object CustomLyricsManifestCodec {
+object CustomLyricsManifestCodec {
     fun encode(manifest: CustomLyricsManifest): String {
         val safe = CustomLyricsManifestPolicy.sanitize(manifest)
         return JSONObject().apply {

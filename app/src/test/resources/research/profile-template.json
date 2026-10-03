@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "packageName": "com.apple.android.music",
+  "versionName": "REPLACE_WITH_FORMAL_VERSION",
+  "versionCode": 0,
+  "productionEnabled": false,
+  "family": "fragment-content",
+  "ambiguityPolicy": "reject-ambiguous",
+  "legacyFirstMatchExceptions": [],
+  "capabilities": {"glass": false, "cellular": false, "staticCollapsedIntercept": false},
+  "evidence": {"status": "unverified-template", "apkSha256": null, "activePath": null, "deviceRecord": null},
+  "instructions": "Fill exact descriptors and Kotlin contract IDs after formal APK evidence. This template must not be added to the production index."
+}

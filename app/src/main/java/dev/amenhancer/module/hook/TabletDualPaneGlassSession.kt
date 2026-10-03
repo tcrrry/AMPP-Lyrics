@@ -27,7 +27,10 @@ internal class TabletDualPaneGlassSession(
     activity: Activity,
     config: TargetConfigClient,
     failure: (Throwable) -> Unit,
-) : PhoneGlassSession(activity, config, failure) {
+) : PhoneGlassSession(activity, config, failure = failure) {
+
+    // Native tablet chrome owns its edge gradient; do not add a second blurred wash.
+    override val navigationScrimEnabled: Boolean = false
 
     private val touchGate = TabletGlassGestureGate()
     private var miniPressDownTime: Long? = null
@@ -43,7 +46,7 @@ internal class TabletDualPaneGlassSession(
     // Reveal the native cover at the first slide only after its alignment hook
     // has identified this player's artwork. Other host builds keep the stock fade.
     protected override fun playerFragmentsAlphaFactor(progress: Float, materialProgress: Float): Float =
-        if (progress > 0f && artworkAnchorView === find("fullplayerSongImage")) 1f else materialProgress
+        if (progress > 0f && artworkAnchorView === find(ChromeResource.FULLPLAYER_SONG_IMAGE)) 1f else materialProgress
 
     // User sketch (2026-09-22): both capsules share one bottom row — the nav
     // pill on the left (65% of a two-thirds-wide row), the mini pill in the
@@ -56,15 +59,15 @@ internal class TabletDualPaneGlassSession(
 
     /** Keep Apple's scaled artwork inside the opening mini glass. */
     internal fun alignNativeArtworkStart(artwork: View, slide: Float) {
-        if (!activated || !slide.isFinite() || artwork !== find("fullplayerSongImage")) return
+        if (!activated || !slide.isFinite() || artwork !== find(ChromeResource.FULLPLAYER_SONG_IMAGE)) return
         val container = artwork.parent as? View ?: return
-        if (container.id != resourceId("artwork_container", "id")) return
+        if (container.id != resourceId(ChromeResource.ARTWORK_CONTAINER)) return
         if (artworkAnchorView !== artwork) {
             artworkAnchorView = artwork
             artworkStartOffsetY = null
         }
         val progress = slide.coerceIn(0f, 1f)
-        val miniCover = miniRoot?.findViewById<View>(resourceId("video_surface_container", "id"))
+        val miniCover = miniRoot?.findViewById<View>(resourceId(ChromeResource.VIDEO_SURFACE_CONTAINER))
         if (progress <= 0.001f && artwork.scaleY < 0.2f) {
             if (miniCover != null && miniCover.width > 0 && miniCover.height > 0) {
                 val source = IntArray(2).also(miniCover::getLocationOnScreen)
@@ -76,13 +79,13 @@ internal class TabletDualPaneGlassSession(
         // dual-pane artwork_container's visual translation. This shift restores
         // the thumbnail's actual screen origin and fades out at the full view.
         val sourceCorrection = artworkStartOffsetY ?: -container.translationY
-        artwork.translationY += sourceCorrection * (1f - progress)
+        writeOwnedTransform(artwork, "translationY", artwork.translationY + sourceCorrection * (1f - progress))
         if (progress > 0f && miniCover != null && miniCover.width > 0 && miniCover.height > 0) {
             val source = IntArray(2).also(miniCover::getLocationOnScreen)
             val target = IntArray(2).also(artwork::getLocationOnScreen)
             // Apple's full cover can run above the glass while the sheet is still
             // opening. Its native scale and horizontal motion remain untouched.
-            if (target[1] < source[1]) artwork.translationY += (source[1] - target[1]).toFloat()
+            if (target[1] < source[1]) writeOwnedTransform(artwork, "translationY", artwork.translationY + (source[1] - target[1]).toFloat())
         }
     }
 
@@ -95,7 +98,7 @@ internal class TabletDualPaneGlassSession(
     override fun shouldBypassPlayerIntercept(event: MotionEvent): Boolean = passesThrough(event)
 
     override fun dispatchCollapsedMiniTouch(view: View, event: MotionEvent): Boolean? {
-        if (view.id != resourceId("player_root", "id") || view !== find("player_root")) return null
+        if (view.id != resourceId(ChromeResource.PLAYER_ROOT) || view !== find(ChromeResource.PLAYER_ROOT)) return null
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             redirectedMiniTarget = miniRoot?.takeIf {
                 activated && isCollapsed && it.isShown && capsuleHit(event)?.mini == true
@@ -167,12 +170,12 @@ internal class TabletDualPaneGlassSession(
 
     // Flat layout resolves bottom_navigation_root_flat; stacked stays the fallback.
     override fun resolveBottomNavigationRoot(): View? =
-        find("bottom_navigation_root_flat") ?: find("bottom_navigation_root_stacked")
+        find(ChromeResource.BOTTOM_NAVIGATION_ROOT_FLAT) ?: find(ChromeResource.BOTTOM_NAVIGATION_ROOT_STACKED)
 
     /** The elevated tabs frame sits above player_container. Keep its full-width fade
      * below both capsules so it cannot wash over the mini player's glass. */
     override fun attachNavigationScrim(frame: FrameLayout, scrim: GlassHostView) {
-        val container = find("player_container") as? ViewGroup
+        val container = find(ChromeResource.PLAYER_CONTAINER) as? ViewGroup
             ?: return super.attachNavigationScrim(frame, scrim)
         val height = frame.height.takeIf { it > 0 }
             ?: frame.layoutParams?.height?.takeIf { it > 0 }
@@ -190,7 +193,7 @@ internal class TabletDualPaneGlassSession(
         // Park the row exactly offscreen and avoid subpixel invalidations.
         val target = if (progress >= 0.6f) extent.toFloat() else (1f - exp(-20f * progress)) * extent
         if (progress == 0f || progress >= 0.6f || progress < 0.35f || abs(frame.translationY - target) >= 0.5f) {
-            if (frame.translationY != target) frame.translationY = target
+            if (frame.translationY != target) writeOwnedTransform(frame, "translationY", target)
         }
         val scrim = navScrim ?: return
         val container = scrim.parent as? ViewGroup ?: return
@@ -220,8 +223,8 @@ internal class TabletDualPaneGlassSession(
     override fun suppressNativeChromeSeams() {
         super.suppressNativeChromeSeams()
         val root = hostRoot ?: return
-        for (name in listOf("nav_tabs_top_shadow", "divider")) {
-            val id = resourceId(name, "id").takeIf { it != 0 } ?: continue
+        for (name in listOf(ChromeResource.NAV_TABS_TOP_SHADOW, ChromeResource.DIVIDER)) {
+            val id = resourceId(name).takeIf { it != 0 } ?: continue
             hideSeam(root.findViewById(id))
         }
     }
@@ -229,12 +232,5 @@ internal class TabletDualPaneGlassSession(
     // The host field declares BottomSheetBehavior<FrameLayout> but runs
     // PlayerBottomSheetBehavior (and is the activity's only Behavior field). Prefer a
     // value whose runtime class names it; fall back to the phone declared-type scan.
-    override fun findPlayerBehavior(): Any? {
-        generateSequence(activity.javaClass as Class<*>?) { it.superclass }
-            .flatMap { it.declaredFields.asSequence() }
-            .mapNotNull { field -> runCatching { field.isAccessible = true; field.get(activity) }.getOrNull() }
-            .firstOrNull { it.javaClass.name.contains("PlayerBottomSheetBehavior") }
-            ?.let { return it }
-        return super.findPlayerBehavior()
-    }
+    override fun findPlayerBehavior(): Any? = hostBinding.playerBehavior(true)
 }

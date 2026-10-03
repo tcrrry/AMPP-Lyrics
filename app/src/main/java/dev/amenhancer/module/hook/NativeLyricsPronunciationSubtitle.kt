@@ -21,7 +21,7 @@ internal object NativeLyricsPronunciationSubtitle {
     // This ID belongs to the verified host APK, not the module's resource table.
     @SuppressLint("ResourceType")
     private fun auxiliaryTextColor(view: TextView): Int =
-        runCatching { view.context.getColor(0x7f060301) }.getOrDefault(0x59ffffff)
+        runCatching { view.context.getColor(view.resources.getIdentifier("white_alpha_35", "color", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE)) }.getOrDefault(0x59ffffff)
 
     private val nativeLine = ThreadLocal<Any?>()
     private val selection = ThreadLocal<Selection?>()
@@ -34,23 +34,24 @@ internal object NativeLyricsPronunciationSubtitle {
 
     internal fun isManaged(pointer: Any?): Boolean = pointer != null && managed.containsKey(pointer)
 
-    fun install(loader: ClassLoader) {
+    fun install(loader: ClassLoader, build: TargetBuild = TargetBuild.UNKNOWN) {
+        val modern = build.versionName == "7.0.0-beta" && build.versionCode == 1606L
         runCatching {
             val adapter = loader.loadClass("com.apple.android.music.player.A")
-            val base = loader.loadClass("com.apple.android.music.player.i1")
+            val base = loader.loadClass(if (modern) "com.apple.android.music.player.n1" else "com.apple.android.music.player.i1")
             val holder = loader.loadClass("androidx.recyclerview.widget.RecyclerView\$D")
             val line = loader.loadClass("com.apple.android.music.ttml.javanative.model.LyricsLine\$LyricsLineNative")
             val constraints = loader.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$b")
             constraints.getConstructor(android.view.ViewGroup.LayoutParams::class.java)
             for (name in listOf("i", "j", "k", "t", "v")) constraints.getField(name)
             val flexbox = loader.loadClass("com.apple.android.music.common.views.FullWidthAlphaGradientFlexboxLayout")
-            val subtitle = adapter.getDeclaredMethod("Z", String::class.java, flexbox,
+            val subtitle = adapter.getDeclaredMethod(if (modern) "U" else "Z", String::class.java, flexbox,
                 Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-            val rebuild = adapter.declaredMethods.single { it.name == "g0" && it.parameterTypes.size == 7 }
+            val rebuild = adapter.declaredMethods.single { it.name == (if (modern) "b0" else "g0") && it.parameterTypes.size == 7 }
             val rowView = holder.getDeclaredField("a").apply { isAccessible = true }
-            val pointer = adapter.getMethod("D")
-            val type = adapter.getMethod("k", Int::class.javaPrimitiveType)
-            val index = adapter.getMethod("J", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+            val pointer = adapter.getMethod(if (modern) "y" else "D")
+            val type = adapter.getMethod(if (modern) "f" else "k", Int::class.javaPrimitiveType)
+            val index = adapter.getMethod(if (modern) "E" else "J", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
             val processor = adapter.getDeclaredField("p").apply { isAccessible = true }
             val lineAt = processor.type.getMethod("a", Int::class.javaPrimitiveType)
             val dereference = lineAt.returnType.getMethod("get")
@@ -59,10 +60,10 @@ internal object NativeLyricsPronunciationSubtitle {
             val backgroundPronunciation = line.getMethod("getHtmlPronunciationBackgroundVocalsLineText")
             val translationFlag = base.getDeclaredField("d").apply { isAccessible = true }
             val pronunciationFlag = base.getDeclaredField("e").apply { isAccessible = true }
-            val fullBind = adapter.getDeclaredMethod("p", holder, Int::class.javaPrimitiveType).apply { isAccessible = true }
-            val partialBind = adapter.getDeclaredMethod("q", holder, Int::class.javaPrimitiveType, List::class.java).apply { isAccessible = true }
-            val pending = loader.loadClass("com.apple.android.music.player.i1\$b").getDeclaredField("y").apply { isAccessible = true }
-            val cachedText = loader.loadClass("com.apple.android.music.player.i1\$b").getDeclaredField("v").apply { isAccessible = true }
+            val fullBind = adapter.getDeclaredMethod(if (modern) "k" else "p", holder, Int::class.javaPrimitiveType).apply { isAccessible = true }
+            val partialBind = adapter.getDeclaredMethod(if (modern) "l" else "q", holder, Int::class.javaPrimitiveType, List::class.java).apply { isAccessible = true }
+            val pending = loader.loadClass(if (modern) "com.apple.android.music.player.n1\$b" else "com.apple.android.music.player.i1\$b").getDeclaredField("y").apply { isAccessible = true }
+            val cachedText = loader.loadClass(if (modern) "com.apple.android.music.player.n1\$b" else "com.apple.android.music.player.i1\$b").getDeclaredField("v").apply { isAccessible = true }
             val payloads = listOf("h", "i").map { base.getDeclaredField(it).apply { isAccessible = true }.get(null) }
             var enabled = false
             fun owns(value: Any?): Boolean = enabled && value != null && isManaged(pointer.invoke(value))
@@ -84,14 +85,14 @@ internal object NativeLyricsPronunciationSubtitle {
                         if (!PronunciationHeaderLayout.supports(container)) return@runCatching
                         // Native 6.5.3 main/background word and subtitle layout IDs.
                         val background = when (param.args[3]) {
-                            0x7f0d0439 -> false
-                            0x7f0d043a -> true
+                            container.resources.getIdentifier("lyrics_word_karaoke", "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) -> false
+                            container.resources.getIdentifier("lyrics_word_karaoke_bg", "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) -> true
                             else -> return@runCatching
                         }
                         val text = (if (background) backgroundPronunciation else pronunciation).invoke(value) as? String
                         if (text.isNullOrBlank()) return@runCatching
                         subtitle.invoke(param.thisObject, text, container,
-                            if (background) 0x7f0d042a else 0x7f0d0438, param.args[5], 1)
+                            container.resources.getIdentifier(if (background) "lyrics_word_pronunciation_bg" else "lyrics_word_pronunciation", "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE), param.args[5], 1)
                         val pronunciationView = container.getChildAt(container.childCount - 1)
                         // r24 moved this subtitle outside the native gradient, leaving it
                         // opaque white. Use the same 35% white resource as auxiliary lyrics.
@@ -101,7 +102,7 @@ internal object NativeLyricsPronunciationSubtitle {
                 }
             })
             // Main karaoke words always remain the original lyrics for these pointers.
-            ModernXposedRuntime.hookMethod(base.getDeclaredMethod("G"), object : ModernMethodHook() {
+            ModernXposedRuntime.hookMethod(base.getDeclaredMethod(if (modern) "B" else "G"), object : ModernMethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     if (param.throwable == null && runCatching { adapter.isInstance(param.thisObject) && owns(param.thisObject) }.getOrDefault(false)) {
                         param.result = true

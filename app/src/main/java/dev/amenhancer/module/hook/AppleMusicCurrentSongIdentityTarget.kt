@@ -5,60 +5,6 @@ import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.atomic.AtomicReference
 
-internal data class TargetCurrentSong(
-    val item: Any,
-    val details: CurrentSongDetails,
-)
-
-/** Shared target-process state from Apple's player-level metadata funnel. */
-internal class CurrentSongIdentityCache {
-    private val current = AtomicReference<TargetCurrentSong?>(null)
-    private val listeners = CopyOnWriteArraySet<(TargetCurrentSong?) -> Unit>()
-    private val recentIds = ArrayDeque<Long>()
-    private val recentIdsLock = Any()
-
-    fun publish(item: Any?, details: CurrentSongDetails?) {
-        val published = if (item != null && details != null && details.appleMusicId > 0L) {
-            TargetCurrentSong(item, details)
-        } else {
-            null
-        }
-        current.set(published)
-        synchronized(recentIdsLock) {
-            if (published == null) {
-                recentIds.clear()
-            } else {
-                recentIds.remove(published.details.appleMusicId)
-                recentIds.addLast(published.details.appleMusicId)
-                while (recentIds.size > MAX_RECENT_IDS) recentIds.removeFirst()
-            }
-        }
-        listeners.forEach { listener ->
-            runCatching { listener(published) }
-        }
-    }
-
-    fun addListener(listener: (TargetCurrentSong?) -> Unit) {
-        listeners += listener
-        current.get()?.let { published ->
-            runCatching { listener(published) }
-        }
-    }
-
-    fun current(): TargetCurrentSong? = current.get()
-
-    /** Allows a stale fragment ID only when it was recently observed as current. */
-    fun canRebind(fragmentAdamId: Long?, publishedAdamId: Long?): Boolean {
-        if (publishedAdamId == null || publishedAdamId <= 0L) return false
-        if (fragmentAdamId == null) return true
-        return synchronized(recentIdsLock) { fragmentAdamId in recentIds }
-    }
-
-    private companion object {
-        const val MAX_RECENT_IDS = 8
-    }
-}
-
 /**
  * Publishes the verified current-item identity for custom-lyrics hooks and
  * Apple Music's embedded AM++ settings. Reuses [CurrentItemIdentitySeam] and
@@ -68,7 +14,22 @@ internal class AppleMusicCurrentSongIdentityTarget(
     private val symbols: TargetSymbolResolver,
     private val cache: CurrentSongIdentityCache,
 ) : CurrentSongIdentityTarget {
-    override fun install(): TargetCapabilityInstall {
+    private var installedResult: TargetCapabilityInstall? = null
+    private val registration = HookRegistrationScope()
+    @Synchronized override fun install(): TargetCapabilityInstall {
+        installedResult?.let { return it }
+        return try {
+            installOnce().also { result ->
+                if (result is TargetCapabilityInstall.Active) registration.activate()
+                else if (false) registration.activate()
+                else registration.close()
+                installedResult = result
+            }
+        } catch (error: Throwable) { registration.close(); throw error }
+    }
+    private fun hook(method: java.lang.reflect.Executable, callback: ModernMethodHook): Boolean =
+        ModernXposedRuntime.hookMethod(method,callback,registration)
+    private fun installOnce(): TargetCapabilityInstall {
         val installMethodResolution = symbols.resolve(AppleMusicSymbols.LyricsInstallMethod)
         val installMethod = installMethodResolution.valueOrNull()
             ?: return TargetCapabilityInstall.Degraded(installMethodResolution.summary)
@@ -95,7 +56,7 @@ internal class AppleMusicCurrentSongIdentityTarget(
             return TargetCapabilityInstall.Degraded(diagnostic)
         }
         val hooked = runCatching {
-            ModernXposedRuntime.hookMethod(metadataPublishMethod, object : ModernMethodHook() {
+            hook(metadataPublishMethod, object : ModernMethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     runCatching {
                         val item = converterMethod.invoke(null, param.args.getOrNull(0))
