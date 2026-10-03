@@ -33,3 +33,5 @@ python3 scripts/package-700-release.py \
 ```
 
 输出四种安装包、SHA-256 和静态校验报告。直接上传 Release，不使用 Actions 临时产物作为发布中转。普通 CI 保留测试，临时 APK 上传改为手动选择且仅保留一天，避免持续占用 Actions 存储。历史 Release 与附件保留。
+
+如当前云代理拒绝二进制上传，可由 `publish-v1-3.yml` 在 GitHub runner 重现全部检查后直接上传发布草稿；不使用 upload-artifact、不占用 Actions 临时产物额度。检查草稿附件完整后再正式发布。
