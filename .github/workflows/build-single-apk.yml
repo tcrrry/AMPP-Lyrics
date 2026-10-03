@@ -45,6 +45,7 @@ jobs:
       - name: 保存构建产物
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: AMPP-Lyrics-single-apk-v1.1
           path: dist/*
           if-no-files-found: error

@@ -30,8 +30,13 @@ object AppleMusicHostProfiles {
     fun find(packageName: String, versionName: String, versionCode: Long): AppleMusicHostProfile? {
         val name = "$versionName-$versionCode.json"
         if (name !in filenames) return null
-        return load(name).takeIf { it.packageName == packageName }
+        return load(name).takeIf { it.packageName == profilePackage(packageName) }
     }
+
+    fun profilePackage(packageName: String): String = if (
+        packageName == dev.amenhancer.module.ModuleConstants.TARGET_PACKAGE &&
+        packageName == "com.tcrrry.ampplyrics.coexist"
+    ) dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE else packageName
 
     fun isProductionBuild(packageName: String, versionName: String, versionCode: Long): Boolean =
         find(packageName, versionName, versionCode)?.productionEnabled == true

@@ -9,6 +9,46 @@ class FragmentSettingsModelsTest {
     private val models = FragmentSettingsModels.resolve(SettingsContractLoader(), FragmentSettingsContract())
 
     @Test
+    fun `module and lyrics native rows open separate pages and deduplicate together`() {
+        var module = 0
+        var lyrics = 0
+        val category = models.createCategory({ module++ }, { lyrics++ }) as SettingsHostCategory
+        assertEquals(listOf("AM++", "Tcrrry 歌词设置"), category.c.map { (it as SettingsHostAction).b })
+        val rows = category.c.map { it as SettingsHostAction }
+        assertSame(SettingsHostUnit.a, rows[1].j!!.invoke())
+        assertEquals(0, module)
+        assertEquals(1, lyrics)
+        assertSame(SettingsHostUnit.a, rows[0].j!!.invoke())
+        assertEquals(1, module)
+        assertEquals("tcrrry_embedded_lyrics_preference", rows[1].j!!.toString())
+        val stale = models.createCategory({}, {})
+        val host = Any()
+        assertEquals(listOf(category, host), models.prependUnique(listOf(stale, host, stale), category))
+    }
+
+    @Test
+    fun `both native callbacks are revoked on view destruction and restored on recreation`() {
+        val calls = mutableListOf<String>()
+        val sessions = FragmentSettingsSessions(models) { calls += "module" }
+        sessions.onLyrics = { calls += "lyrics" }
+        val fragment = Any()
+        val vm = Any()
+        sessions.bind(fragment, vm)
+        val first = (sessions.transform(vm, emptyList<Any>()) as List<*>).first() as SettingsHostCategory
+        val oldRows = first.c.map { it as SettingsHostAction }
+        sessions.unbind(fragment)
+        oldRows.forEach { it.j!!.invoke() }
+        assertTrue(calls.isEmpty())
+        sessions.bind(fragment, vm)
+        val next = (sessions.transform(vm, emptyList<Any>()) as List<*>).first() as SettingsHostCategory
+        assertNotSame(first, next)
+        next.c.forEach { (it as SettingsHostAction).j!!.invoke() }
+        assertEquals(listOf("module", "lyrics"), calls)
+        oldRows.forEach { it.j!!.invoke() }
+        assertEquals(2, calls.size)
+    }
+
+    @Test
     fun `native constructors retain enabled navigation style and host Unit`() {
         var opened = 0
         val category = models.createCategory { opened++ } as SettingsHostCategory

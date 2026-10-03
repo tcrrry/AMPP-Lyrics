@@ -23,8 +23,8 @@ object AppleMusicHostFactory {
     fun settingsActivityMatcher(context: android.content.Context, playerClass: Class<*>?): SettingsActivityMatcher =
         if (fragmentFamily(context)) FragmentSettingsNativeFactory.activityMatcher(context)
         else settingsNames(context).let { LegacySettingsActivityMatcher(playerClass,it.getString("playerActivity"),it.getString("mainActivity")) }
-    fun settingsViewBridge(context: android.content.Context, onOpen: (android.app.Activity)->Unit): SettingsViewBridge =
-        if (fragmentFamily(context)) FragmentSettingsNativeFactory.viewBridge(context,onOpen)
+    fun settingsViewBridge(context: android.content.Context, onOpen: (android.app.Activity)->Unit, onLyrics: (android.app.Activity)->Unit = onOpen): SettingsViewBridge =
+        if (fragmentFamily(context)) FragmentSettingsNativeFactory.viewBridge(context,onOpen,onLyrics)
         else LegacySettingsViewBridge(context,onOpen)
     fun installSettingsEntry(context: android.content.Context, loader: ClassLoader, observer: SettingsEntryObserver) =
         if (fragmentFamily(context)) { FragmentSettingsNativeFactory.install(context,loader,observer); Unit }

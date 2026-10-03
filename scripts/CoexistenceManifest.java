@@ -52,7 +52,7 @@ class CoexistenceManifest {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 2) throw new IllegalArgumentException("input.apk output.apk");
+        if (args.length != 2 && args.length != 3) throw new IllegalArgumentException("input.apk output.apk [label]");
         ApkModule apk = ApkModule.loadApkFile(new File(args[0]));
         AndroidManifestBlock manifest = apk.getAndroidManifest();
         if (!ORIGINAL.equals(manifest.getPackageName())) throw new IllegalArgumentException("Wrong host");
@@ -61,7 +61,7 @@ class CoexistenceManifest {
         manifest.getManifestElement().removeAttributesWithId(0x0101000b); // sharedUserId
         manifest.getManifestElement().removeAttributesWithId(0x01010261); // sharedUserLabel
         manifest.setPackageName(TARGET);
-        manifest.setApplicationLabel("AM++ Lyrics 共存测试版");
+        manifest.setApplicationLabel(args.length == 3 ? args[2] : "AM++ Lyrics 共存测试版");
         Iterator<ResXmlElement> elements = manifest.recursiveElements();
         ArrayList<ResXmlElement> filters = new ArrayList<>();
         while (elements.hasNext()) {

@@ -32,7 +32,7 @@ data class ModuleSettings(
     val schemaVersion: Int = ModuleConstants.CONFIG_SCHEMA_VERSION,
 ) {
     companion object {
-        const val DEFAULT_CUSTOM_LYRICS_ENABLED = ModuleConstants.TARGET_PACKAGE == ModuleConstants.RESOURCE_PACKAGE
+        const val DEFAULT_CUSTOM_LYRICS_ENABLED = true
         const val MIN_LYRIC_BLUR_RADIUS_OFFSET_PX = -10
         const val MAX_LYRIC_BLUR_RADIUS_OFFSET_PX = 10
         const val FOLLOW_SYSTEM_APPLE_MUSIC_DPI = 0

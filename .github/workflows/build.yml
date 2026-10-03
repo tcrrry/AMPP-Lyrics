@@ -3,6 +3,12 @@ name: Build
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      save_artifacts:
+        description: Save temporary APK artifacts for one day
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -63,13 +69,16 @@ jobs:
           PYREPORT
 
       - name: Upload standalone module APK
+        if: github.event_name == 'workflow_dispatch' && inputs.save_artifacts
         uses: actions/upload-artifact@v4
         with:
           name: AM-plus-plus-Desktop-Lyrics-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 1
 
       - name: Upload glass comparison APKs
+        if: github.event_name == 'workflow_dispatch' && inputs.save_artifacts
         uses: actions/upload-artifact@v4
         with:
           name: AM-plus-plus-glass-lab
@@ -77,3 +86,4 @@ jobs:
             glass-lab/build/outputs/apk/debug/glass-lab-debug.apk
             glass-lab/build/outputs/apk/androidTest/debug/glass-lab-debug-androidTest.apk
           if-no-files-found: error
+          retention-days: 1

@@ -104,11 +104,16 @@ internal class FragmentSettingsModels private constructor(
     private val categoryItems: Field,
     private val actionCallback: Field,
 ) {
-    fun createCategory(onOpen: () -> Unit): Any {
-        val callback = Proxy.newProxyInstance(loader, arrayOf(callbackClass), EntryCallback(unit, onOpen))
-        // This is the same optimized constructor and default mask as native navigation rows.
-        val action = actionConstructor.newInstance("AM++", null, false, null, null, callback, 0x17a)
-        return categoryConstructor.newInstance(null, listOf(action), null, 0x3b)
+    fun createCategory(onOpen: () -> Unit): Any = createCategory(onOpen, null)
+
+    fun createCategory(onOpen: () -> Unit, onLyrics: (() -> Unit)?): Any {
+        fun action(title: String, key: String, open: () -> Unit): Any {
+            val callback = Proxy.newProxyInstance(loader, arrayOf(callbackClass), EntryCallback(unit, open, key))
+            return actionConstructor.newInstance(title, null, false, null, null, callback, 0x17a)
+        }
+        val rows = mutableListOf(action("AM++", "ampp_embedded_settings_preference", onOpen))
+        onLyrics?.let { rows += action("Tcrrry 歌词设置", "tcrrry_embedded_lyrics_preference", it) }
+        return categoryConstructor.newInstance(null, rows, null, 0x3b)
     }
 
     fun prependUnique(original: Any?, category: Any): Any? {
@@ -123,14 +128,14 @@ internal class FragmentSettingsModels private constructor(
     internal fun isModuleCategory(value: Any?): Boolean {
         if (!categoryItems.declaringClass.isInstance(value)) return false
         val rows = categoryItems.get(value) as? List<*> ?: return false
-        return rows.size == 1 && rows.single()?.let { row ->
-            if (!actionCallback.declaringClass.isInstance(row)) return@let false
-            val callback = actionCallback.get(row) ?: return@let false
+        return rows.isNotEmpty() && rows.all { row ->
+            if (!actionCallback.declaringClass.isInstance(row)) return@all false
+            val callback = actionCallback.get(row) ?: return@all false
             Proxy.isProxyClass(callback.javaClass) && Proxy.getInvocationHandler(callback) is EntryCallback
-        } == true
+        }
     }
 
-    private class EntryCallback(private val unit: Any, private val onOpen: () -> Unit) : InvocationHandler {
+    private class EntryCallback(private val unit: Any, private val onOpen: () -> Unit, private val key: String) : InvocationHandler {
         override fun invoke(proxy: Any, method: Method, args: Array<out Any?>?): Any? = when {
             method.name == "invoke" && method.parameterCount == 0 -> {
                 // A UI failure must not escape into the host Compose click dispatcher.
@@ -139,7 +144,7 @@ internal class FragmentSettingsModels private constructor(
             }
             method.name == "equals" && method.parameterCount == 1 -> proxy === args?.getOrNull(0)
             method.name == "hashCode" && method.parameterCount == 0 -> System.identityHashCode(proxy)
-            method.name == "toString" && method.parameterCount == 0 -> "ampp_embedded_settings_preference"
+            method.name == "toString" && method.parameterCount == 0 -> key
             else -> throw UnsupportedOperationException(method.toGenericString())
         }
     }
@@ -181,6 +186,7 @@ internal class FragmentSettingsSessions(
         var active = true
         var category: Any? = null
     }
+    var onLyrics: ((Any) -> Unit)? = null
     private val fragments = WeakHashMap<Any, Session>()
     private val viewModels = WeakHashMap<Any, Session>()
 
@@ -194,12 +200,16 @@ internal class FragmentSettingsSessions(
             previous.fragment.get()?.let { if (fragments[it] === previous) fragments.remove(it) }
         }
         val session = Session(fragment, viewModel)
-        session.category = models.createCategory {
+        fun open(callback: (Any) -> Unit) {
             val current = synchronized(this) {
                 session.fragment.get()?.takeIf { session.active && fragments[it] === session }
             }
-            if (current != null) onOpen(current)
+            if (current != null) callback(current)
         }
+        session.category = models.createCategory(
+            onOpen = { open(onOpen) },
+            onLyrics = onLyrics?.let { callback -> { open(callback) } },
+        )
         fragments[fragment] = session
         viewModels[viewModel] = session
         return true

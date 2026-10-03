@@ -32,6 +32,7 @@ internal class EmbeddedBootstrap {
     }
 
     fun supports(build: TargetBuild): Boolean =
+        build.packageName == ModuleConstants.TARGET_PACKAGE &&
         dev.amenhancer.host.applemusic.AppleMusicHostProfiles.isProductionBuild(
             build.packageName, build.versionName, build.versionCode,
         )

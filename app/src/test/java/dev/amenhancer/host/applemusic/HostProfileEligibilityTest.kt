@@ -2,6 +2,15 @@ package dev.amenhancer.host.applemusic
 import org.junit.Assert.*
 import org.junit.Test
 class HostProfileEligibilityTest {
+    @Test fun coexistAliasRetainsExactVersionAndPackageGates() {
+        val packageName = dev.amenhancer.module.ModuleConstants.TARGET_PACKAGE
+        assertTrue(AppleMusicHostProfiles.isProductionBuild(packageName, "7.0.0-beta", 1606))
+        assertFalse(AppleMusicHostProfiles.isProductionBuild(packageName, "7.0.0-beta", 1607))
+        assertFalse(AppleMusicHostProfiles.isProductionBuild(packageName, "7.0.0", 1606))
+        assertFalse(AppleMusicHostProfiles.isProductionBuild("unrelated.host", "7.0.0-beta", 1606))
+        assertTrue(dev.amenhancer.module.hook.FragmentCellularDataEntryTarget.supports(
+            dev.amenhancer.module.hook.TargetBuild(packageName, "7.0.0-beta", 1606)))
+    }
     private enum class Form { PhoneStacked, TabletDualPane }
     private fun supports(sdk: Int, code: Long, name: String, tablet: Boolean) =
         !tablet && sdk >= 33 && AppleMusicHostProfiles.supportsGlass(code,name)

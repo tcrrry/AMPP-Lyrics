@@ -89,7 +89,7 @@ internal class FragmentCellularDataEntryTarget(
         )
 
         private fun qualified(build: TargetBuild, profile: AppleMusicHostProfile?): Boolean =
-            profile != null && profile.packageName == build.packageName && profile.versionName == build.versionName &&
+            profile != null && profile.packageName == AppleMusicHostProfiles.profilePackage(build.packageName) && profile.versionName == build.versionName &&
                 profile.versionCode == build.versionCode && profile.productionEnabled &&
                 profile.family == "fragment-content" && profile.capability("cellular")
     }

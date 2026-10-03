@@ -1,8 +1,6 @@
 name: Apple Music 7.0 单 APK 测试版
 
 on:
-  push:
-    branches: [feat/applemusic-7-single-apk]
   workflow_dispatch:
 
 permissions:
@@ -57,6 +55,7 @@ jobs:
             --aapt2 "$ANDROID_HOME/build-tools/37.0.0/aapt2"
       - uses: actions/upload-artifact@v4
         with:
+          retention-days: 1
           name: AppleMusic-700-single-apk-test-r1
           path: dist/*
           if-no-files-found: error

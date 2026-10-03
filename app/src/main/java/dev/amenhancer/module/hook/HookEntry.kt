@@ -181,7 +181,8 @@ class HookEntry : XposedModule() {
                                 currentSong = { currentSong.current()?.details },
                             ),
                             activityMatcher = AppleMusicHostFactory.settingsActivityMatcher(application, playerActivityClass),
-                            nativeBridgeFactory = { onOpen -> AppleMusicHostFactory.settingsViewBridge(application, onOpen) },
+                            nativeBridgeFactory = { onOpen -> AppleMusicHostFactory.settingsViewBridge(application, onOpen,
+                                onLyrics = { activity -> settingsHost?.openLyricsSettings(activity) }) },
                         )
                         settingsHost = host
                         AppleMusicHostFactory.installSettingsEntry(application, targetClassLoader, host)
