@@ -34,7 +34,7 @@ python3 scripts/package-tcrrry-embedded.py patched output.apks
 
 单 APK 使用 v1.1 APKS 中保留的原始三分包，先合并，再用相同的 NPatch 1.0.7（741）重新嵌入原模块。不能直接合并已注入分包：NPatch 的内嵌 origin.apk 也必须包含完整资源和原生库。
 
-依赖 Java 17 及以上、Python 3.11 及以上、unzip、Android Build Tools 35.0.0 的 apksigner / aapt2，以及以下固定工具（脚本校验工具 SHA-256）：
+依赖 Java 21 及以上、Python 3.11 及以上、unzip、Android Build Tools 35.0.0 的 apksigner / aapt2，以及以下固定工具（脚本校验工具 SHA-256）：
 
 - [APKEditor 1.4.9](https://github.com/REAndroid/APKEditor/releases/tag/V1.4.9)
 - [NPatch 1.0.7（741）](https://github.com/7723mod/NPatch/releases/tag/v1.0.7)
@@ -50,3 +50,29 @@ python3 scripts/package-single-apk.py input.apks AMPP-Lyrics-AppleMusic-6.5.3-ar
 脚本检查 APKS 完整性、单 APK 签名与 APKS 一致、NPatch 配置不变、内嵌模块校验值不变、包名和版本正确、不再要求分包，以及所有 arm64 原生库内容一致；随后输出 APK 和 `.sha256` 文件。NPatch 的嵌套 ZIP 布局包含重叠条目，因此提取内嵌文件用 unzip，而不是关闭 Python zipfile 的安全检查。
 
 当前单 APK 要求 Android 11 及以上，只包含 arm64-v8a / xxxhdpi 变体。已有用户实机安装验证通过，发布页优先推荐单 APK；这项反馈不代表登录、播放、歌词显示及覆盖安装均已验证。
+
+
+## 备用共存 APK（测试版）
+
+共存包独立使用 `com.tcrrry.ampplyrics.coexist`，显示名称为“AM++ Lyrics 共存测试版”。不会修改或覆盖普通 APK / APKS / 模块 APK 发布附件。此包需要单独登录，仅供实机验证。
+
+先构建专用模块（普通构建不带此参数）：
+
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug -PamppCoexistence=true --no-daemon
+```
+
+再用固定的原始 APKS 生成共存包：
+
+```sh
+python3 scripts/package-coexist-apk.py input.apks app/build/outputs/apk/debug/app-debug.apk \
+  AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test.apk \
+  --editor /path/to/APKEditor-1.4.9.jar \
+  --npatch /path/to/jar-v1.0.7-741-release.jar \
+  --apksigner /path/to/build-tools/35.0.0/apksigner \
+  --aapt2 /path/to/build-tools/35.0.0/aapt2
+```
+
+模块构建使用 Java 17，NPatch 打包使用 Java 21。`CoexistenceManifest.java` 移除 shared UID、隔离 Provider 和自身权限、设置独立名称，并取消 BROWSABLE 外部链接注册。模块将安装身份与原始资源命名空间分开，并在共存进程内重定向自身 Intent / Provider URI。打包脚本校验资源、原始 DEX、原生库、签名、内嵌模块及隔离结构。
+
+也可运行 GitHub Actions“构建备用共存 APK（测试版）”；它分别测试默认与共存模块身份，仅上传共存测试 APK 及其校验文件，不替换原有附件。详细测试范围见[共存评估](coexistence-feasibility.md)。

@@ -27,6 +27,7 @@
 | **APK 整合包（推荐，优先下载）** | [下载 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)，直接交给系统安装器安装，无需分包安装器；已有用户实机安装验证通过。 |
 | **APKS 整合包（备用）** | [下载 APKS](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks)，使用 MT 管理器 / SAI 等分包安装器安装。 |
 | **模块 APK（进阶用户）** | [下载模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-module.apk)，供已有兼容模块环境或自行嵌入的进阶用户使用，不能单独作为 Apple Music 播放器使用。 |
+| **共存 APK（测试备用）** | [下载共存测试 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test.apk)，独立包名，可保留现有应用；需要单独登录，等待用户实机验证。 |
 
 APK 和 APKS 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**；选择其中一种即可。`.sha256` 文件只用于校验。
 
@@ -34,7 +35,15 @@ APK 和 APKS 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**�
 
 从 v1.1 APKS 保留的原始分包合并后重新嵌入相同模块，沿用 NPatch 1.0.7（741）、现有配置及测试签名。只改变打包形态，模块功能与 v1.1 一致。单 APK 已通过静态校验，**已有用户反馈实机安装正常，现优先推荐 APK**。登录、播放和歌词显示仍需进一步验证，不将安装成功等同于全部功能验证通过。
 
-两种整合包仍基于 Apple Music 6.5.3（1599），要求 Android 11 及以上，只包含 arm64-v8a / xxxhdpi 变体，并非全架构通用包；模块内部版本为 1.6.3（113）。账号、订阅和播放权限仍按原服务规则。
+### 新增备用共存 APK（2026-10-03）
+
+显示名称为 **AM++ Lyrics 共存测试版**，包名为 `com.tcrrry.ampplyrics.coexist`，使用独立应用数据目录。现有普通 APK、APKS 和模块 APK 附件保持不变，默认仍推荐普通 APK。
+
+共存版移除共享 UID，隔离 Provider / 自身权限，并使用专用模块适配安装身份。原始类名、资源命名空间、Apple Music DEX 和 arm64 原生库保留。为避免争抢官方外部入口，共存版不注册浏览器音乐链接及第三方音乐 SDK 认证入口，请从自己的图标进入登录。
+
+此包用于用户实机验证，尚未确认安装共存、账号登录、DRM、在线/离线播放和歌词功能；测试说明见[主分支共存评估](https://github.com/tcrrry/AMPP-Lyrics/blob/main/docs/coexistence-feasibility.md)。不需要为试用卸载现有应用。
+
+所有整合包仍基于 Apple Music 6.5.3（1599），要求 Android 11 及以上，只包含 arm64-v8a / xxxhdpi 变体，并非全架构通用包；模块内部版本为 1.6.3（113）。账号、订阅和播放权限仍按原服务规则。
 
 单 APK 与当前 APKS 签名一致，但分包切换到单 APK 的覆盖安装仍需实机验证，安装器必须完整替换应用并移除旧分包；不要仅替换 base.apk。与官方 Apple Music 签名不同，不能正常覆盖官方版。卸载会删除本地数据和下载音乐，请在切换前确认保留需求。安装后完全退出并重启 Apple Music。
 
@@ -46,10 +55,13 @@ APK 和 APKS 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**�
 
 单 APK 静态校验：APK v2 签名有效，签名证书与 APKS 一致；内嵌模块 SHA-256 与 v1.1 模块一致；NPatch 配置一致；包名 / 版本正确、无需分包，全部 arm64 原生库内容一致。构建脚本见主分支 `scripts/package-single-apk.py`。
 
+共存测试版：默认与共存模块身份的单元测试、lint 与模块构建通过；打包校验确认独立包名、无共享 UID、Provider 隔离、原始 DEX / 资源标识 / arm64 原生库保留，内嵌共存模块和 APK 签名有效。实机功能验证仍由用户完成。
+
 ## SHA-256
 
 ```text
 309062ad1c1987160e493277a396ab784b1c052e6bf96c68b8ba92a5188a5781  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk
 e08466d26ba06c55b8f491a52e4c7bd383602f68cb3ce06af1182c0167123f10  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks
 e14317e4faedd01a9131ff4258a2f0291e8d69a30fa22278962da027e6107873  AMPP-Lyrics-module.apk
+5fccb283e21d1a27f5c47ffcd23c858dc140405d1c4063d56f753b936923ed49  AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test.apk
 ```
