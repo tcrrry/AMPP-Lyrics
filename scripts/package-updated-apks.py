@@ -39,11 +39,13 @@ def main():
         outputs = []
         for name in single.SPLITS:
             # ABI and density splits are unchanged; preserve their existing signatures.
+            # Splits omit uses-sdk. Verify for the host's actual Android 11 minimum,
+            # rather than apksigner's API 1 fallback that requires obsolete v1 signatures.
             matches = (list((work / 'patched').glob('base-*-npatched.apk'))
                        if name == 'base.apk' else [work / name])
             if len(matches) != 1:
                 raise RuntimeError(f'Expected one patched split: {name}')
-            if single.certificate(args.apksigner, matches[0]) != single.certificate(args.apksigner, work / 'base.apk'):
+            if single.certificate(args.apksigner, matches[0], min_sdk=30) != single.certificate(args.apksigner, work / 'base.apk'):
                 raise RuntimeError(f'Signing certificate changed: {name}')
             if name == 'base.apk':
                 embedded = work / 'embedded.apk'

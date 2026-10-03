@@ -31,9 +31,11 @@ def extract_nested(apk, entry, target):
         subprocess.run(["unzip", "-p", str(apk), entry], stdout=stream, check=True)
 
 
-def certificate(apksigner, apk):
+def certificate(apksigner, apk, min_sdk=None):
     output = subprocess.check_output(
-        [str(apksigner), "verify", "--print-certs", str(apk)], text=True
+        [str(apksigner), "verify", "--print-certs",
+         *(["--min-sdk-version", str(min_sdk)] if min_sdk is not None else []),
+         str(apk)], text=True
     )
     return re.search(r"certificate SHA-256 digest: ([0-9a-f]{64})", output).group(1)
 
