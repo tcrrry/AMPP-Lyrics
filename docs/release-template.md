@@ -10,7 +10,7 @@
 
 ![AM++ Lyrics 封面](https://raw.githubusercontent.com/tcrrry/AMPP-Lyrics/v1.1/docs/images/ampp-lyrics-cover.jpg)
 
-**B站视频：** 待补充
+**B站视频：** [Apple Music 安卓端歌词增强演示：QQ／网易云逐字歌词、翻译与发音](https://b23.tv/FsZM26H)
 
 ## 这次更新
 

@@ -21,11 +21,9 @@
 
 ## 视频演示
 
-**B站视频：** 待补充
+**B站视频：** [Apple Music 安卓端歌词增强演示：QQ／网易云逐字歌词、翻译与发音](https://b23.tv/FsZM26H)
 
 ![AM++ Lyrics：将 QQ 音乐和网易云歌词融入 Apple Music](docs/images/ampp-lyrics-cover.jpg)
-
-<!-- B站视频链接预留：发布后填入实际视频地址。 -->
 
 ## 核心功能
 
