@@ -1,0 +1,100 @@
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicCjkKaraokeAnimationTarget.kt:482:19 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicCjkKaraokeAnimationTarget.kt:482:23 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicCjkKaraokeAnimationTarget.kt:482:63 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicCjkKaraokeAnimationTarget.kt:601:9 'when' expression over a subject of type 'Character.UnicodeBlock?' is not exhaustive. Add a 'null' or 'else' branch.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicCustomLyricsTarget.kt:350:57 Unnecessary safe call on a non-null receiver of type 'AutoLyricsReplacementSession'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicCustomLyricsTarget.kt:501:74 Unnecessary safe call on a non-null receiver of type 'AutoLyricsRuntime'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicDpiOverride.kt:125:17 'field scaledDensity: Float' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicDpiOverride.kt:391:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt:1436:68 'val systemWindowInsetTop: Int' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/AutoLyricsReplacementSession.kt:494:73 Unnecessary non-null assertion (!!) on a non-null receiver of type 'AutoLyricsCandidate'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/EmbeddedMlKit.kt:19:25 'constructor(p0: AssetManager!, p1: DisplayMetrics!, p2: Configuration!): Resources' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/LunabeatClient.kt:171:43 Elvis operator (?:) always returns the left operand of non-nullable type 'LunabeatCatalogCacheSnapshot'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/ModernXposedRuntime.kt:121:64 This class is not recommended for use in Kotlin. Use 'kotlin.Boolean' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/ModernXposedRuntime.kt:122:58 This class is not recommended for use in Kotlin. Use 'kotlin.Byte' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/ModernXposedRuntime.kt:123:68 This class is not recommended for use in Kotlin. Use 'kotlin.Char' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/ModernXposedRuntime.kt:124:60 This class is not recommended for use in Kotlin. Use 'kotlin.Short' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/ModernXposedRuntime.kt:125:64 This class is not recommended for use in Kotlin. Use 'kotlin.Int' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/ModernXposedRuntime.kt:126:58 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/ModernXposedRuntime.kt:127:60 This class is not recommended for use in Kotlin. Use 'kotlin.Float' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/ModernXposedRuntime.kt:128:62 This class is not recommended for use in Kotlin. Use 'kotlin.Double' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/PhoneGlassRuntime.kt:213:34 Unnecessary non-null assertion (!!) on a non-null receiver of type 'Class<*>'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TargetSymbols.kt:1863:68 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Set' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TargetSymbols.kt:2314:30 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TargetSymbols.kt:2322:30 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TargetSymbols.kt:2330:30 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TargetSymbols.kt:2342:34 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TargetSymbols.kt:2346:34 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TargetSymbols.kt:2514:65 This class is not recommended for use in Kotlin. Use 'kotlin.collections.List' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TargetSymbols.kt:2533:30 This class is not recommended for use in Kotlin. Use 'kotlin.collections.Map' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/hook/TtmlNativeParser.kt:97:57 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsHost.kt:260:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsHost.kt:310:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsHost.kt:753:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsHost.kt:786:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsHost.kt:1718:44 This class is not recommended for use in Kotlin. Use 'kotlin.collections.List' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsHost.kt:1809:44 This class is not recommended for use in Kotlin. Use 'kotlin.collections.List' instead.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsHost.kt:1811:69 Unchecked cast of 'Any!' to 'MutableList<Any?>'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsHost.kt:2210:68 'static field SOFT_INPUT_ADJUST_RESIZE: Int' is deprecated. Deprecated in Java.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/dev/amenhancer/module/ui/EmbeddedSettingsSvgAssets.kt:214:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/io/github/proify/lyricon/amprovider/xposed/AppleInternalCatalogResolver.kt:1076:34 Unnecessary safe call on a non-null receiver of type 'Map<String, AppleInternalCatalogResolver.CatalogSong>'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/io/github/proify/lyricon/amprovider/xposed/AppleInternalCatalogResolver.kt:1210:40 Unnecessary safe call on a non-null receiver of type 'AppleInternalCatalogResolver.CatalogSong'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/io/github/proify/lyricon/amprovider/xposed/hooks/AppleContentLocalizationHooks.kt:73:62 Unnecessary safe call on a non-null receiver of type 'AppleInternalCatalogResolver.CatalogRequestLocalization'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/io/github/proify/lyricon/amprovider/xposed/hooks/AppleContentLocalizationHooks.kt:74:60 Unnecessary safe call on a non-null receiver of type 'AppleInternalCatalogResolver.CatalogRequestLocalization'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/io/github/proify/lyricon/amprovider/xposed/internal/WeakIdentityMap.kt:38:42 Expression is unused.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/io/github/proify/lyricon/amprovider/xposed/metadata/AppleArtistSurfaceHooks.kt:690:30 Unnecessary safe call on a non-null receiver of type 'Any'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/main/java/io/github/proify/lyricon/amprovider/xposed/metadata/AppleArtistSurfaceHooks.kt:691:31 Unnecessary safe call on a non-null receiver of type 'Any'.
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:processDebugJavaRes
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:generateDebugLintReportModel
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:lintAnalyzeDebugAndroidTest
+> Task :app:mergeDebugJavaResource
+
+> Task :app:compileDebugUnitTestKotlin
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/CatalogLanguageSymbolsTest.kt:305:37 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/FeatureInstallationModuleTest.kt:129:27 Unnecessary non-null assertion (!!) on a non-null receiver of type '(() -> HookContext) -> Unit'.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:147:38 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:156:28 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:160:31 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:164:29 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:166:51 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:167:57 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:168:56 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:169:54 No cast needed.
+w: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/src/test/java/dev/amenhancer/module/hook/TitleCorrectionSymbolsTest.kt:225:45 No cast needed.
+
+> Task :app:dexBuilderDebug
+> Task :app:compileDebugUnitTestJavaWithJavac
+> Task :app:processDebugUnitTestJavaRes
+
+> Task :app:testDebugUnitTest
+
+OrdinarySettingsWritePolicyTest > ordinary settings encode carries exactly the runtime toggles and the current schema version FAILED
+    java.lang.AssertionError at OrdinarySettingsWritePolicyTest.kt:102
+
+> Task :app:lintAnalyzeDebug
+> Task :app:lintAnalyzeDebugUnitTest
+
+> Task :app:testDebugUnitTest FAILED
+
+917 tests completed, 1 failed
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/validation-1791007850091.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///home/runner/work/AMPP-Lyrics/AMPP-Lyrics/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 3m 55s
+191 actionable tasks: 191 executed

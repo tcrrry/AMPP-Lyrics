@@ -1,0 +1,25 @@
+{
+  "source": "898ccace171647f6820e78da345d4d97736f78fb",
+  "run": "37102178535",
+  "steps": {
+    "validation": "failure",
+    "inputs": "skipped",
+    "package": "skipped",
+    "release": "skipped"
+  },
+  "tests": {
+    "app": {
+      "tests": 917,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "glass": {
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "checksums": []
+}
