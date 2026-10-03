@@ -56,3 +56,5 @@ r3 在共存打包时将 `layout_behavior` 中以点开头的宿主类名补全�
 `VerifyCoexistenceLayouts.java` 检查最终 APK 及 NPatch 内嵌 origin，拒绝残留的相对行为类名，并确认资料库分类页保留正确的滚动行为类。原有签名、包名、资源 ID、宿主 DEX 和嵌入模块校验继续执行。
 
 新文件为 `AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r3.apk`，上传至 v1.2；不替换 r2 或普通 APK/APKS/模块附件。可覆盖安装相同签名和包名的旧共存版。共存版新安装仍需手动开启自定义歌词替换；已经保存的配置保留。静态缺陷已修正，所有分类入口是否恢复仍需用户实机复测，不能以构建或静态校验代替手机测试。
+
+验证记录：[r3 共存构建 Actions](https://github.com/tcrrry/AMPP-Lyrics/actions/runs/37112457362) 与[完整 CI](https://github.com/tcrrry/AMPP-Lyrics/actions/runs/37112457529) 均成功。最终 APK 及内嵌 origin 的布局检查通过；仅追加 r3 APK 和校验文件，发布前后逐项比对确认旧附件 ID、大小与摘要不变。实机复测仍待用户反馈。

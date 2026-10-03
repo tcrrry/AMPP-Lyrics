@@ -7,7 +7,7 @@
 
 **单 APK / APKS 整合安装包 · 无需 Root · 无需另装 LSPosed 或模块**
 
-**[下载 APK（推荐）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)** · [下载 APKS（备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks) · [模块 APK（进阶用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-module.apk) · [共存 APK（测试备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r2.apk) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
+**[下载 APK（推荐）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)** · [下载 APKS（备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks) · [模块 APK（进阶用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-module.apk) · [共存 APK（测试备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.2/AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r3.apk) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
 
 </div>
 
@@ -46,13 +46,13 @@
 | **[APK 整合包（推荐）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)** | **普通用户，优先选择** | 直接打开 APK 安装，无需分包安装器；已有用户实机安装验证通过。 |
 | [APKS 整合包（备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks) | 需要分包安装方式的用户 | 用 MT 管理器、SAI 等分包安装器安装，无需 Root 或额外模块框架。 |
 | [模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-module.apk) | 已有兼容模块环境、或需要自行嵌入的进阶用户 | 独立模块，不是 Apple Music 主程序，不能单独安装后直接播放音乐。 |
-| [共存 APK（测试备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r2.apk) | 希望保留官方版或普通增强版，并愿意实机验证的用户 | 独立包名，直接安装；用户反馈初版可登录，开启歌词替换后匹配正常；第二版修正资源查找和封面 Provider 匹配，显示效果待复测。 |
+| [共存 APK（测试备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.2/AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r3.apk) | 希望保留官方版或普通增强版，并愿意实机验证的用户 | 独立包名，直接安装；用户反馈初版可登录，开启歌词替换后匹配正常；第三版修正资料库分类页的布局类名，闪退修复效果待实机复测。 |
 
-v1.2 新安装默认开启“自定义歌词替换”和“自动实时补全”，两个设置页的日夜配色放到页面最后。来源没有逐字时间时按逐行歌词显示，不再把整句模拟成逐字高亮。已有用户保存的关闭选项不会强行覆盖，若仍未自动匹配，可在 AM++ 的自定义歌词中检查开关。普通 APK、APKS 和模块均已更新；共存测试版仍使用 v1.1 的第二版，暂不更新。
+普通版 v1.2 新安装默认开启“自定义歌词替换”和“自动实时补全”，两个设置页的日夜配色放到页面最后。来源没有逐字时间时按逐行歌词显示，不再把整句模拟成逐字高亮。已有用户保存的关闭选项不会强行覆盖，若仍未自动匹配，可在 AM++ 的自定义歌词中检查开关。普通 APK、APKS 和模块均已更新；另提供共存测试第三版，修正资料库分类页的布局类名，需实机复测。
 
 v1.1 在 v1 / r25 基础上加入发音覆盖率评分，并允许更完整的发音结果刷新播放页。歌曲匹配可信度优先，同档内译文、逐字、发音覆盖率权重依次为 200、100、50；手动指定来源仍然优先。已安装 v1 或 r25 的用户需安装新版整合包才能获得这次优化。旧版 v1 保留在发布列表中。
 
-共存测试 APK 是独立备用选项，显示为 **AM++ Lyrics 共存测试版**，与普通 APK / APKS 使用不同包名和应用数据目录；无需为测试卸载现有应用。请从共存版自己的图标登录，外部音乐链接和第三方音乐 SDK 认证入口暂不支持。[共存实现与验证说明](docs/coexistence-feasibility.md)。默认仍推荐上方已验证安装的普通 APK。第二版可覆盖升级共存初版；首次使用请在“自定义歌词”开启“自定义歌词替换”和“自动实时补全”，保存后完全退出并重开。
+共存测试 APK 是独立备用选项，显示为 **AM++ Lyrics 共存测试版**，与普通 APK / APKS 使用不同包名和应用数据目录；无需为测试卸载现有应用。请从共存版自己的图标登录，外部音乐链接和第三方音乐 SDK 认证入口暂不支持。[共存实现与验证说明](docs/coexistence-feasibility.md)。默认仍推荐上方已验证安装的普通 APK。第三版可覆盖升级共存初版或第二版；首次使用请在“自定义歌词”开启“自定义歌词替换”和“自动实时补全”，保存后完全退出并重开。
 
 发布页附带的 `.sha256` 文件用于校验，不是安装包。开发期 r8～r25 等历史版本保留在原开发仓库；本公开仓库从 v1 开始发布。
 
