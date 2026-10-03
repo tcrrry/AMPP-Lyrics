@@ -1,14 +1,14 @@
 package dev.amenhancer.module.config
 
-import dev.amenhancer.glass.GlassPolicy
+import dev.amenhancer.module.model.EnhancementDefaults
 import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.model.CustomLyricsManifest
 import dev.amenhancer.module.model.LyricsFontManifest
 import dev.amenhancer.module.model.ModuleSettings
 
-internal object ModuleSettingsSchema {
+object ModuleSettingsSchema {
     /** Keys removed by the profile migration. */
-    internal val obsoleteKeys: Set<String> = setOf(KEY_TITLE_CORRECTION_TARGET_LANGUAGE)
+    val obsoleteKeys: Set<String> = setOf(KEY_TITLE_CORRECTION_TARGET_LANGUAGE)
 
     fun decode(values: Map<String, *>): ModuleSettings = ModuleSettings(
         dualPaneEnabled = values.boolean(KEY_DUAL_PANE, default = true),
@@ -24,12 +24,12 @@ internal object ModuleSettingsSchema {
             ?.coerceIn(
                 ModuleSettings.MIN_PHONE_LIQUID_GLASS_BOTTOM_GAP_DP,
                 ModuleSettings.MAX_PHONE_LIQUID_GLASS_BOTTOM_GAP_DP,
-            ) ?: GlassPolicy.BOTTOM_DP,
+            ) ?: EnhancementDefaults.GLASS_BOTTOM_DP,
         phoneLiquidGlassPanelBlurDp = values.number(KEY_PHONE_LIQUID_GLASS_PANEL_BLUR_DP)
             ?.coerceIn(
                 ModuleSettings.MIN_PHONE_LIQUID_GLASS_PANEL_BLUR_DP,
                 ModuleSettings.MAX_PHONE_LIQUID_GLASS_PANEL_BLUR_DP,
-            ) ?: GlassPolicy.PANEL_BLUR_DP.toInt(),
+            ) ?: EnhancementDefaults.GLASS_PANEL_BLUR_DP.toInt(),
         futureBlurEnabled = values.boolean(KEY_FUTURE_BLUR, default = true),
         cjkKaraokeAnimationEnabled = values.boolean(
             KEY_CJK_KARAOKE_ANIMATION_ENABLED,
@@ -39,6 +39,7 @@ internal object ModuleSettingsSchema {
             KEY_NAVIGATION_COMPENSATION,
             default = false,
         ),
+        forceCellularDataEntryEnabled = values.boolean(KEY_FORCE_CELLULAR_DATA_ENTRY, default = false),
         lyricBlurRadiusOffsetPx = values.number(KEY_LYRIC_BLUR_RADIUS_OFFSET)
             ?.coerceIn(
                 ModuleSettings.MIN_LYRIC_BLUR_RADIUS_OFFSET_PX,
@@ -90,6 +91,7 @@ internal object ModuleSettingsSchema {
             KEY_FUTURE_BLUR to settings.futureBlurEnabled,
             KEY_CJK_KARAOKE_ANIMATION_ENABLED to settings.cjkKaraokeAnimationEnabled,
             KEY_NAVIGATION_COMPENSATION to settings.navigationCompensationEnabled,
+            KEY_FORCE_CELLULAR_DATA_ENTRY to settings.forceCellularDataEntryEnabled,
             KEY_LYRIC_BLUR_RADIUS_OFFSET to settings.lyricBlurRadiusOffsetPx.coerceIn(
                 ModuleSettings.MIN_LYRIC_BLUR_RADIUS_OFFSET_PX,
                 ModuleSettings.MAX_LYRIC_BLUR_RADIUS_OFFSET_PX,
@@ -198,7 +200,7 @@ internal object ModuleSettingsSchema {
      * an already-initialized embedded store skips remote migration, so it must
      * still be able to upgrade its own legacy value in place.
      */
-    internal fun legacyTitleCorrectionMigrationValues(values: Map<String, *>): Map<String, Any> {
+    fun legacyTitleCorrectionMigrationValues(values: Map<String, *>): Map<String, Any> {
         if (!values.containsKey(KEY_TITLE_CORRECTION_TARGET_LANGUAGE) ||
             values.string(KEY_TITLE_CORRECTION_MODE).isNotBlank()
         ) {
@@ -248,6 +250,7 @@ internal object ModuleSettingsSchema {
         KEY_FUTURE_BLUR,
         KEY_CJK_KARAOKE_ANIMATION_ENABLED,
         KEY_NAVIGATION_COMPENSATION,
+        KEY_FORCE_CELLULAR_DATA_ENTRY,
         KEY_LYRIC_BLUR_RADIUS_OFFSET,
         KEY_APPLE_MUSIC_DPI_OVERRIDE_DPI,
         KEY_TITLE_CORRECTION_ENABLED,
@@ -280,6 +283,7 @@ internal object ModuleSettingsSchema {
     private const val KEY_FUTURE_BLUR = "future_blur_enabled"
     private const val KEY_CJK_KARAOKE_ANIMATION_ENABLED = "cjk_karaoke_animation_enabled"
     private const val KEY_NAVIGATION_COMPENSATION = "navigation_compensation_enabled"
+    private const val KEY_FORCE_CELLULAR_DATA_ENTRY = "force_cellular_data_entry_enabled"
     private const val KEY_LYRIC_BLUR_RADIUS_OFFSET = "lyric_blur_radius_offset_px"
     private const val KEY_APPLE_MUSIC_DPI_OVERRIDE_DPI = "apple_music_dpi_override_dpi"
     private const val KEY_TITLE_CORRECTION_ENABLED = "title_correction_enabled"

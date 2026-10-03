@@ -3,7 +3,7 @@ package dev.amenhancer.module.lyrics
 import dev.amenhancer.module.model.CustomLyricsEntry
 
 /** Verifies a remote TTML file against its manifest before native parsing. */
-internal class CustomLyricsFileReader(
+class CustomLyricsFileReader(
     private val readBytes: (String) -> ByteArray?,
 ) {
     fun read(entry: CustomLyricsEntry): String? {

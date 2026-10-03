@@ -49,10 +49,12 @@ import kotlin.math.roundToInt
 
 @RequiresApi(33)
 internal open class PhoneGlassSession(
-    protected val activity: Activity,
+    val activity: Activity,
     protected val config: TargetConfigClient,
+    protected val hostBinding: ChromeHostBinding = AppleMusicHostFactory.bindChrome(activity),
     private val failure: (Throwable) -> Unit,
 ) : GlassSession, ViewTreeObserver.OnPreDrawListener {
+    private val transformOwners = IdentityHashMap<View, MutableMap<String, dev.amenhancer.module.host.OwnedHostProperty<Float>>>()
     private val states = IdentityHashMap<View, NativeViewState>()
     private val layerAlphas = IdentityHashMap<View, NativeLayerAlpha>()
     private val visibleGlassRect = android.graphics.Rect()
@@ -112,12 +114,15 @@ internal open class PhoneGlassSession(
     private var underlap = false
     private var scanNeeded = true
     private var scrollTargets: List<View> = emptyList()
-    private val layoutListener = ViewTreeObserver.OnGlobalLayoutListener { scanNeeded = true }
+    private var hierarchyDirty = false
+    private val layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+        scanNeeded = true; hierarchyDirty = true; hostBinding.invalidateViews()
+    }
     private var nextSettingsCheck = 0L
     protected val density get() = activity.resources.displayMetrics.density
     private fun dp(value: Int) = (value * density).roundToInt()
     protected val bottomInset get() = activity.window.decorView.rootWindowInsets?.getInsets(WindowInsets.Type.navigationBars())?.bottom ?: 0
-    protected val miniVisible get() = miniRoot?.isShown == true
+    protected open val miniVisible get() = miniRoot?.isShown == true
     // AM++: user-adjustable glass lift/material, captured with the session so every
     // height consumer (frame, content padding, peek) agrees within a frame.
     protected var bottomGapDp = GlassPolicy.BOTTOM_DP
@@ -140,21 +145,22 @@ internal open class PhoneGlassSession(
 
     // Resource IDs are stable for this Activity's host APK. Keep values and Views live so
     // configuration changes and replaced page/player hierarchies still take effect.
-    private val resourceIds = HashMap<String, Int>()
+    protected fun resourceId(role: ChromeResource): Int = hostBinding.resourceId(role)
+    protected open fun find(role: ChromeResource): View? = hostBinding.find(role)
+    protected fun dimen(role: ChromeResource): Int = hostBinding.dimension(role)
 
-    protected fun resourceId(name: String, type: String): Int {
-        val key = "$type/$name"
-        resourceIds[key]?.let { return it }
-        val id = activity.resources.getIdentifier(name, type, ModuleConstants.RESOURCE_PACKAGE)
-        if (id != 0) resourceIds[key] = id
-        return id
+    protected fun writeOwnedTransform(view: View, property: String, value: Float) {
+        val owner = transformOwners.getOrPut(view) { HashMap() }.getOrPut(property) {
+            when (property) {
+                "scaleX" -> dev.amenhancer.module.host.OwnedHostProperty({ view.scaleX }, { view.scaleX = it })
+                "scaleY" -> dev.amenhancer.module.host.OwnedHostProperty({ view.scaleY }, { view.scaleY = it })
+                "translationX" -> dev.amenhancer.module.host.OwnedHostProperty({ view.translationX }, { view.translationX = it })
+                "translationY" -> dev.amenhancer.module.host.OwnedHostProperty({ view.translationY }, { view.translationY = it })
+                else -> error("Unknown transform property")
+            }
+        }
+        owner.set(value)
     }
-
-    protected fun find(name: String): View? = resourceId(name, "id")
-        .takeIf { it != 0 }?.let { activity.findViewById(it) }
-
-    protected fun dimen(name: String): Int = resourceId(name, "dimen")
-        .takeIf { it != 0 }?.let { activity.resources.getDimensionPixelSize(it) } ?: 0
 
     private fun save(view: View): NativeViewState = states.getOrPut(view) { NativeViewState(view) }
 
@@ -166,7 +172,7 @@ internal open class PhoneGlassSession(
      * cannot resurrect a seam; close() restores the saved states.
      */
     protected open fun suppressNativeChromeSeams() {
-        hideSeam(find("navigation_tabs_divider"))
+        hideSeam(find(ChromeResource.NAVIGATION_TABS_DIVIDER))
         navigation?.let { nav ->
             if (glassMenuReady) {
                 // An alpha-hidden native strip still accepts taps across its full width.
@@ -185,6 +191,12 @@ internal open class PhoneGlassSession(
         if (view.visibility != View.GONE) view.visibility = View.GONE
     }
 
+    protected fun clearNativeBackground(view: View?) {
+        view ?: return
+        save(view)
+        if (view.background != null) view.background = null
+    }
+
     private fun allowGlassOverflow(view: View) {
         generateSequence(view as View?) { it.parent as? View }.takeWhile { it.layoutParams != null }.forEach {
             if (it is ViewGroup) {
@@ -200,15 +212,24 @@ internal open class PhoneGlassSession(
     protected open fun sessionEligible(): Boolean =
         config.settings().phoneLiquidGlassEnabled && !TabletModeQualifier.isOfficialTablet(activity)
 
-    protected open fun resolveBottomNavigationRoot(): View? = find("bottom_navigation_root_stacked")
+    protected open fun resolveBottomNavigationRoot(): View? = find(ChromeResource.BOTTOM_NAVIGATION_ROOT_STACKED)
 
     // The stacked native holder (also installed by the tablet dual-pane adaptation)
     // reserves miniplayer_height even when mini is hidden, plus tabs and bottom inset.
     protected open fun nativePeekBaseline(): Int =
-        bottomInset + dimen("navigation_tabs_height") + dimen("miniplayer_height")
+        bottomInset + dimen(ChromeResource.NAVIGATION_TABS_HEIGHT) + dimen(ChromeResource.MINIPLAYER_HEIGHT)
 
     /** Capsule exit driver; the phone host translates the frame from its own holder. */
     protected open fun driveNavFrameExit(progress: Float) = Unit
+
+    protected open val navigationScrimEnabled: Boolean = true
+
+    protected open fun miniMaterialParent(root: FrameLayout): FrameLayout =
+        find(ChromeResource.PLAYER_SHEET_CONTAINER) as? FrameLayout ?: root
+
+    protected open fun initialSlide(sheet: View, behavior: Any): Float = hostBinding.sheetSnapshot(behavior).let {
+        InitialGlassSlide.resolve(it.state, sheet.top, it.collapsedTop, it.expandedTop)
+    }
 
     /** Phone keeps its bottom fade inside the native tabs frame. */
     protected open fun attachNavigationScrim(frame: FrameLayout, scrim: GlassHostView) {
@@ -231,9 +252,9 @@ internal open class PhoneGlassSession(
             bottomGapDp = ModuleSettings.normalizePhoneLiquidGlassBottomGapDp(glassSettings.phoneLiquidGlassBottomGapDp)
             navBlurDp = ModuleSettings.normalizePhoneLiquidGlassPanelBlurDp(glassSettings.phoneLiquidGlassPanelBlurDp)
             hostRoot = resolveBottomNavigationRoot() ?: return
-            val frame = find("bottom_navigation_tabs_frame") as? FrameLayout ?: return
-            val nav = find("bottom_navigation") ?: return
-            val content = find("navigation_host_group") as? ViewGroup ?: return
+            val frame = find(ChromeResource.BOTTOM_NAVIGATION_TABS_FRAME) as? FrameLayout ?: return
+            val nav = find(ChromeResource.BOTTOM_NAVIGATION) ?: return
+            val content = find(ChromeResource.NAVIGATION_HOST_GROUP) as? ViewGroup ?: return
             check(!isDescendant(frame, content)) { "Backdrop source contains the glass consumer" }
             navFrame = frame
             navigation = nav
@@ -241,7 +262,7 @@ internal open class PhoneGlassSession(
             playerBehavior = findPlayerBehavior()
             if (playerBehavior == null) {
                 if (!retryPending) {
-                    check(behaviorRetries < 20) { "1586 player behavior not ready after retries" }
+                    check(behaviorRetries < 20) { "Native player behavior not ready after retries" }
                     behaviorRetries++
                     retryPending = true
                     attachHandler.postDelayed(retryAttach, 50L)
@@ -254,11 +275,13 @@ internal open class PhoneGlassSession(
             refreshMenu()
             // Bottom fade: blurred, washed-out strip under the tabs, matching the
             // reference apps' gradient bar. Added first so the tabs stay on top.
-            val scrim = GlassHostView(moduleContext(), bleedDp = 0).also { navScrim = it }
-            scrim.alpha = 0f
-            scrim.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-            scrim.content { HostConfiguration { BottomScrim(bg) } }
-            attachNavigationScrim(frame, scrim)
+            if (navigationScrimEnabled) {
+                val scrim = GlassHostView(moduleContext(), bleedDp = 0).also { navScrim = it }
+                scrim.alpha = 0f
+                scrim.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                scrim.content { HostConfiguration { BottomScrim(bg) } }
+                attachNavigationScrim(frame, scrim)
+            }
             val glass = GlassHostView(moduleContext()).also { navGlass = it }
             glass.alpha = 0f
             glass.content { HostConfiguration { GlassNavigation(tabs, selectedId, accent, foreground, bg, ::selectTab, panelBlur = navBlurDp.dp) } }
@@ -268,13 +291,17 @@ internal open class PhoneGlassSession(
             })
             observer = activity.window.decorView.viewTreeObserver.also { it.addOnPreDrawListener(this); it.addOnGlobalLayoutListener(layoutListener) }
         }
-        val root = (find("mini_player") ?: find("mini_player_touch_panel")) as? FrameLayout
-        if (root != null && root !== miniRoot) {
+        val root = (find(ChromeResource.MINI_PLAYER) ?: find(ChromeResource.MINI_PLAYER_TOUCH_PANEL)) as? FrameLayout
+        val content = root?.findViewById<View>(resourceId(ChromeResource.MINI_PLAYER_CONTENT))
+        if (root != null && (root !== miniRoot || content !== miniContent)) {
             miniGlass?.let { (it.parent as? ViewGroup)?.removeView(it) }
             miniRoot?.let { states.remove(it)?.restore(it) }
-            miniContent?.let { states.remove(it)?.restore(it) }
+            miniContent?.let {
+                transformOwners.remove(it)?.values?.forEach(AutoCloseable::close)
+                states.remove(it)?.restore(it)
+            }
             miniRoot = root
-            miniContent = root.findViewById(activity.resources.getIdentifier("mini_player_content", "id", ModuleConstants.RESOURCE_PACKAGE))
+            miniContent = content
             val bg = backdrop ?: return
             val glass = GlassHostView(moduleContext()).also { miniGlass = it }
             glass.alpha = 0f
@@ -283,13 +310,13 @@ internal open class PhoneGlassSession(
                 HostConfiguration {
                     NativeLiquidButton(bg, input, glassExpansion, panelBlur = navBlurDp.dp, autoClip = geometry.sideBySide,
                         miniHeightDp = geometry.miniHeightDp) { sx, sy, x, y ->
-                        miniContent?.let { v -> v.scaleX = sx; v.scaleY = sy; v.translationX = x; v.translationY = y }
+                        miniContent?.let { v -> writeOwnedTransform(v, "scaleX", sx); writeOwnedTransform(v, "scaleY", sy); writeOwnedTransform(v, "translationX", x); writeOwnedTransform(v, "translationY", y) }
                     }
                 }
             }
             // The native mini container disappears early in the opening animation.
             // Keep the material behind the whole sheet, independent of that container.
-            val surfaceParent = find("player_sheet_container") as? FrameLayout ?: root
+            val surfaceParent = miniMaterialParent(root)
             playerSheet = surfaceParent
             surfaceParent.addView(glass, 0, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(geometry.miniHeightDp), Gravity.TOP).apply {
                 val slot = capsuleMarginsPx(navFrame?.width ?: 0, mini = true)
@@ -297,9 +324,13 @@ internal open class PhoneGlassSession(
             })
             if (activated) prepareMini()
         }
+        states.forEach { (view,state) -> state.captureOwned(view) }
     }
 
-    override fun ownsCurrentHierarchy(): Boolean = !closed && (navFrame == null || find("bottom_navigation_tabs_frame") === navFrame)
+    override fun ownsCurrentHierarchy(): Boolean {
+        hostBinding.invalidateViews()
+        return !closed && (navFrame == null || find(ChromeResource.BOTTOM_NAVIGATION_TABS_FRAME) === navFrame)
+    }
 
     @androidx.compose.runtime.Composable
     private fun HostConfiguration(content: @androidx.compose.runtime.Composable () -> Unit) {
@@ -332,11 +363,12 @@ internal open class PhoneGlassSession(
     private fun refreshMenu() {
         if (hostConfiguration != activity.resources.configuration) hostConfiguration = Configuration(activity.resources.configuration)
         val nav = navigation ?: return
-        val menu = ModernXposedRuntime.callMethod(nav, "getMenu") as Menu
-        val selected = (ModernXposedRuntime.callMethod(nav, "getSelectedItemId") as Number).toInt()
+        val snapshot = hostBinding.navigation(nav)
+        val menu = snapshot.menu
+        val selected = snapshot.selectedId
         val night = activity.resources.configuration.uiMode and 0x30 == 0x20
         val fg = if (night) AndroidColor.WHITE else AndroidColor.BLACK
-        val accentId = resourceId("color_primary", "color")
+        val accentId = resourceId(ChromeResource.COLOR_PRIMARY)
         val hostAccent = if (accentId != 0) activity.getColor(accentId) else 0xfffa233b.toInt()
         val items = (0 until menu.size()).map(menu::getItem).filter { it.isVisible }
         val key = items.flatMap { listOf(it.itemId, it.title?.toString(), it.isEnabled, it.icon) } + listOf(night, hostAccent)
@@ -356,7 +388,7 @@ internal open class PhoneGlassSession(
     private fun selectTab(id: Int): Int {
         if (tabs.none { it.id == id && it.enabled }) return selectedId
         runCatching {
-            navigation?.let { ModernXposedRuntime.callMethod(it, "setSelectedItemId", id) }
+            navigation?.let { hostBinding.selectNavigation(it, id) }
             refreshMenu()
         }.onFailure(::scheduleFailure)
         return selectedId
@@ -364,7 +396,9 @@ internal open class PhoneGlassSession(
 
     override fun onPreDraw(): Boolean {
         if (closed || failureScheduled) return true
+        states.forEach { (view,state) -> state.observeNative(view) }
         try {
+            if (hierarchyDirty) { hierarchyDirty = false; attachAvailableViews() }
             val now = android.os.SystemClock.uptimeMillis()
             if (now >= nextSettingsCheck) {
                 nextSettingsCheck = now + 500
@@ -406,6 +440,7 @@ internal open class PhoneGlassSession(
                 )
             }
         } catch (error: Throwable) { scheduleFailure(error) }
+        finally { states.forEach { (view,state) -> state.captureOwned(view) } }
         return true
     }
 
@@ -414,15 +449,11 @@ internal open class PhoneGlassSession(
         val frame = navFrame ?: return
         // First layout may have dispatched its slide callback before this session existed.
         // Read the laid-out native state before changing peek height or hiding any layer.
-        val sheet = find("player_sheet_container") ?: return
+        val sheet = find(ChromeResource.PLAYER_SHEET_CONTAINER) ?: return
         if (!sheet.isLaidOut) return
         playerSheet = sheet
         val behavior = checkNotNull(playerBehavior)
-        val base = activity.classLoader.loadClass("com.google.android.material.bottomsheet.BottomSheetBehavior")
-        val state = base.getDeclaredField("G").apply { isAccessible = true }.getInt(behavior)
-        val collapsedTop = base.getDeclaredField("B").apply { isAccessible = true }.getInt(behavior)
-        val expandedTop = (PhoneGlassRuntime.method(base, "B").invoke(behavior) as Number).toInt()
-        slide = InitialGlassSlide.resolve(state, sheet.top, collapsedTop, expandedTop)
+        slide = initialSlide(sheet, behavior)
         save(nav)
         save(frame)
         nav.alpha = 0f
@@ -465,8 +496,8 @@ internal open class PhoneGlassSession(
                 if (topOffset != 0) params.topMargin = topOffset
             }
             content.layoutParams = params
-            listOf("video_surface_container", "mini_player_play_btn", "mini_player_next_btn").forEach { name ->
-                val id = activity.resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE)
+            listOf(ChromeResource.VIDEO_SURFACE_CONTAINER, ChromeResource.MINI_PLAYER_PLAY_BTN, ChromeResource.MINI_PLAYER_NEXT_BTN).forEach { name ->
+                val id = resourceId(name)
                 content.findViewById<View>(id)?.let { child ->
                     save(child)
                     child.layoutParams = child.layoutParams.apply {
@@ -476,7 +507,7 @@ internal open class PhoneGlassSession(
                 }
             }
         }
-        listOf("player_root", "player_top_shadow", "background_layers", "motion_switcher", "player_fragments_host").mapNotNull(::find).forEach(::save)
+        listOf(ChromeResource.PLAYER_ROOT, ChromeResource.PLAYER_TOP_SHADOW, ChromeResource.BACKGROUND_LAYERS, ChromeResource.MOTION_SWITCHER, ChromeResource.PLAYER_FRAGMENTS_HOST).mapNotNull(::find).forEach(::save)
     }
 
     private fun updateGeometry() {
@@ -518,12 +549,12 @@ internal open class PhoneGlassSession(
         }
     }
 
-    override fun peekHeight(): Int = GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry) + if (miniVisible) dimen("shadow_height") else 0
+    override fun peekHeight(): Int = GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry) + if (miniVisible) dimen(ChromeResource.SHADOW_HEIGHT) else 0
 
     override fun observeNativePeek(height: Int) = nativePeek.observe(height)
 
     private fun writePeek(height: Int) = nativePeek.writeByModule {
-        playerBehavior?.let { PhoneGlassRuntime.method(it.javaClass, "F", Int::class.javaPrimitiveType!!, Boolean::class.javaPrimitiveType!!).invoke(it, height, false) }
+        playerBehavior?.let { hostBinding.writePeek(it, height) }
     }
 
     private fun updateUnderlap(): Boolean {
@@ -551,9 +582,7 @@ internal open class PhoneGlassSession(
                 }
             }
             val candidates = descendants(root).filter { view ->
-            view.isShown && view.height >= root.height / 2 && view.height > 0 && !isViewPagerPageHost(view) && generateSequence(view.javaClass as Class<*>?) { it.superclass }.any {
-                it.name in setOf("androidx.recyclerview.widget.RecyclerView", "androidx.core.widget.NestedScrollView", "android.widget.ScrollView", "android.widget.ListView")
-            }
+            view.isShown && view.height >= root.height / 2 && view.height > 0 && !isViewPagerPageHost(view) && hostBinding.isScrollContainer(view)
             }.toList()
             scrollTargets = candidates.filter { child ->
                 generateSequence(child.parent) { it.parent }.takeWhile { it !== root }.none { parent -> candidates.any { it === parent } }
@@ -572,7 +601,7 @@ internal open class PhoneGlassSession(
         // not expose RecyclerView children. Padding their View viewport removes
         // the very pixels the backdrop needs; their own content owns scrolling.
         val composeScene = descendants(root).any { view ->
-            view.isShown && view.height > 0 && view.javaClass.name == "androidx.compose.ui.platform.ComposeView"
+            view.isShown && view.height > 0 && hostBinding.isComposeScene(view)
         }
         val occupied = if (navFrame?.isShown == true) GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry) else 0
         if (terminal.isEmpty() && !composeScene) {
@@ -643,24 +672,24 @@ internal open class PhoneGlassSession(
                 glass.visibility = visibility
             }
         }
-        find("player_sheet_container")?.let { v ->
+        find(ChromeResource.PLAYER_SHEET_CONTAINER)?.let { v ->
             val original = save(v)
             val desired = if (progress == 0f) null else original.outlineProvider
             if (v.outlineProvider !== desired) v.outlineProvider = desired
         }
-        listOf("player_top_shadow", "background_layers").mapNotNull(::find).forEach { v ->
+        listOf(ChromeResource.PLAYER_TOP_SHADOW, ChromeResource.BACKGROUND_LAYERS).mapNotNull(::find).forEach { v ->
             applyLayerAlpha(v, materialProgress)
         }
-        find("player_fragments_host")?.let { v ->
+        find(ChromeResource.PLAYER_FRAGMENTS_HOST)?.let { v ->
             applyLayerAlpha(v, playerFragmentsAlphaFactor(progress, materialProgress))
         }
         // The motion subtree includes rectangular legibility/blur overlays and can
         // still have thumbnail-sized bounds early in the native transition. Reveal
         // it only after the glass has faded and the opaque player background is back.
-        find("motion_switcher")?.let { v ->
+        find(ChromeResource.MOTION_SWITCHER)?.let { v ->
             applyLayerAlpha(v, blend(0.6f, 0.85f))
         }
-        find("player_root")?.background = if (materialProgress < 1f) null else states[find("player_root")]?.background
+        find(ChromeResource.PLAYER_ROOT)?.background = if (materialProgress < 1f) null else states[find(ChromeResource.PLAYER_ROOT)]?.background
         // The flat tablet row is parked offscreen at 60%; the stacked phone row
         // moves under native control, so test its actual window bounds instead.
         val consumerVisible = !(geometry.sideBySide && progress >= 0.6f) &&
@@ -758,9 +787,7 @@ internal open class PhoneGlassSession(
 
     override fun foreground(active: Boolean) { navGlass?.foreground(active); navScrim?.foreground(active); miniGlass?.foreground(active) }
 
-    protected open fun findPlayerBehavior(): Any? = generateSequence(activity.javaClass as Class<*>?) { it.superclass }.flatMap { it.declaredFields.asSequence() }.firstNotNullOfOrNull {
-        if (it.type.name.contains("BottomSheetBehavior")) runCatching { it.isAccessible = true; it.get(activity) }.getOrNull() else null
-    }
+    protected open fun findPlayerBehavior(): Any? = hostBinding.playerBehavior(false)
 
     private fun scheduleFailure(error: Throwable) {
         if (failureScheduled || closed) return
@@ -782,10 +809,13 @@ internal open class PhoneGlassSession(
         listOfNotNull(navGlass, navScrim, miniGlass).forEach { (it.parent as? ViewGroup)?.removeView(it) }
         states.forEach { (view, state) -> state.restore(view) }
         states.clear()
+        transformOwners.values.forEach { it.values.forEach(AutoCloseable::close) }
+        transformOwners.clear()
         layerAlphas.forEach { (view, state) -> view.alpha = state.native }
         layerAlphas.clear()
         nativePeek.latest?.let { runCatching { writePeek(it) } }
         releaseGlassOwnership(hostRoot)
+        hostBinding.close()
         activity.window.decorView.requestLayout()
     }
 
@@ -798,47 +828,53 @@ internal open class PhoneGlassSession(
     /** ViewPager2 hosts its pages in an internal RecyclerView. Padding that RecyclerView
      * shrinks every page instead of adding scroll space, so the page content stops above
      * the glass and the bar samples empty background. Pad the lists inside the pages. */
-    private fun isViewPagerPageHost(view: View): Boolean =
-        (view.parent as? View)?.javaClass?.name == "androidx.viewpager2.widget.ViewPager2"
+    private fun isViewPagerPageHost(view: View): Boolean = hostBinding.isPagerPageHost(view)
+
 
     private class NativeViewState(view: View) {
-        val background = view.background
-        val alpha = view.alpha
-        private val visibility = view.visibility
-        private val accessibility = view.importantForAccessibility
-        private val params = view.layoutParams
-        private val originalWidth = params.width
-        private val originalHeight = params.height
-        private val margins = (params as? ViewGroup.MarginLayoutParams)?.let { intArrayOf(it.leftMargin, it.topMargin, it.rightMargin, it.bottomMargin) }
-        private val padding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
-        val bottomPadding get() = padding[3]
+        private val currentValues = HashMap<String,Any?>(24)
+        private val ownership = dev.amenhancer.module.host.OwnedHostState(snapshot(view))
+        val background get() = ownership.nativeValue("background") as? android.graphics.drawable.Drawable
+        val bottomPadding get() = ownership.nativeValue("paddingBottom") as Int
+        val outlineProvider get() = ownership.nativeValue("outline") as? android.view.ViewOutlineProvider
         var scrollPadding = false
         var scrollPaddingActive = false
-        private val clipChildren = (view as? ViewGroup)?.clipChildren
-        private val clipPadding = (view as? ViewGroup)?.clipToPadding
-        val outlineProvider = view.outlineProvider
-        private val transform = floatArrayOf(view.scaleX, view.scaleY, view.translationX, view.translationY)
+        fun observeNative(view: View) = ownership.observeNative(snapshot(view))
+        fun captureOwned(view: View) = ownership.captureOwned(snapshot(view))
         fun restoreInteraction(view: View) {
-            if (view.visibility != visibility) view.visibility = visibility
-            if (view.importantForAccessibility != accessibility) view.importantForAccessibility = accessibility
+            view.visibility = ownership.nativeValue("visibility") as Int
+            view.importantForAccessibility = ownership.nativeValue("accessibility") as Int
         }
         fun restoreScroll(view: View) {
-            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, padding[3])
-            if (view is ViewGroup) clipPadding?.let { view.clipToPadding = it }
+            val restored=ownership.restoreValues(snapshot(view))
+            view.setPadding(view.paddingLeft,view.paddingTop,view.paddingRight,restored.getValue("paddingBottom") as Int)
+            if (view is ViewGroup) view.clipToPadding=restored.getValue("clipPadding") as Boolean
         }
         fun restore(view: View) {
-            view.background = background; view.alpha = alpha; view.visibility = visibility
-            view.outlineProvider = outlineProvider
-            view.importantForAccessibility = accessibility
-            params.width = originalWidth
-            params.height = originalHeight
-            if (params is ViewGroup.MarginLayoutParams && margins != null) {
-                params.setMargins(margins[0], margins[1], margins[2], margins[3])
+            val values=ownership.restoreValues(snapshot(view))
+            view.background=values["background"] as? android.graphics.drawable.Drawable
+            view.alpha=values.getValue("alpha") as Float
+            view.visibility=values.getValue("visibility") as Int
+            view.importantForAccessibility=values.getValue("accessibility") as Int
+            view.outlineProvider=values["outline"] as? android.view.ViewOutlineProvider
+            val params=view.layoutParams
+            params.width=values.getValue("width") as Int; params.height=values.getValue("height") as Int
+            if (params is ViewGroup.MarginLayoutParams) params.setMargins(values.getValue("leftMargin") as Int,
+                values.getValue("topMargin") as Int,values.getValue("rightMargin") as Int,values.getValue("bottomMargin") as Int)
+            view.layoutParams=params
+            view.setPadding(values.getValue("paddingLeft") as Int,values.getValue("paddingTop") as Int,
+                values.getValue("paddingRight") as Int,values.getValue("paddingBottom") as Int)
+            if (view is ViewGroup) { view.clipChildren=values.getValue("clipChildren") as Boolean;view.clipToPadding=values.getValue("clipPadding") as Boolean }
+        }
+        private fun snapshot(view: View): Map<String,Any?> = currentValues.apply {
+            put("background",view.background);put("alpha",view.alpha);put("visibility",view.visibility)
+            put("accessibility",view.importantForAccessibility);put("outline",view.outlineProvider)
+            put("width",view.layoutParams.width);put("height",view.layoutParams.height)
+            (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+                put("leftMargin",it.leftMargin);put("topMargin",it.topMargin);put("rightMargin",it.rightMargin);put("bottomMargin",it.bottomMargin)
             }
-            view.layoutParams = params
-            view.setPadding(padding[0], padding[1], padding[2], padding[3])
-            if (view is ViewGroup) { clipChildren?.let { view.clipChildren = it }; clipPadding?.let { view.clipToPadding = it } }
-            view.scaleX = transform[0]; view.scaleY = transform[1]; view.translationX = transform[2]; view.translationY = transform[3]
+            put("paddingLeft",view.paddingLeft);put("paddingTop",view.paddingTop);put("paddingRight",view.paddingRight);put("paddingBottom",view.paddingBottom)
+            (view as? ViewGroup)?.let { put("clipChildren",it.clipChildren);put("clipPadding",it.clipToPadding) }
         }
     }
 }

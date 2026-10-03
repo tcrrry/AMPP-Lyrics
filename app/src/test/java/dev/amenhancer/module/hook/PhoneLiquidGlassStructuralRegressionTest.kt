@@ -10,13 +10,31 @@ class PhoneLiquidGlassStructuralRegressionTest {
     private fun source(relativePath: String): String = sequenceOf(
         File("src/main/java/$relativePath"),
         File("app/src/main/java/$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+        File("../app/src/main/java/$relativePath"),
+
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found from the unit-test working directory")
 
     private fun projectFile(relativePath: String): String = sequenceOf(
         File(relativePath),
         File("../$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found from the unit-test working directory")
 
     @Test
@@ -66,7 +84,8 @@ class PhoneLiquidGlassStructuralRegressionTest {
         val runtime = source("dev/amenhancer/module/hook/PhoneGlassRuntime.kt")
 
         // The pre-form supports() overload survives with its phone-only meaning.
-        assertTrue(policy.contains("fun supports(sdk: Int, versionCode: Long, versionName: String, tablet: Boolean)"))
+        assertTrue(policy.contains("fun supports(sdk: Int, verifiedHost: Boolean, tablet: Boolean)"))
+        assertTrue(policy.contains("!tablet && supports(sdk, verifiedHost, GlassHostForm.PhoneStacked)"))
         // The phone path keeps excluding official tablets and keeps its own session.
         assertTrue(runtime.contains("isOfficialTablet"))
         assertTrue(runtime.contains("PhoneGlassSession("))
@@ -102,7 +121,11 @@ class PhoneLiquidGlassStructuralRegressionTest {
         // RecyclerView shrinks every page, so the page stops above the glass and the bar
         // samples empty background (Search results looked opaque). The pager host must stay
         // out of the padding targets and previously padded targets must be released.
-        assertTrue(session.contains("androidx.viewpager2.widget.ViewPager2"))
+        assertTrue(dev.amenhancer.host.applemusic.AppleMusicHostProfiles.all.filter { it.family == "legacy-activity" }.all {
+            it.document.getJSONObject("chrome").getJSONObject("views").getString("pagerType") ==
+                "androidx.viewpager2.widget.ViewPager2"
+        })
+        assertTrue(session.contains("hostBinding.isPagerPageHost(view)"))
         assertTrue(session.contains("!isViewPagerPageHost(view)"))
         assertTrue(session.contains("state.scrollPaddingActive && terminal.none"))
         assertTrue(session.contains("restoreScroll(view)"))

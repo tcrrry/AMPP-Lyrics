@@ -1,4 +1,7 @@
-package dev.amenhancer.module.hook
+package dev.amenhancer.module.lyrics.source
+
+import dev.amenhancer.module.hook.AutoLyricsCandidate
+import dev.amenhancer.module.hook.DesktopLyricsTrack
 
 import dev.amenhancer.module.lyrics.TtmlInputPolicy
 import dev.amenhancer.module.lyrics.AmllTtmlFormatConverter
@@ -10,7 +13,7 @@ import org.json.JSONObject
 /**
  * AMLL TTML DB client. Direct, fixed URL per Adam ID; failures return null.
  */
-internal class AmllTtmlClient(private val transport: LyricHttpTransport) {
+class AmllTtmlClient(private val transport: LyricHttpTransport) {
     fun fetch(adamId: Long): String? =
         transport.get("$AMLL_TTML_DB_BASE/am-lyrics/$adamId.ttml")
 
@@ -21,7 +24,7 @@ internal class AmllTtmlClient(private val transport: LyricHttpTransport) {
 }
 
 /** One automatic source in the fixed playback lookup order. */
-internal data class AutoLyricsSource(
+data class AutoLyricsSource(
     val name: String,
     val fetch: (Long) -> String?,
 )
@@ -31,7 +34,7 @@ internal data class AutoLyricsSource(
  * conversion stays here so the playback session only handles validation,
  * native parsing, caching, and publication.
  */
-internal class AutoLyricsSourceResolver(
+class AutoLyricsSourceResolver(
     private val sources: List<AutoLyricsSource>,
     private val desktopLyrics: ((DesktopLyricsTrack) -> AutoLyricsCandidate?)? = null,
     private val fallbackTranslation: ((Long, AutoLyricsCandidate) -> AutoLyricsCandidate)? = null,
@@ -83,7 +86,7 @@ internal class AutoLyricsSourceResolver(
 }
 
 /** User-owned TTML repository indexed by Apple Music Adam ID; settings process only. */
-internal data class AmLyricsIndexEntry(
+data class AmLyricsIndexEntry(
     val appleMusicId: Long,
     val alternateIds: List<Long>,
     val displayName: String,
@@ -96,7 +99,7 @@ internal data class AmLyricsIndexEntry(
         get() = listOf(appleMusicId) + alternateIds
 }
 
-internal data class AmLyricsIndex(
+data class AmLyricsIndex(
     val entries: List<AmLyricsIndexEntry>,
 ) {
     fun entryFor(appleMusicId: Long): AmLyricsIndexEntry? = entries.firstOrNull { entry ->
@@ -104,7 +107,7 @@ internal data class AmLyricsIndex(
     }
 }
 
-internal class AmLyricsClient(private val transport: LyricHttpTransport) {
+class AmLyricsClient(private val transport: LyricHttpTransport) {
     fun fetch(adamId: Long): String? {
         if (adamId <= 0L) return null
         val entry = fetchIndex()?.entryFor(adamId) ?: return null

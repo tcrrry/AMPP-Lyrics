@@ -24,7 +24,7 @@ class HleMetadataIntegrationStructuralTest {
     private fun source(relative: String): String = sequenceOf(
         File(relative),
         File("../$relative"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("Missing $relative")
 
     @Test
@@ -142,7 +142,7 @@ class HleMetadataIntegrationStructuralTest {
     fun `typed host adapters preserve HLE callback contracts`() {
         val bridge = source("app/src/main/java/dev/amenhancer/module/hook/HleMetadataSurfaceBridge.kt")
         assertTrue(bridge.contains("createHostAdapters()"))
-        assertTrue(bridge.contains("private inline fun <T> hostCall"))
+        assertTrue(bridge.contains("internal inline fun <T> hostCall"))
         listOf(
             "AppleMetadataSurfaceHost",
             "AppleLibrarySurfaceHost",

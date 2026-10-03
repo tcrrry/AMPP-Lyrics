@@ -1,5 +1,7 @@
 package dev.amenhancer.module.hook
 
+import dev.amenhancer.module.lyrics.source.HttpLyricTransport
+import dev.amenhancer.module.lyrics.source.AmLyricsClient
 import java.io.File
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -9,7 +11,7 @@ class CurrentSongIdentityStructuralRegressionTest {
     private fun projectFile(relativePath: String): String = sequenceOf(
         File(relativePath),
         File("../$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found from the unit-test working directory")
 
     @Test
@@ -72,21 +74,21 @@ class CurrentSongIdentityStructuralRegressionTest {
 
     @Test
     fun `registers the capability in adaptation and the feature in installation`() {
-        val adaptation = projectFile(
-            "app/src/main/java/dev/amenhancer/module/hook/TargetAdaptation.kt",
-        )
+        val adaptation = projectFile("app/src/main/java/dev/amenhancer/module/hook/TargetAdaptation.kt")
+        val factory = projectFile("app/src/main/java/dev/amenhancer/module/hook/AppleMusicHostFactory.kt")
+        val assembly = projectFile("app/src/main/java/dev/amenhancer/module/hook/AppleMusicAssembly.kt")
         val installation = projectFile(
             "app/src/main/java/dev/amenhancer/module/hook/FeatureInstallation.kt",
         )
         val constants = projectFile("app/src/main/java/dev/amenhancer/module/ModuleConstants.kt")
 
         assertTrue(adaptation.contains("currentSong: CurrentSongIdentityCache = CurrentSongIdentityCache()"))
-        assertTrue(adaptation.contains("currentSong = currentSong"))
-        assertTrue(adaptation.contains("currentSongIdentity = AppleMusicCurrentSongIdentityTarget("))
-        assertTrue(adaptation.contains("customLyrics = AppleMusicCustomLyricsTarget("))
-        assertTrue(adaptation.contains("autoLyricsRuntime = autoLyricsRuntime"))
-        assertTrue(adaptation.contains("settings.customLyricsEnabled && settings.automaticLyricsEnabled"))
-        assertTrue(adaptation.contains("internal fun interface CurrentSongIdentityTarget"))
+        assertTrue(factory.contains("currentSong = currentSong"))
+        assertTrue(factory.contains("currentSongIdentity = AppleMusicCurrentSongIdentityTarget("))
+        assertTrue(factory.contains("customLyrics = AppleMusicCustomLyricsTarget("))
+        assertTrue(factory.contains("autoLyricsRuntime = autoLyricsRuntime"))
+        assertTrue(assembly.contains("settings.customLyricsEnabled && settings.automaticLyricsEnabled"))
+        assertTrue(adaptation.contains("fun interface CurrentSongIdentityTarget"))
         assertTrue(installation.contains("FeatureInstallationPlan(feature = CurrentSongIdentityFeature())"))
         assertTrue(
             installation.indexOf("FeatureInstallationPlan(feature = CurrentSongIdentityFeature())") <

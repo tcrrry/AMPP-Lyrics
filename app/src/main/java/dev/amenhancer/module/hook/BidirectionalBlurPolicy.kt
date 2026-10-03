@@ -4,7 +4,7 @@ import dev.amenhancer.module.model.ModuleSettings
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-internal object BidirectionalBlurPolicy {
+object BidirectionalBlurPolicy {
     /** Largest radius any visible lyric row may receive; credits fall back to it only when no lyric row is visible. */
     const val MAX_BLUR_RADIUS = 22f
     private val PAST_RADII_BY_DISTANCE = floatArrayOf(0f, 13f, 17f, MAX_BLUR_RADIUS)

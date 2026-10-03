@@ -3,7 +3,7 @@ package dev.amenhancer.module.config
 import dev.amenhancer.module.model.LyricsFontManifest
 
 /** Pure validation for the small manifest shared through remote preferences. */
-internal object FontManifestPolicy {
+object FontManifestPolicy {
     private val fileIdPattern = Regex("[A-Za-z0-9_-]{1,96}")
     private val sha256Pattern = Regex("[0-9a-fA-F]{64}")
 

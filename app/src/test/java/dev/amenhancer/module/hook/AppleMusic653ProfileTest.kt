@@ -41,11 +41,11 @@ class AppleMusic653ProfileTest {
 
     @Test
     fun `bootstrap accepts only the exact 6_5_3 tuple`() {
-        val bootstrap = EmbeddedBootstrap()
-        assertTrue(bootstrap.supports(build653))
-        assertTrue(bootstrap.supports(TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.2", 1586L)))
-        assertFalse(bootstrap.supports(TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.3", 1587L)))
-        assertFalse(bootstrap.supports(TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.4", 1599L)))
+        val bootstrap = dev.amenhancer.host.applemusic.AppleMusicHostProfiles
+        assertTrue(bootstrap.isProductionBuild(build653.packageName, build653.versionName, build653.versionCode))
+        assertTrue(bootstrap.isProductionBuild(ModuleConstants.TARGET_PACKAGE, "6.5.2", 1586L))
+        assertFalse(bootstrap.isProductionBuild(ModuleConstants.TARGET_PACKAGE, "6.5.3", 1587L))
+        assertFalse(bootstrap.isProductionBuild(ModuleConstants.TARGET_PACKAGE, "6.5.4", 1599L))
     }
 
     @Test

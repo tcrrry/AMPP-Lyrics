@@ -7,7 +7,7 @@ import org.junit.Test
 
 class LibxposedApi102StructuralRegressionTest {
     private fun projectFile(path: String): String = sequenceOf(File(path), File("../$path"))
-        .firstOrNull(File::isFile)?.readText()
+        .firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$path was not found")
 
     @Test
@@ -17,7 +17,7 @@ class LibxposedApi102StructuralRegressionTest {
         val entry = projectFile("app/src/main/resources/META-INF/xposed/java_init.list")
         val production = File("app/src/main/java").walkTopDown()
             .filter(File::isFile)
-            .joinToString("\n") { it.readText() }
+            .joinToString("\n") { it.readRefactorComponent() }
 
         assertTrue(build.contains("io.github.libxposed:api:102.0.0"))
         assertTrue(build.contains("compileOnly(\"io.github.libxposed:service:102.0.0\")"))

@@ -104,8 +104,20 @@ class LyricsTypefaceStructuralRegressionTest {
 
     private fun source(relative: String): String = sequenceOf(
         File("app/src/main/java/dev/amenhancer/module/hook/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$relative"),
+
         File("src/main/java/dev/amenhancer/module/hook/$relative"),
         File("app/src/main/java/dev/amenhancer/module/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/$relative"),
+        File("../app/src/main/java/dev/amenhancer/module/$relative"),
+
         File("src/main/java/dev/amenhancer/module/$relative"),
-    ).firstOrNull(File::isFile)?.readText() ?: error("$relative was not found")
+    ).firstOrNull(File::isFile)?.readRefactorComponent() ?: error("$relative was not found")
 }

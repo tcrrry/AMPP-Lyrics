@@ -5,7 +5,7 @@ import dev.amenhancer.module.model.CustomLyricsEntry
 import dev.amenhancer.module.model.CustomLyricsManifest
 import dev.amenhancer.module.model.CustomLyricsSources
 
-internal data class CustomLyricsDraft(
+data class CustomLyricsDraft(
     val appleMusicId: Long,
     val displayName: String,
     val ttml: String,
@@ -13,7 +13,7 @@ internal data class CustomLyricsDraft(
     val enabled: Boolean = true,
 )
 
-internal data class CustomLyricsMultiIdDraft(
+data class CustomLyricsMultiIdDraft(
     val appleMusicIds: List<Long>,
     val displayName: String,
     val ttml: String,
@@ -21,7 +21,7 @@ internal data class CustomLyricsMultiIdDraft(
     val enabled: Boolean = true,
 )
 
-internal sealed interface CustomLyricsSaveResult {
+sealed interface CustomLyricsSaveResult {
     data class Saved(
         val manifest: CustomLyricsManifest,
         val entry: CustomLyricsEntry,
@@ -30,7 +30,7 @@ internal sealed interface CustomLyricsSaveResult {
     data class Failed(val message: String) : CustomLyricsSaveResult
 }
 
-internal sealed interface CustomLyricsBatchSaveResult {
+sealed interface CustomLyricsBatchSaveResult {
     data class Saved(
         val manifest: CustomLyricsManifest,
         val entries: List<CustomLyricsEntry>,
@@ -40,7 +40,7 @@ internal sealed interface CustomLyricsBatchSaveResult {
 }
 
 /** Writes a new TTML file before publishing the replacement manifest. */
-internal class CustomLyricsImportTransaction(
+class CustomLyricsImportTransaction(
     private val fileIdFactory: () -> String,
     private val writeRemoteFile: (String, ByteArray) -> Boolean,
     private val publishManifest: (CustomLyricsManifest) -> Boolean,

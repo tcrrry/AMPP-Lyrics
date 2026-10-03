@@ -1,5 +1,7 @@
 package dev.amenhancer.module.hook
 
+import dev.amenhancer.module.lyrics.source.AutoLyricsSourceResolver
+import dev.amenhancer.module.lyrics.source.AutoLyricsSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

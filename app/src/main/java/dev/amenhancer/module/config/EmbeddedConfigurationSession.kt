@@ -8,13 +8,6 @@ import android.os.ParcelFileDescriptor
 import java.util.UUID
 import java.security.MessageDigest
 
-/** Read-only configuration surface consumed by target-process features. */
-internal interface ConfigurationReader {
-    fun values(): Map<String, *>
-    fun openFile(name: String): InputStream?
-    fun openFileDescriptor(name: String): ParcelFileDescriptor? = null
-}
-
 /** Host-private storage adapter used only by the embedded artifact. */
 internal interface EmbeddedConfigurationStorage : ConfigurationReader {
     fun writeValues(values: Map<String, Any>, synchronous: Boolean): Boolean

@@ -6,7 +6,7 @@ import dev.amenhancer.module.model.CustomLyricsManifest
 import dev.amenhancer.module.model.CustomLyricsSources
 
 /** Validates the cross-process index without trusting remote preferences. */
-internal object CustomLyricsManifestPolicy {
+object CustomLyricsManifestPolicy {
     /** Upper bound for the remote index file that carries the whole manifest. */
     const val MAX_INDEX_BYTES = 8 * 1024 * 1024
 

@@ -5,7 +5,7 @@ import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Executable
 import java.lang.reflect.Method
 
-internal abstract class ModernMethodHook {
+abstract class ModernMethodHook {
     open fun beforeHookedMethod(param: MethodHookParam) = Unit
     open fun afterHookedMethod(param: MethodHookParam) = Unit
 
@@ -14,7 +14,7 @@ internal abstract class ModernMethodHook {
         val thisObject: Any?,
         val args: Array<Any?>,
     ) {
-        internal val extras = mutableMapOf<String, Any?>()
+        val extras = mutableMapOf<String, Any?>()
         private var returnEarly = false
         private var resultValue: Any? = null
 
@@ -39,7 +39,7 @@ internal abstract class ModernMethodHook {
     }
 }
 
-internal object ModernXposedRuntime {
+object ModernXposedRuntime {
     private const val TAG = "AppleMusicEnhancer"
 
     @Volatile
@@ -51,9 +51,10 @@ internal object ModernXposedRuntime {
 
     fun activeModule(): XposedModule? = module
 
-    fun hookMethod(executable: Executable, callback: ModernMethodHook): Boolean {
+    fun hookMethod(executable: Executable, callback: ModernMethodHook, scope: HookRegistrationScope? = null): Boolean {
         val activeModule = module ?: error("Modern Xposed runtime is not attached")
         activeModule.hook(executable).intercept { chain ->
+            if (scope != null && !scope.isActive) return@intercept chain.proceed()
             val param = ModernMethodHook.MethodHookParam(
                 method = executable,
                 thisObject = chain.thisObject,
@@ -74,10 +75,10 @@ internal object ModernXposedRuntime {
         return true
     }
 
-    fun hookAllMethods(type: Class<*>, name: String, callback: ModernMethodHook): Set<Executable> =
+    fun hookAllMethods(type: Class<*>, name: String, callback: ModernMethodHook, scope: HookRegistrationScope? = null): Set<Executable> =
         type.declaredMethods
             .filter { it.name == name }
-            .onEach { hookMethod(it, callback) }
+            .onEach { hookMethod(it, callback, scope) }
             .toSet()
 
     fun callMethod(receiver: Any, name: String, vararg args: Any?): Any? {

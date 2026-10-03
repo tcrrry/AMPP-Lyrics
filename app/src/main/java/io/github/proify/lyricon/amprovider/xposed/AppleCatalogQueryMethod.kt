@@ -16,17 +16,11 @@ internal object AppleCatalogQueryMethod {
      *  - 6.5.3 (1599) renames s8.F to u8.E and moves the query, with its exact 353-instruction
      *    body, onto [v]; u8.E#B is now a method that takes the continuation implementation first.
      */
-    private val VERIFIED_RENAMES: Map<String, Map<String, String>> = mapOf(
-        "s8.F" to mapOf("B" to "x"),
-        "u8.E" to mapOf("B" to "v"),
-    )
-
     fun resolve(clazz: Class<*>, preferredName: String): Method {
         find(clazz, preferredName)?.let { method ->
             return method.also { it.isAccessible = true }
         }
-        val method = VERIFIED_RENAMES[clazz.name]
-            ?.get(preferredName)
+        val method = dev.amenhancer.host.applemusic.AppleMusicHostProfiles.catalogQueryRename(clazz.name, preferredName)
             ?.let { name -> find(clazz, name) }
         return method?.also { it.isAccessible = true }
             ?: throw NoSuchMethodException(

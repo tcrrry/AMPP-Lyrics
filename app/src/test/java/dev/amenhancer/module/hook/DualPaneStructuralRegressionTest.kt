@@ -18,21 +18,29 @@ class DualPaneStructuralRegressionTest {
         sequenceOf(
             File("src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
             File("app/src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
-        ).firstOrNull(File::isFile)?.readText()
+        File("../app/src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
+        ).firstOrNull(File::isFile)?.readRefactorComponent()
             ?: error("AppleMusicDualPaneTarget.kt was not found from the unit-test working directory")
     }
     private val featureSource: String by lazy {
         sequenceOf(
             File("src/main/java/dev/amenhancer/module/hook/DualPaneFeature.kt"),
             File("app/src/main/java/dev/amenhancer/module/hook/DualPaneFeature.kt"),
-        ).firstOrNull(File::isFile)?.readText()
+        File("../app/src/main/java/dev/amenhancer/module/hook/DualPaneFeature.kt"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/DualPaneFeature.kt"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/DualPaneFeature.kt"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/DualPaneFeature.kt"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/DualPaneFeature.kt"),
+
+        ).firstOrNull(File::isFile)?.readRefactorComponent()
             ?: error("DualPaneFeature.kt was not found from the unit-test working directory")
     }
     private val interceptGuardSource: String by lazy {
         sequenceOf(
             File("src/main/java/dev/amenhancer/module/hook/StaticCollapsedInterceptGuard.kt"),
             File("app/src/main/java/dev/amenhancer/module/hook/StaticCollapsedInterceptGuard.kt"),
-        ).firstOrNull(File::isFile)?.readText()
+        File("../app/src/main/java/dev/amenhancer/module/hook/StaticCollapsedInterceptGuard.kt"),
+        ).firstOrNull(File::isFile)?.readRefactorComponent()
             ?: error("StaticCollapsedInterceptGuard.kt was not found from the unit-test working directory")
     }
 
@@ -311,7 +319,7 @@ class DualPaneStructuralRegressionTest {
         assertTrue(source.contains("val state = stateFor(controllerInstance) ?: return"))
         assertTrue(source.contains("if (!TabletModeQualifier.isEligible(state.root.context))"))
         assertTrue(source.contains("state.root.setTag(R.id.am_enhancer_dual_pane_state, null)"))
-        assertTrue(source.contains("if (requested.name == LYRICS_STATE)"))
+        assertTrue(source.contains("if (requested.name == DUAL_PANE_LYRICS_STATE)"))
     }
 
     @Test
@@ -380,7 +388,13 @@ class DualPaneStructuralRegressionTest {
         assertTrue(source.contains("AppleMusicSymbols.LyricsFragmentUpdateMetrics"))
         assertTrue(source.contains("alignSynchronizedLyricsHighlightAnchor"))
         assertTrue(source.contains("TabletLyricAnchorPolicy.highlightOffset"))
-        assertTrue(source.contains("listOf(\"z0\", \"A0\")"))
+        assertTrue(dev.amenhancer.host.applemusic.AppleMusicHostProfiles.all.filter { it.family == "legacy-activity" }.all { profile ->
+            val variants = profile.document.getJSONObject("layoutVariants").getJSONArray("lyricsFields")
+            (0 until variants.length()).any { index ->
+                val names = variants.getJSONObject(index).getJSONArray("synchronizedMetrics")
+                List(names.length()) { names.getString(it) } == listOf("z0", "A0")
+            }
+        })
         assertTrue(source.contains("lowerBoundary.getInt(bounds) - controlsHeight"))
         assertTrue(source.contains("ModernXposedRuntime.callMethod(recycler, \"S\")"))
         assertTrue(source.contains("corrected landscape lyrics metrics"))

@@ -65,6 +65,20 @@ class AppleCatalogQueryMethodTest {
     }
 
     @Test
+    fun `1606 exact query invokes F with its request locale and never guesses the old name`() {
+        val method = AppleCatalogQueryMethod.resolve(w9.Q::class.java, "F")
+        assertEquals("F", method.name)
+        assertEquals(
+            "catalog-1606:songs:ja-JP",
+            method.invoke(w9.Q(), "songs", mapOf("l" to "ja-JP"), object : Continuation<Any> {
+                override val context = kotlin.coroutines.EmptyCoroutineContext
+                override fun resumeWith(result: Result<Any>) = Unit
+            }),
+        )
+        assertEquals("F", AppleCatalogQueryMethod.resolve(w9.Q::class.java, "B").name)
+    }
+
+    @Test
     fun `unknown classes names invalid signatures and ambiguity fail closed`() {
         listOf(Unknown::class.java, WrongParameters::class.java, WrongReturn::class.java,
             WrongStatic::class.java, Ambiguous::class.java).forEach { clazz ->

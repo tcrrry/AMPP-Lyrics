@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.FutureTask
 import java.util.concurrent.Executors
 
-internal data class DesktopLyricsTrack(
+data class DesktopLyricsTrack(
     val title: String,
     val artist: String,
     val album: String = "",

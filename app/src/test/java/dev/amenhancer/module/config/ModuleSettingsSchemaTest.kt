@@ -10,6 +10,30 @@ import org.junit.Test
 
 class ModuleSettingsSchemaTest {
     @Test
+    fun `cellular entry defaults off rejects malformed values and round trips`() {
+        assertFalse(ModuleSettingsSchema.decode(emptyMap<String, Any>()).forceCellularDataEntryEnabled)
+        assertFalse(ModuleSettingsSchema.decode(
+            mapOf("force_cellular_data_entry_enabled" to "true"),
+        ).forceCellularDataEntryEnabled)
+        val values = ModuleSettingsSchema.encodeOrdinarySettings(
+            ModuleSettings(forceCellularDataEntryEnabled = true),
+        )
+        assertEquals(true, values["force_cellular_data_entry_enabled"])
+        assertEquals(true, ModuleSettingsSchema.decode(values).forceCellularDataEntryEnabled)
+    }
+
+    @Test
+    fun `cellular entry alone identifies a legacy configuration during upgrade`() {
+        val upgraded = ModuleSettingsSchema.upgrade(
+            storedValues = mapOf("force_cellular_data_entry_enabled" to true),
+            legacyValues = mapOf("dual_pane_enabled" to false),
+        )!!
+        assertEquals(true, upgraded["force_cellular_data_entry_enabled"])
+        assertEquals(true, upgraded["dual_pane_enabled"])
+        assertEquals(ModuleConstants.CONFIG_SCHEMA_VERSION, upgraded["schema_version"])
+    }
+
+    @Test
     fun `empty values decode to the documented defaults`() {
         assertEquals(
             ModuleSettings(
@@ -50,6 +74,7 @@ class ModuleSettingsSchemaTest {
                 "future_blur_enabled" to false,
                 "cjk_karaoke_animation_enabled" to true,
                 "navigation_compensation_enabled" to false,
+                "force_cellular_data_entry_enabled" to false,
                 "lyric_blur_radius_offset_px" to 6,
                 "apple_music_dpi_override_dpi" to 0,
                 "title_correction_enabled" to false,
@@ -88,6 +113,7 @@ class ModuleSettingsSchemaTest {
                 "future_blur_enabled" to true,
                 "cjk_karaoke_animation_enabled" to true,
                 "navigation_compensation_enabled" to false,
+                "force_cellular_data_entry_enabled" to false,
                 "lyric_blur_radius_offset_px" to 0,
                 "apple_music_dpi_override_dpi" to 0,
                 "title_correction_enabled" to false,

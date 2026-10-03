@@ -22,7 +22,22 @@ internal class AppleMusicCustomLyricsTarget(
     private val currentSong: CurrentSongIdentityCache,
     private val autoLyricsRuntime: AutoLyricsRuntime? = null,
 ) : CustomLyricsTarget {
-    override fun install(): TargetCapabilityInstall {
+    private var installedResult: TargetCapabilityInstall? = null
+    private val registration = HookRegistrationScope()
+    @Synchronized override fun install(): TargetCapabilityInstall {
+        installedResult?.let { return it }
+        return try {
+            installOnce().also { result ->
+                if (result is TargetCapabilityInstall.Active) registration.activate()
+                else if (result.message.startsWith("Custom lyric I2 replacement installed")) registration.activate()
+                else registration.close()
+                installedResult = result
+            }
+        } catch (error: Throwable) { registration.close(); throw error }
+    }
+    private fun hook(method: java.lang.reflect.Executable, callback: ModernMethodHook): Boolean =
+        ModernXposedRuntime.hookMethod(method,callback,registration)
+    private fun installOnce(): TargetCapabilityInstall {
         val installMethodResolution = symbols.resolve(AppleMusicSymbols.LyricsInstallMethod)
         val installMethod = installMethodResolution.valueOrNull()
             ?: return TargetCapabilityInstall.Degraded(installMethodResolution.summary)
@@ -52,7 +67,7 @@ internal class AppleMusicCustomLyricsTarget(
         seam.resolve(installMethod)?.let { diagnostic ->
             return TargetCapabilityInstall.Degraded(diagnostic)
         }
-        val parser = TtmlNativeParser.create(
+        val nativeParser = TtmlNativeParser.create(
             parserClass = parserClass,
             parseMethod = parseMethod,
             ptrClass = ptrClass,
@@ -66,6 +81,7 @@ internal class AppleMusicCustomLyricsTarget(
                     nativeResolution.summary,
                 ).joinToString("; "),
         )
+        val parser = OpaqueTtmlParser(nativeParser)
         val timingObservations = TtmlTimingObservationRegistry()
         val fileReader = CustomLyricsFileReader { fileId ->
             config.openFile(fileId)?.let { input ->
@@ -100,7 +116,7 @@ internal class AppleMusicCustomLyricsTarget(
             readAdamId = parser::adamIdOf,
             bindAdamId = parser::bindAdamId,
             onReplacementPublished = { appleMusicId ->
-                mainHandler.post { publishToPage(appleMusicId) }
+                mainHandler.post { if (registration.isActive) publishToPage(appleMusicId) }
             },
             executor = ThreadPoolExecutor(
                 1,
@@ -190,7 +206,7 @@ internal class AppleMusicCustomLyricsTarget(
                 readAdamId = parser::adamIdOf,
                 bindAdamId = parser::bindAdamId,
                 onReplacementPublished = { appleMusicId ->
-                    mainHandler.post { publishToPage(appleMusicId) }
+                    mainHandler.post { if (registration.isActive) publishToPage(appleMusicId) }
                 },
                 // Keep automatic results outside manual mappings so a later
                 // Desktop Lyrics lookup can supersede an older fallback.
@@ -214,8 +230,8 @@ internal class AppleMusicCustomLyricsTarget(
             )
         }
         val readyReplacementFor: (Long) -> Any? = { appleMusicId ->
-            session.readyReplacementFor(appleMusicId)
-                ?: autoSession?.readyReplacementFor(appleMusicId)
+            parser.unwrap(session.readyReplacementFor(appleMusicId)
+                ?: autoSession?.readyReplacementFor(appleMusicId))
         }
         val isTracking: (Long) -> Boolean = { appleMusicId ->
             session.isTracking(appleMusicId) || autoSession?.isTracking(appleMusicId) == true
@@ -290,7 +306,7 @@ internal class AppleMusicCustomLyricsTarget(
         }
         val parserHooked = runCatching {
             parseMethod.isAccessible = true
-            ModernXposedRuntime.hookMethod(parseMethod, object : ModernMethodHook() {
+            hook(parseMethod, object : ModernMethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     runCatching {
                         val ttml = param.args.getOrNull(0) as? String ?: return@runCatching
@@ -313,7 +329,7 @@ internal class AppleMusicCustomLyricsTarget(
         }.isSuccess
         val itemUpdateContext = LyricsItemUpdateContext()
         val hooked = runCatching {
-            ModernXposedRuntime.hookMethod(installMethod, object : ModernMethodHook() {
+            hook(installMethod, object : ModernMethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     itemUpdateContext.markAppleInvokedI2()
                     runCatching {
@@ -372,15 +388,14 @@ internal class AppleMusicCustomLyricsTarget(
                             }
                             param.thisObject?.let { readyReapply.dismiss(it) }
                             if (fragmentAdamId == adamId && installedPointer != null &&
-                                runCatching { installedPointer.get(param.thisObject) === replacement }.getOrDefault(false)) {
+                                runCatching { installedPointer.get(param.thisObject) === parser.unwrap(replacement) }.getOrDefault(false)) {
                                 // Apple's I2 clears timing offsets before its own
                                 // same-pointer early return. Avoid that redundant reset.
                                 param.result = null
                                 return@runCatching
                             }
                             if (replacement !== original) {
-                                param.args[0] = replacement
-                                ModernXposedRuntime.log("Desktop Lyrics I2 installed id=$adamId")
+                                param.args[0] = parser.unwrap(replacement)
                             }
                         }
                     }.onFailure { error ->
@@ -417,7 +432,7 @@ internal class AppleMusicCustomLyricsTarget(
             }.getOrNull()
             if (coordinator != null) {
                 val itemUpdateHooked = runCatching {
-                    ModernXposedRuntime.hookMethod(itemUpdateMethod, object : ModernMethodHook() {
+                    hook(itemUpdateMethod, object : ModernMethodHook() {
                         override fun beforeHookedMethod(param: MethodHookParam) {
                             itemUpdateContext.enterO2()
                         }
@@ -460,7 +475,7 @@ internal class AppleMusicCustomLyricsTarget(
         val availabilityMethod = availabilityResolution.valueOrNull()
         val availabilityHooked = availabilityMethod != null && runCatching {
             availabilityMethod.isAccessible = true
-            ModernXposedRuntime.hookMethod(availabilityMethod, object : ModernMethodHook() {
+            hook(availabilityMethod, object : ModernMethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     runCatching {
                         val nativeLyricsAvailable = param.result as? Boolean ?: return@runCatching
@@ -506,7 +521,7 @@ internal class AppleMusicCustomLyricsTarget(
                 true
             } else false
         }
-        currentSong.addListener { current ->
+        val identitySubscription = currentSong.addListener { current ->
             val appleMusicId = current?.details?.appleMusicId
             ModernXposedRuntime.log(
                 "Desktop Lyrics song id=${appleMusicId ?: 0L} " +
@@ -525,6 +540,7 @@ internal class AppleMusicCustomLyricsTarget(
                 if (session.readyReplacementFor(id) == null) autoSession?.ensureRequested(id)
             }
         }
+        registration.onClose(identitySubscription::close)
         if (!availabilityHooked) {
             return TargetCapabilityInstall.Degraded(
                 "Custom lyric I2 replacement installed, but unavailable-lyrics entry could not be enabled; " +

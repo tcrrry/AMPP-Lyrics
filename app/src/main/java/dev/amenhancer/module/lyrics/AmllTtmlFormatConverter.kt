@@ -1,6 +1,6 @@
 package dev.amenhancer.module.lyrics
 
-internal data class TtmlFormatConversion(
+data class TtmlFormatConversion(
     val ttml: String,
     val converted: Boolean,
 )
@@ -59,7 +59,7 @@ internal data class TtmlFormatConversion(
  * word separation, and a DOM round-trip would not preserve it. Only markup is
  * examined; lyric text nodes are copied verbatim.
  */
-internal object AmllTtmlFormatConverter {
+object AmllTtmlFormatConverter {
 
     private const val ITUNES_NAMESPACE = "http://music.apple.com/lyric-ttml-internal"
     private const val ROLE_TRANSLATION = "x-translation"

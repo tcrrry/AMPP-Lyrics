@@ -1,0 +1,17 @@
+{
+  "researchOnly": true,
+  "packageName": "com.apple.android.music",
+  "versionName": "7.0.0-beta",
+  "versionCode": 1606,
+  "baseSha256": "3d09687ed752e48e73f2c72524e18cffff69c66b523096c2e97c8f9135980603",
+  "family": "fragment-content",
+  "activity": "com.apple.android.music.common.MainActivity",
+  "viewOwner": "com.apple.android.music.common.fragment.MusicContentFragment",
+  "settingsOwner": "com.apple.android.music.settings2.fragment.SettingsFragment",
+  "navigation": {"placement": "top", "tabs": "top_nav_tabs", "background": "top_nav_blur"},
+  "mini": {"content": "mini_player_content", "background": "mini_player_blur"},
+  "player": {"container": "player_sheet_container", "restrictedFragmentContainer": true},
+  "evidence": ".scratch/applemusic-700-beta-analysis/REPORT.md and TABLET_GLASS_FEASIBILITY.md",
+  "runtimeVerified": false,
+  "productionEnabled": false
+}

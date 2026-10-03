@@ -1,7 +1,7 @@
 package com.juren233.hyperlyricsenhanced.common
 
 /** Minimal HLE constants surface used by the migrated Apple metadata subsystem. */
-internal object RootConstants {
+object RootConstants {
     const val KEY_HOOK_APPLE_MUSIC_CONTENT_UI_LANGUAGE =
         "key_hook_apple_music_content_ui_language"
 

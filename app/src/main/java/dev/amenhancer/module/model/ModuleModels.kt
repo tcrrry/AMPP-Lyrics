@@ -1,6 +1,5 @@
 package dev.amenhancer.module.model
 
-import dev.amenhancer.glass.GlassPolicy
 import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.config.TitleCorrectionMode
 
@@ -10,13 +9,15 @@ data class ModuleSettings(
     val disableEditorialVideoOnTablet: Boolean = true,
     val phoneLiquidGlassEnabled: Boolean = false,
     /** Distance in dp between the bottom-bar capsule and the screen bottom; glass-gated. */
-    val phoneLiquidGlassBottomGapDp: Int = GlassPolicy.BOTTOM_DP,
+    val phoneLiquidGlassBottomGapDp: Int = EnhancementDefaults.GLASS_BOTTOM_DP,
     /** Backdrop blur radius in dp shared by the nav panel and the mini-player. */
-    val phoneLiquidGlassPanelBlurDp: Int = GlassPolicy.PANEL_BLUR_DP.toInt(),
+    val phoneLiquidGlassPanelBlurDp: Int = EnhancementDefaults.GLASS_PANEL_BLUR_DP.toInt(),
     val futureBlurEnabled: Boolean = true,
     /** Enables the native rush-gradient adaptation for CJK karaoke lyrics. */
     val cjkKaraokeAnimationEnabled: Boolean = true,
     val navigationCompensationEnabled: Boolean = false,
+    /** Restores native Data settings and the app's cellular availability predicate. */
+    val forceCellularDataEntryEnabled: Boolean = false,
     val lyricBlurRadiusOffsetPx: Int = 0,
     /** Fixed logical density for Apple Music; 0 follows the system density. */
     val appleMusicDpiOverrideDpi: Int = FOLLOW_SYSTEM_APPLE_MUSIC_DPI,

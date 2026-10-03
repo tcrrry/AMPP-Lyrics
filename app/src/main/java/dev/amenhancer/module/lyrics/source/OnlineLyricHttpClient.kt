@@ -1,16 +1,16 @@
-package dev.amenhancer.module.hook
+package dev.amenhancer.module.lyrics.source
 
 import java.net.HttpURLConnection
 import java.net.URL
 
 /** Network surface used by the lyric clients; faked in unit tests. */
-internal data class LyricHttpResponse(
+data class LyricHttpResponse(
     val statusCode: Int,
     val body: ByteArray?,
     val etag: String? = null,
 )
 
-internal interface LyricHttpTransport {
+interface LyricHttpTransport {
     fun get(url: String): String?
 
     /** Raw response bytes for callers that must verify remote size and hash. */
@@ -27,7 +27,7 @@ internal interface LyricHttpTransport {
  * the caller keeps the original lyrics. Runs on the background executor only,
  * never on the parser/I2 hook or the main thread.
  */
-internal class HttpLyricTransport(
+class HttpLyricTransport(
     private val connectTimeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
     private val readTimeoutMs: Int = DEFAULT_READ_TIMEOUT_MS,
     private val maxResponseBytes: Int = DEFAULT_MAX_RESPONSE_BYTES,

@@ -1,4 +1,4 @@
-package dev.amenhancer.module.hook
+package dev.amenhancer.module.lyrics.source
 
 import dev.amenhancer.module.lyrics.TtmlInputPolicy
 import java.io.File
@@ -13,21 +13,21 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** Cached raw Lunabeat catalog payloads. */
-internal data class LunabeatCatalogCacheSnapshot(
+data class LunabeatCatalogCacheSnapshot(
     val manifestJson: String,
     val indexJson: String,
     val etag: String? = null,
 )
 
 /** Storage seam keeps catalog caching independent from Android UI/process code. */
-internal fun interface LunabeatCatalogCache {
+fun interface LunabeatCatalogCache {
     fun read(): LunabeatCatalogCacheSnapshot?
 
     fun write(manifestJson: String, indexJson: String, etag: String? = null): Boolean = false
 }
 
 /** File-backed cache used by both the standalone and embedded settings hosts. */
-internal class FileLunabeatCatalogCache(
+class FileLunabeatCatalogCache(
     private val directory: File,
 ) : LunabeatCatalogCache {
     private val cacheFile: File = File(directory, CACHE_FILE_NAME)
@@ -90,13 +90,13 @@ internal class FileLunabeatCatalogCache(
     }
 }
 
-internal data class LunabeatManifest(
+data class LunabeatManifest(
     val schemaVersion: Int,
     val revision: String,
     val indexPath: String,
 )
 
-internal data class LunabeatSong(
+data class LunabeatSong(
     val title: String,
     val artists: List<String>,
     val album: String,
@@ -111,7 +111,7 @@ internal data class LunabeatSong(
         ).joinToString(" - ").ifBlank { "Lunabeat 自定义歌词" }
 }
 
-internal data class LunabeatCatalog(
+data class LunabeatCatalog(
     val manifest: LunabeatManifest,
     val songs: List<LunabeatSong>,
 ) {
@@ -126,7 +126,7 @@ internal data class LunabeatCatalog(
  * manifest's optional indexSha256 is intentionally not enforced because the
  * current published value does not match the served index bytes.
  */
-internal class LunabeatClient(
+class LunabeatClient(
     private val indexTransport: LyricHttpTransport,
     private val lyricsTransport: LyricHttpTransport = indexTransport,
     private val cache: LunabeatCatalogCache,
@@ -148,7 +148,7 @@ internal class LunabeatClient(
             .takeIf(TtmlInputPolicy::isAcceptable)
     }
 
-    internal fun loadCatalog(): LunabeatCatalog? {
+    fun loadCatalog(): LunabeatCatalog? {
         val cachedSnapshot = cache.read()
         val cached = cachedSnapshot?.let { snapshot ->
             parseCatalog(snapshot.manifestJson, snapshot.indexJson)
@@ -187,7 +187,7 @@ internal class LunabeatClient(
         return updated
     }
 
-    internal companion object {
+    companion object {
         const val API_BASE = "https://2755337087.github.io/ttml-hub/api/v1"
         const val MANIFEST_URL = "$API_BASE/manifest.json"
         const val LYRICS_BASE = "https://2755337087.github.io/ttml-hub"

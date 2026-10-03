@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,6 +31,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -87,6 +89,8 @@ fun LiquidBottomTabs(
     isTabEnabled: (Int) -> Boolean = { true },
     panelHeight: androidx.compose.ui.unit.Dp = 64f.dp,
     panelBlur: androidx.compose.ui.unit.Dp = GlassPolicy.PANEL_BLUR_DP.dp,
+    leadingWidth: androidx.compose.ui.unit.Dp = 0f.dp,
+    leadingContent: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable RowScope.() -> Unit
 ) {
     // AM++: preserve Apple's reselect action without changing drag/animation behavior.
@@ -111,6 +115,7 @@ fun LiquidBottomTabs(
     // AM++: the squeeze nudge is read by both the panel layer and the highlight, so it lives
     // in one place and is evaluated against whichever width is being drawn.
     fun squeezeOffset(width: Float): Float {
+        if (!width.isFinite() || width <= 0f) return 0f
         val fraction = (offsetAnimation.value / width).fastCoerceIn(-1f, 1f)
         return squeeze * fraction.sign * EaseOut.transform(abs(fraction))
     }
@@ -132,15 +137,19 @@ fun LiquidBottomTabs(
         modifier.then(freeDragBridge.modifier),
         contentAlignment = Alignment.CenterStart
     ) {
-        val tabWidth = with(density) {
-            (constraints.maxWidth.toFloat() - 8f.dp.toPx()) / tabsCount
-        }
+        val leadingPx = with(density) { if (leadingContent == null) 0f else leadingWidth.toPx() }
+        val geometry = dev.amenhancer.glass.GlassTabGeometry(constraints.maxWidth.toFloat(), panelInset, leadingPx, tabsCount)
+        val tabWidth = geometry.tabWidth
 
-        val panelOffset by remember(density) {
+        val panelOffset by remember(density, constraints.maxWidth) {
             derivedStateOf { squeezeOffset(constraints.maxWidth.toFloat()) }
         }
 
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
+        // The first composition can be the 1px warm-up host. Gestures must use the current
+        // measured slot, never the width captured when the animation object was constructed.
+        val liveGeometry = rememberUpdatedState(geometry)
+        val liveIsLtr = rememberUpdatedState(isLtr)
         var currentIndex by remember(selectedTabIndex) {
             mutableIntStateOf(selectedTabIndex())
         }
@@ -171,10 +180,7 @@ fun LiquidBottomTabs(
                     }
                 },
                 onDrag = { _, dragAmount ->
-                    updateValue(
-                        (targetValue + dragAmount.x / tabWidth * if (isLtr) 1f else -1f)
-                            .fastCoerceIn(0f, (tabsCount - 1).toFloat())
-                    )
+                    updateValue(liveGeometry.value.draggedIndex(targetValue, dragAmount.x, liveIsLtr.value))
                     animationScope.launch {
                         offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
                     }
@@ -195,17 +201,24 @@ fun LiquidBottomTabs(
                     onTabSelected(index)
                 }
         }
+        LaunchedEffect(selectedTabIndex()) {
+            // Drawer/back navigation changes the native selected ID without a glass gesture.
+            currentIndex = selectedTabIndex()
+            if (dampedDragAnimation.targetValue != currentIndex.toFloat()) {
+                dampedDragAnimation.animateToValue(currentIndex.toFloat())
+            }
+        }
 
         // AM++: hand the thumb's live geometry to the highlight built above the box scope.
         highlightAnchor.pillValue = { dampedDragAnimation.value }
         highlightAnchor.panelWidth = constraints.maxWidth.toFloat()
-        highlightAnchor.panelInset = panelInset
+        highlightAnchor.panelInset = panelInset + leadingPx
         highlightAnchor.tabWidth = tabWidth
         highlightAnchor.isLtr = isLtr
         freeDragBridge.animation = dampedDragAnimation
         freeDragBridge.tabWidth = tabWidth
         freeDragBridge.panelWidth = constraints.maxWidth.toFloat()
-        freeDragBridge.panelInset = panelInset
+        freeDragBridge.panelInset = panelInset + leadingPx
         freeDragBridge.panelOffset = panelOffset
         freeDragBridge.tabsCount = tabsCount
         freeDragBridge.isLtr = isLtr
@@ -229,7 +242,7 @@ fun LiquidBottomTabs(
                     },
                     layerBlock = {
                         val progress = dampedDragAnimation.pressProgress
-                        val scale = lerp(1f, 1f + 16f.dp.toPx() / size.width, progress)
+                        val scale = dev.amenhancer.glass.GlassPressGeometry.panelScale(size.width, 16f.dp.toPx(), progress)
                         scaleX = scale
                         scaleY = scale
                     },
@@ -240,7 +253,7 @@ fun LiquidBottomTabs(
                 .fillMaxWidth()
                 .padding(4f.dp),
             verticalAlignment = Alignment.CenterVertically,
-            content = content
+            content = { leadingContent?.invoke(this); content() }
         )
 
         CompositionLocalProvider(
@@ -280,7 +293,7 @@ fun LiquidBottomTabs(
                     .padding(horizontal = 4f.dp)
                     .graphicsLayer(colorFilter = ColorFilter.tint(accentColor)),
                 verticalAlignment = Alignment.CenterVertically,
-                content = content
+                content = { leadingContent?.invoke(this); content() }
             )
         }
 
@@ -289,8 +302,10 @@ fun LiquidBottomTabs(
                 .padding(horizontal = 4f.dp)
                 .graphicsLayer {
                     translationX =
-                        if (isLtr) dampedDragAnimation.value * tabWidth + panelOffset
-                        else size.width - (dampedDragAnimation.value + 1f) * tabWidth + panelOffset
+                        if (leadingPx == 0f) {
+                            if (isLtr) dampedDragAnimation.value * tabWidth + panelOffset
+                            else size.width - (dampedDragAnimation.value + 1f) * tabWidth + panelOffset
+                        } else geometry.thumbOffset(dampedDragAnimation.value, isLtr) + panelOffset
                 }
                 .drawBackdrop(
                     backdrop = rememberCombinedBackdrop(backdrop, tabsBackdrop),
@@ -336,7 +351,8 @@ fun LiquidBottomTabs(
                     }
                 )
                 .height(panelHeight - 8f.dp)
-                .fillMaxWidth(1f / tabsCount)
+                .then(if (leadingPx == 0f) Modifier.fillMaxWidth(1f / tabsCount)
+                    else Modifier.width(with(density) { tabWidth.toDp() }))
         )
     }
 }
@@ -421,71 +437,76 @@ private class FreeDragBridge {
                 // the owner holds, and the newest one still held inherits the drag when it lifts.
                 val held = mutableListOf<Pair<PointerId, Offset>>()
                 var canceled = false
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                try {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
 
-                    for (change in event.changes) {
-                        if (change.id == ownerId) continue
-                        if (!change.pressed && !change.previousPressed) continue
+                        for (change in event.changes) {
+                            if (change.id == ownerId) continue
+                            if (!change.pressed && !change.previousPressed) continue
+                            change.consume()
+                            when {
+                                !change.previousPressed -> {
+                                    // A press that lands mid-drag is only a hand-over candidate, and
+                                    // only when it targets a tab that may be selected.
+                                    if (tabIndexAt(change.position.x)?.let { isTabEnabled(it) } == true) {
+                                        held.removeAll { it.first == change.id }
+                                        held.add(change.id to change.position)
+                                    }
+                                }
+
+                                change.pressed -> {
+                                    val index = held.indexOfFirst { it.first == change.id }
+                                    if (index >= 0) {
+                                        held[index] = change.id to change.position
+                                    }
+                                }
+
+                                else -> held.removeAll { it.first == change.id }
+                            }
+                        }
+
+                        val change = event.changes.fastFirstOrNull { it.id == ownerId }
+                        if (change == null) {
+                            canceled = true
+                            break
+                        }
                         change.consume()
-                        when {
-                            !change.previousPressed -> {
-                                // A press that lands mid-drag is only a hand-over candidate, and
-                                // only when it targets a tab that may be selected.
-                                if (tabIndexAt(change.position.x)?.let { isTabEnabled(it) } == true) {
-                                    held.removeAll { it.first == change.id }
-                                    held.add(change.id to change.position)
-                                }
+                        if (change.changedToUpIgnoreConsumed()) {
+                            // Hand the drag over to the newest finger still down. One that already
+                            // lifted leaves nothing behind, so the drag simply ends where it is.
+                            val next = held.lastOrNull() ?: break
+                            held.removeAt(held.lastIndex)
+                            ownerId = next.first
+                            ownerPosition = next.second
+                            tapEligible = false
+                            damped.updateValue(valueAt(ownerPosition.x))
+                            continue
+                        }
+                        val dragAmount = change.position - ownerPosition
+                        if (dragAmount != Offset.Zero) {
+                            if (tapEligible) {
+                                traveled += dragAmount.getDistance()
                             }
+                            damped.onDrag.invoke(damped, IntSize.Zero, dragAmount)
+                        }
+                        ownerPosition = change.position
+                    }
 
-                            change.pressed -> {
-                                val index = held.indexOfFirst { it.first == change.id }
-                                if (index >= 0) {
-                                    held[index] = change.id to change.position
-                                }
-                            }
-
-                            else -> held.removeAll { it.first == change.id }
+                    if (canceled) {
+                        onCanceled()
+                        damped.animateToValue(originalIndex.toFloat())
+                    } else {
+                        damped.onDragStopped.invoke(damped)
+                        // The thumb's own gesture reports a tap the same way: a hold that never moved
+                        // beyond the touch slop is the finger pressing and lifting in place.
+                        if (tapEligible && traveled <= viewConfiguration.touchSlop) {
+                            damped.onTap?.invoke()
                         }
                     }
-
-                    val change = event.changes.fastFirstOrNull { it.id == ownerId }
-                    if (change == null) {
-                        canceled = true
-                        break
-                    }
-                    change.consume()
-                    if (change.changedToUpIgnoreConsumed()) {
-                        // Hand the drag over to the newest finger still down. One that already
-                        // lifted leaves nothing behind, so the drag simply ends where it is.
-                        val next = held.lastOrNull() ?: break
-                        held.removeAt(held.lastIndex)
-                        ownerId = next.first
-                        ownerPosition = next.second
-                        tapEligible = false
-                        damped.updateValue(valueAt(ownerPosition.x))
-                        continue
-                    }
-                    val dragAmount = change.position - ownerPosition
-                    if (dragAmount != Offset.Zero) {
-                        if (tapEligible) {
-                            traveled += dragAmount.getDistance()
-                        }
-                        damped.onDrag.invoke(damped, IntSize.Zero, dragAmount)
-                    }
-                    ownerPosition = change.position
-                }
-
-                if (canceled) {
+                } finally {
+                    // Pointer cancellation and menu disposal must not leave a held lens behind.
                     onCanceled()
-                    damped.animateToValue(originalIndex.toFloat())
-                } else {
-                    damped.onDragStopped.invoke(damped)
-                    // The thumb's own gesture reports a tap the same way: a hold that never moved
-                    // beyond the touch slop is the finger pressing and lifting in place.
-                    if (tapEligible && traveled <= viewConfiguration.touchSlop) {
-                        damped.onTap?.invoke()
-                    }
                     damped.release()
                 }
             }

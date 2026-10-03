@@ -5,13 +5,13 @@ import dev.amenhancer.module.model.CustomLyricsManifest
 import java.io.InputStream
 
 /** Current index state: the published pointer (may be stale) plus the resolved manifest. */
-internal data class CustomLyricsIndexState(
+data class CustomLyricsIndexState(
     val pointer: CustomLyricsIndexPointer?,
     val manifest: CustomLyricsManifest,
     val canCommit: Boolean = true,
 )
 
-internal sealed interface CustomLyricsIndexCommitResult {
+sealed interface CustomLyricsIndexCommitResult {
     data class Committed(
         val pointer: CustomLyricsIndexPointer,
         val manifest: CustomLyricsManifest,
@@ -28,7 +28,7 @@ internal sealed interface CustomLyricsIndexCommitResult {
  * best-effort delete the old index file. A failed pointer publication keeps
  * the old pointer and deletes the new file.
  */
-internal class CustomLyricsIndexRepository(
+class CustomLyricsIndexRepository(
     private val newIndexFileId: () -> String,
     private val openFile: (String) -> InputStream?,
     private val writeRemoteFile: (String, ByteArray) -> Boolean,

@@ -32,11 +32,9 @@ internal class EmbeddedBootstrap {
     }
 
     fun supports(build: TargetBuild): Boolean =
-        build.packageName == ModuleConstants.TARGET_PACKAGE &&
-            SUPPORTED_BUILDS.any { supported ->
-                build.versionName == supported.versionName &&
-                    build.versionCode == supported.versionCode
-            }
+        dev.amenhancer.host.applemusic.AppleMusicHostProfiles.isProductionBuild(
+            build.packageName, build.versionName, build.versionCode,
+        )
 
     private class DeferredConfigurationReader : ConfigurationReader {
         private val delegate = AtomicReference<ConfigurationReader?>(null)
@@ -51,11 +49,4 @@ internal class EmbeddedBootstrap {
             delegate.get()?.openFileDescriptor(name)
     }
 
-    private companion object {
-        private val SUPPORTED_BUILDS = listOf(
-            TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.1", 1583L),
-            TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.2", 1586L),
-            TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.3", 1599L),
-        )
-    }
 }

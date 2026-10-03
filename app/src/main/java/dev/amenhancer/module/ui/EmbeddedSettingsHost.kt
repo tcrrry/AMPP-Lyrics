@@ -78,7 +78,7 @@ import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
-internal enum class EmbeddedHostActivityRole {
+enum class EmbeddedHostActivityRole {
     Player,
     MainContent,
     Settings,
@@ -1081,8 +1081,10 @@ internal class EmbeddedSettingsHost private constructor(
     private val controller: EmbeddedSettingsController,
     private val safRouter: EmbeddedSafResultRouter,
     private val selectionHandler: EmbeddedSafSelectionHandler,
-    private val activityMatcher: EmbeddedActivityMatcher,
-) : Application.ActivityLifecycleCallbacks {
+    private val activityMatcher: dev.amenhancer.module.hook.SettingsActivityMatcher,
+    nativeBridgeFactory: ((Activity) -> Unit) -> dev.amenhancer.module.hook.SettingsViewBridge,
+) : Application.ActivityLifecycleCallbacks, dev.amenhancer.module.hook.SettingsEntryObserver {
+    private val nativeBridge = nativeBridgeFactory(::showSettingsDialog)
     private val lifecycleState = EmbeddedSettingsLifecycleState()
     private var activityReference: WeakReference<Activity>? = null
     private var dialogReference: WeakReference<Dialog>? = null
@@ -1168,7 +1170,7 @@ internal class EmbeddedSettingsHost private constructor(
      * Call from the embedding Activity result seam. Returning false means the
      * result belongs to the host and must continue through its normal path.
      */
-    fun onActivityResult(
+    override fun onActivityResult(
         activity: Activity,
         requestCode: Int,
         resultCode: Int,
@@ -1199,7 +1201,7 @@ internal class EmbeddedSettingsHost private constructor(
      * for future host layouts or when a repacker changes the Preference
      * implementation.
      */
-    fun onSettingsPreferencesReady(fragment: Any, activity: Activity) {
+    override fun onSettingsPreferencesReady(fragment: Any, activity: Activity) {
         if (!registered || activity.packageName != ModuleConstants.TARGET_PACKAGE) return
         val activityId = activityKey(activity)
         val previousActivity = activityReference?.get()
@@ -1230,7 +1232,7 @@ internal class EmbeddedSettingsHost private constructor(
         }
     }
 
-    fun onSettingsFragmentResumed(fragment: Any, activity: Activity) {
+    override fun onSettingsFragmentResumed(fragment: Any, activity: Activity) {
         if (!registered || activity.packageName != ModuleConstants.TARGET_PACKAGE) return
         val activityId = activityKey(activity)
         lifecycleState.onActivityResumed(
@@ -1270,7 +1272,7 @@ internal class EmbeddedSettingsHost private constructor(
      * host Activity. Try the native Preference before the adapter is attached;
      * if that seam is not ready yet, keep a visible list-container fallback.
      */
-    fun onSettingsFragmentViewCreated(fragment: Any, activity: Activity, view: View?) {
+    override fun onSettingsFragmentViewCreated(fragment: Any, activity: Activity, view: View?) {
         if (!registered || activity.packageName != ModuleConstants.TARGET_PACKAGE) return
         val activityId = activityKey(activity)
         lifecycleState.onActivityResumed(
@@ -1363,6 +1365,7 @@ internal class EmbeddedSettingsHost private constructor(
      * on a second Activity resume callback.
      */
     private fun installMainContentLayoutObserver(activity: Activity) {
+        if (!nativeBridge.supportsViewFallback) return
         val decor = activity.window?.decorView ?: return
         if (observedMainContentActivity?.get() === activity && mainContentLayoutListener != null) {
             onMainContentLayout(activity)
@@ -1616,6 +1619,7 @@ internal class EmbeddedSettingsHost private constructor(
     }
 
     private fun injectNativeSettingsPreference(fragment: Any, activity: Activity): Boolean {
+        if (!nativeBridge.supportsViewFallback) return nativeBridge.injectNativeSettingsPreference(fragment, activity)
         val moduleAdded = injectOneNativeSettingsPreference(fragment, activity, lyrics = false)
         val lyricsAdded = injectOneNativeSettingsPreference(fragment, activity, lyrics = true)
         return moduleAdded && lyricsAdded
@@ -4709,12 +4713,15 @@ internal class EmbeddedSettingsHost private constructor(
             safRouter: EmbeddedSafResultRouter = EmbeddedSafResultRouter(),
             selectionHandler: EmbeddedSafSelectionHandler = EmbeddedSafSelectionHandler { _, _ -> },
             playerActivityClass: Class<*>? = null,
+            activityMatcher: dev.amenhancer.module.hook.SettingsActivityMatcher = dev.amenhancer.module.hook.AppleMusicHostFactory.settingsActivityMatcher(application, playerActivityClass),
+            nativeBridgeFactory: ((Activity) -> Unit) -> dev.amenhancer.module.hook.SettingsViewBridge = { onOpen -> dev.amenhancer.module.hook.AppleMusicHostFactory.settingsViewBridge(application, onOpen) },
         ): EmbeddedSettingsHost = EmbeddedSettingsHost(
             application = application,
             controller = controller,
             safRouter = safRouter,
             selectionHandler = selectionHandler,
-            activityMatcher = EmbeddedActivityMatcher(playerActivityClass),
+            activityMatcher = activityMatcher,
+            nativeBridgeFactory = nativeBridgeFactory,
         ).also(application::registerActivityLifecycleCallbacks)
     }
 }

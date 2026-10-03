@@ -19,7 +19,8 @@ class DualPaneStateAccessorsTest {
         sequenceOf(
             File("src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
             File("app/src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
-        ).firstOrNull(File::isFile)?.readText()
+        File("../app/src/main/java/dev/amenhancer/module/hook/AppleMusicDualPaneTarget.kt"),
+        ).firstOrNull(File::isFile)?.readRefactorComponent()
             ?: error("AppleMusicDualPaneTarget.kt was not found from the unit-test working directory")
     }
 
@@ -56,8 +57,8 @@ class DualPaneStateAccessorsTest {
 
     @Test
     fun `locates the controller state LiveData by type instead of by its 6_5_2 field name`() {
-        assertTrue(source.contains("findFieldByType(controller.javaClass)"))
-        assertFalse(source.contains("findField(controller.javaClass, \"S\")"))
+        assertTrue(source.contains("dualPaneFieldByType(controller.javaClass)"))
+        assertFalse(source.contains("dualPaneField(controller.javaClass, \"S\")"))
     }
 
     private fun stateEnum(controllerName: String): Class<*> =

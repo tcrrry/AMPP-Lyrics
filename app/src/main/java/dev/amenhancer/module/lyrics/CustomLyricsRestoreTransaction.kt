@@ -4,7 +4,7 @@ import dev.amenhancer.module.config.CustomLyricsManifestPolicy
 import dev.amenhancer.module.model.CustomLyricsEntry
 import dev.amenhancer.module.model.CustomLyricsManifest
 
-internal sealed interface CustomLyricsRestoreResult {
+sealed interface CustomLyricsRestoreResult {
     data class Restored(val manifest: CustomLyricsManifest) : CustomLyricsRestoreResult
     data class Failed(val message: String) : CustomLyricsRestoreResult
 }
@@ -13,7 +13,7 @@ internal sealed interface CustomLyricsRestoreResult {
  * Conflict strategy applied per Apple Music ID when a restore meets both a
  * current entry and a backup entry with the same ID.
  */
-internal enum class CustomLyricsRestorePolicy {
+enum class CustomLyricsRestorePolicy {
     /** Same-ID conflicts take the backup entry; the overwritten current file is retired. */
     OVERWRITE,
 
@@ -35,7 +35,7 @@ internal enum class CustomLyricsRestorePolicy {
  * files and leaves the old manifest and old files untouched. An empty backup
  * is a successful no-op.
  */
-internal class CustomLyricsRestoreTransaction(
+class CustomLyricsRestoreTransaction(
     private val fileIdFactory: () -> String,
     private val writeRemoteFile: (String, ByteArray) -> Boolean,
     private val publishManifest: (CustomLyricsManifest) -> Boolean,

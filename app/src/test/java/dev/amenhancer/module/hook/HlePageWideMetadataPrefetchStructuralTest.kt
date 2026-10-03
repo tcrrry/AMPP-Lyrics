@@ -8,7 +8,7 @@ class HlePageWideMetadataPrefetchStructuralTest {
     private fun source(relative: String): String = sequenceOf(
         File(relative),
         File("../$relative"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("Missing $relative")
 
     @Test

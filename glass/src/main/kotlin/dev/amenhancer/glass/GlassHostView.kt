@@ -42,6 +42,13 @@ class GlassHostView(context: Context, bleedDp: Int = 32) : FrameLayout(context) 
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
     }
 
+    /** Fade the expanded drawing bounds, including shadows, without clipping to the hit bounds. */
+    var contentAlpha: Float
+        get() = compose.alpha
+        set(value) {
+            compose.alpha = if (value.isFinite()) value.coerceIn(0f, 1f) else 0f
+        }
+
     init {
         clipChildren = false
         clipToPadding = false
@@ -57,7 +64,9 @@ class GlassHostView(context: Context, bleedDp: Int = 32) : FrameLayout(context) 
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        // Measure the composition once at the final bleed size. FrameLayout's first pass at
+        // the unpadded size followed by a second pass made pressed controls alternate constraints.
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec))
         compose.measure(
             MeasureSpec.makeMeasureSpec(measuredWidth + bleed * 2, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(measuredHeight + bleed * 2, MeasureSpec.EXACTLY),

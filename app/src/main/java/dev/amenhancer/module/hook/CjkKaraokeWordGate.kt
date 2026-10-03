@@ -6,7 +6,7 @@ package dev.amenhancer.module.hook
  * false is deliberately fail-closed, so a malformed binding keeps Apple's
  * original (non-overridden) classifier result.
  */
-internal data class CjkKaraokeWordTiming(
+data class CjkKaraokeWordTiming(
     val text: CharSequence,
     val nativeDurationMs: Int,
     val cumulativeDurationMs: Int,
@@ -19,7 +19,7 @@ internal data class CjkKaraokeWordTiming(
  * Does not impose Apple's duration/length trigger. Those conditions remain in
  * z.a0; this gate only blocks merged or multi-character CJK chunks.
  */
-internal fun isSingleUnmergedCjkWord(timing: CjkKaraokeWordTiming): Boolean {
+fun isSingleUnmergedCjkWord(timing: CjkKaraokeWordTiming): Boolean {
     if (timing.isBackground) return false
     if (timing.splitBindingCount < 0 || timing.splitBindingCount > 1) return false
 

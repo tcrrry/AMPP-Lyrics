@@ -3,13 +3,13 @@ package dev.amenhancer.module.font
 import dev.amenhancer.module.config.FontManifestPolicy
 import dev.amenhancer.module.model.LyricsFontManifest
 
-internal sealed interface FontImportResult {
+sealed interface FontImportResult {
     data class Imported(val manifest: LyricsFontManifest) : FontImportResult
     data class Failed(val message: String) : FontImportResult
 }
 
 /** Commits a new remote file first, and publishes its manifest only after the copy succeeds. */
-internal class FontImportTransaction(
+class FontImportTransaction(
     private val fileIdFactory: () -> String,
     private val writeRemoteFile: (String, ByteArray) -> Boolean,
     private val publishManifest: (LyricsFontManifest) -> Boolean,

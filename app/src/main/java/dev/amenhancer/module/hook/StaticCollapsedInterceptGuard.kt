@@ -55,7 +55,6 @@ internal object StaticCollapsedInterceptGuard {
      * superclass and the full CoordinatorLayout/View/MotionEvent signature on both builds
      * (6.5.2 base and 6.5.3 base), so the structural resolver stays valid for each of them.
      */
-    private val SUPPORTED_BUILDS = listOf("6.5.2" to 1586L, "6.5.3" to 1599L)
     private const val FLAT_ROOT = "bottom_navigation_root_flat"
     private const val TABS_FRAME = "bottom_navigation_tabs_frame"
     private const val PLAYER_CONTAINER = "player_container"
@@ -64,10 +63,9 @@ internal object StaticCollapsedInterceptGuard {
     private const val PLAYER_QUEUE = "player_queue"
 
     fun isSupportedBuild(build: TargetBuild): Boolean =
-        build.packageName == ModuleConstants.TARGET_PACKAGE &&
-            SUPPORTED_BUILDS.any { (name, code) ->
-                build.versionName == name && build.versionCode == code
-            }
+        dev.amenhancer.host.applemusic.AppleMusicHostProfiles.find(
+            build.packageName, build.versionName, build.versionCode,
+        )?.let { it.productionEnabled && it.capability("staticCollapsedIntercept") } == true
 
     fun install(intercept: Method?): Boolean {
         intercept ?: return false

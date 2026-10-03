@@ -13,6 +13,19 @@ import java.lang.ref.WeakReference
 import java.util.Collections
 import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+internal fun AppleMusicDpiOverrideStatus.asFeatureResult(): FeatureInstallResult = when (state) {
+        AppleMusicDpiOverrideState.DISABLED -> FeatureInstallResult.disabled(message)
+        AppleMusicDpiOverrideState.ACTIVE -> FeatureInstallResult.active(message)
+        AppleMusicDpiOverrideState.DEGRADED -> FeatureInstallResult.degraded(message)
+    }
+
+internal class AppleMusicDpiOverrideFeature : FeatureHook {
+    override val key: String = ModuleConstants.FEATURE_APPLE_MUSIC_DPI
+
+    override fun install(context: HookContext): FeatureInstallResult =
+        AppleMusicHostFactory.densityStatus().asFeatureResult()
+}
+
 
 /**
  * Pure arithmetic used by the per-process density override.  Android's
@@ -124,24 +137,6 @@ internal object AppleMusicDpiOverridePolicy {
         metrics.density = nextDensity
         metrics.scaledDensity = nextDensity * fontScale
         return changed
-    }
-}
-
-internal enum class AppleMusicDpiOverrideState {
-    DISABLED,
-    ACTIVE,
-    DEGRADED,
-}
-
-internal data class AppleMusicDpiOverrideStatus(
-    val state: AppleMusicDpiOverrideState,
-    val targetDpi: Int,
-    val message: String,
-) {
-    fun asFeatureResult(): FeatureInstallResult = when (state) {
-        AppleMusicDpiOverrideState.DISABLED -> FeatureInstallResult.disabled(message)
-        AppleMusicDpiOverrideState.ACTIVE -> FeatureInstallResult.active(message)
-        AppleMusicDpiOverrideState.DEGRADED -> FeatureInstallResult.degraded(message)
     }
 }
 
@@ -396,11 +391,4 @@ internal object AppleMusicDpiOverrideRuntime : Application.ActivityLifecycleCall
     override fun onActivityStopped(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
     override fun onActivityDestroyed(activity: Activity) = Unit
-}
-
-internal class AppleMusicDpiOverrideFeature : FeatureHook {
-    override val key: String = ModuleConstants.FEATURE_APPLE_MUSIC_DPI
-
-    override fun install(context: HookContext): FeatureInstallResult =
-        AppleMusicDpiOverrideRuntime.status.asFeatureResult()
 }

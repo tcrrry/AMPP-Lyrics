@@ -5,7 +5,18 @@ internal class AppleMusicLyricsTypefaceTarget(
     private val symbols: TargetSymbolResolver,
     private val session: LyricsTypefaceSession,
 ) : LyricsTypefaceTarget {
-    override fun install(): TargetCapabilityInstall {
+    private val registration = HookRegistrationScope()
+    private var installedResult: TargetCapabilityInstall? = null
+    @Synchronized override fun install(): TargetCapabilityInstall {
+        installedResult?.let { return it }
+        return try {
+            installOnce().also {
+                if (!registration.isActive) registration.close()
+                installedResult = it
+            }
+        } catch (error: Throwable) { registration.close(); throw error }
+    }
+    private fun installOnce(): TargetCapabilityInstall {
         val fragmentResolution = symbols.resolve(AppleMusicSymbols.LyricsFragment)
         val fragmentClass = fragmentResolution.valueOrNull()
             ?: return TargetCapabilityInstall.Degraded(fragmentResolution.summary)
@@ -38,22 +49,24 @@ internal class AppleMusicLyricsTypefaceTarget(
                     session.attachToFragment(owner, recyclerClass)
                 }
             },
+            registration,
         )
         if (hooks.isEmpty()) {
             return TargetCapabilityInstall.Degraded(
                 "PlayerLyricsViewFragment.onResume had no hookable method",
             )
         }
+        registration.activate()
         session.activate()
         val fontStatus = if (preparation is LyricsTypefacePreparation.Ready) {
             "font ready"
         } else {
             "font loading in background"
         }
-        return TargetCapabilityInstall.Active(
-            "Lyrics typeface installed for ${LyricsTypefaceLayoutContract.layoutNames.size} " +
-                "verified player lyric layouts ($fontStatus); ${fragmentResolution.summary}",
-        )
+        val diagnostic = "Lyrics typeface installed for ${LyricsTypefaceLayoutContract.layoutNames.size} " +
+            "verified player lyric layouts ($fontStatus); ${fragmentResolution.summary}"
+        return if (preparation is LyricsTypefacePreparation.Ready) TargetCapabilityInstall.Active(diagnostic)
+        else TargetCapabilityInstall.Degraded(diagnostic)
     }
 
     private fun findLifecycleDeclaringClass(start: Class<*>, methodName: String): Class<*>? =

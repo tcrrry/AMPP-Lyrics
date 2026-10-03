@@ -12,7 +12,7 @@ import java.util.concurrent.RejectedExecutionException
  * index without changing the session. The seam never guesses a remote-file
  * format — it only promises an in-memory snapshot of the current mappings.
  */
-internal fun interface CustomLyricsIndexProvider {
+fun interface CustomLyricsIndexProvider {
     /** Loads the current index snapshot, or null when the index is unavailable. */
     fun load(): Map<Long, CustomLyricsEntry>?
 }
@@ -31,7 +31,7 @@ internal fun interface CustomLyricsIndexProvider {
  * [onReplacementPublished] on the preparing thread; callers hop to the main
  * thread when a UI re-entry is needed.
  */
-internal class CustomLyricsReplacementSession(
+class CustomLyricsReplacementSession(
     private val index: CustomLyricsIndexProvider,
     private val readTtml: (CustomLyricsEntry) -> String?,
     private val parseTtml: (String) -> Any?,

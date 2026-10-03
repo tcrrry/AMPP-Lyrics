@@ -4,7 +4,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 /** Native equivalent of the reference player's viewport-relative lyric presentation. */
-internal object TabletLyricVisualPolicy {
+object TabletLyricVisualPolicy {
     const val ITEM_SPACING_EXTRA_DP = 4
     const val EDGE_TRANSITION_FRACTION = 0.10f
     private const val FONT_HEIGHT_FRACTION = 0.05f

@@ -1,4 +1,5 @@
 package io.github.proify.lyricon.amprovider.xposed
+import dev.amenhancer.module.hook.readRefactorComponent
 
 import java.io.File
 import org.junit.Assert.assertTrue
@@ -9,7 +10,8 @@ class AppleInternalCatalogResolverStructuralTest {
     private fun source(): String = sequenceOf(
         File("app/src/main/java/io/github/proify/lyricon/amprovider/xposed/AppleInternalCatalogResolver.kt"),
         File("../app/src/main/java/io/github/proify/lyricon/amprovider/xposed/AppleInternalCatalogResolver.kt"),
-    ).firstOrNull(File::isFile)?.readText() ?: error("Missing resolver source")
+        File("../app/src/main/java/io/github/proify/lyricon/amprovider/xposed/AppleInternalCatalogResolver.kt"),
+    ).firstOrNull(File::isFile)?.readRefactorComponent() ?: error("Missing resolver source")
 
     @Test
     fun `direct host query stays in main adapter while response work uses CPU seam`() {

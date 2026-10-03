@@ -1,4 +1,5 @@
 package io.github.proify.lyricon.amprovider.xposed
+import dev.amenhancer.module.hook.readRefactorComponent
 
 import java.io.File
 import org.junit.Assert.assertFalse
@@ -9,7 +10,7 @@ class AppleOriginalMetadataCacheWarmupStructuralTest {
     private fun source(relative: String): String = sequenceOf(
         File(relative),
         File("../$relative"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("Missing $relative")
 
     @Test

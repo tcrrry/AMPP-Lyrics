@@ -8,7 +8,7 @@ class AppleMusicDpiOverrideStructuralTest {
     private fun source(relativePath: String): String = sequenceOf(
         File(relativePath),
         File("../$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found")
 
     @Test
@@ -16,8 +16,8 @@ class AppleMusicDpiOverrideStructuralTest {
         val hookEntry = source("app/src/main/java/dev/amenhancer/module/hook/HookEntry.kt")
         val before = hookEntry.substringAfter("override fun beforeHookedMethod")
             .substringBefore("override fun afterHookedMethod")
-        assertTrue(before.contains("AppleMusicDpiOverrideRuntime.install("))
-        assertTrue(before.indexOf("AppleMusicDpiOverrideRuntime.install(") <
+        assertTrue(before.contains("AppleMusicHostFactory.installDensity("))
+        assertTrue(before.indexOf("AppleMusicHostFactory.installDensity(") <
             before.indexOf("FeatureInstallation.registerResources(config)"))
 
         val runtime = source("app/src/main/java/dev/amenhancer/module/hook/AppleMusicDpiOverride.kt")

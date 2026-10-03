@@ -1,10 +1,10 @@
 package dev.amenhancer.module.lyrics
 
-import dev.amenhancer.module.hook.AmLyricsIndex
-import dev.amenhancer.module.hook.AmLyricsIndexEntry
-import dev.amenhancer.module.hook.LunabeatCatalog
-import dev.amenhancer.module.hook.LunabeatManifest
-import dev.amenhancer.module.hook.LunabeatSong
+import dev.amenhancer.module.lyrics.source.AmLyricsIndex
+import dev.amenhancer.module.lyrics.source.AmLyricsIndexEntry
+import dev.amenhancer.module.lyrics.source.LunabeatCatalog
+import dev.amenhancer.module.lyrics.source.LunabeatManifest
+import dev.amenhancer.module.lyrics.source.LunabeatSong
 import dev.amenhancer.module.model.CustomLyricsEntry
 import dev.amenhancer.module.model.CustomLyricsManifest
 import dev.amenhancer.module.model.CustomLyricsSources

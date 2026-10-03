@@ -21,9 +21,7 @@ internal class AppleMusicCatalogLanguageTarget(
     )
 }
 
-internal fun interface CatalogLanguageTarget {
-    fun install(): TargetCapabilityInstall
-}
+
 
 internal object CatalogLanguageRewritePolicy {
     internal val rawTagKeys = setOf(

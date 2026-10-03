@@ -1,5 +1,6 @@
 package dev.amenhancer.module.hook
 
+import dev.amenhancer.module.lyrics.source.HttpLyricTransport
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress

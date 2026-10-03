@@ -9,7 +9,7 @@ class CustomLyricsReadyLateStructuralRegressionTest {
     private fun projectFile(relativePath: String): String = sequenceOf(
         File(relativePath),
         File("../$relativePath"),
-    ).firstOrNull(File::isFile)?.readText()
+    ).firstOrNull(File::isFile)?.readRefactorComponent()
         ?: error("$relativePath was not found from the unit-test working directory")
 
     @Test
@@ -37,7 +37,7 @@ class CustomLyricsReadyLateStructuralRegressionTest {
         )
 
         assertTrue(target.contains("Handler(Looper.getMainLooper())"))
-        assertTrue(target.contains("mainHandler.post { publishToPage(appleMusicId) }"))
+        assertTrue(target.contains("mainHandler.post { if (registration.isActive) publishToPage(appleMusicId) }"))
         assertTrue(target.contains("readyReapply.onReplacementPublished(id)"))
         assertTrue(target.contains("CustomLyricsReadyReapply("))
         assertTrue(target.contains("currentSong.addListener"))

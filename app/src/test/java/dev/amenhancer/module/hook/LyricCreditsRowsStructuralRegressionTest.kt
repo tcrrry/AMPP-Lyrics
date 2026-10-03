@@ -16,25 +16,25 @@ import org.junit.Test
  */
 class LyricCreditsRowsStructuralRegressionTest {
     private val portSource: String by lazy {
-        sourceFile("OpenSourceLyricBlurPort.kt").readText()
+        sourceFile("OpenSourceLyricBlurPort.kt").readRefactorComponent()
     }
     private val featureSource: String by lazy {
-        sourceFile("FutureLyricBlurFeature.kt").readText()
+        sourceFile("LyricCreditsRowResourceHook.kt").readRefactorComponent()
     }
     private val installationSource: String by lazy {
-        sourceFile("FeatureInstallation.kt").readText()
+        sourceFile("FeatureInstallation.kt").readRefactorComponent()
     }
     private val targetSource: String by lazy {
-        sourceFile("AppleMusicBidirectionalLyricBlurTarget.kt").readText()
+        sourceFile("AppleMusicBidirectionalLyricBlurTarget.kt").readRefactorComponent()
     }
     private val identitySource: String by lazy {
-        sourceFile("CreditsRowIdentity.kt").readText()
+        sourceFile("CreditsRowIdentity.kt").readRefactorComponent()
     }
     private val instrumentalSource: String by lazy {
-        sourceFile("InstrumentalRowIdentity.kt").readText()
+        sourceFile("InstrumentalRowIdentity.kt").readRefactorComponent()
     }
     private val contractSource: String by lazy {
-        sourceFile("LyricsTypefaceSession.kt").readText()
+        sourceFile("LyricsTypefaceSession.kt").readRefactorComponent()
     }
 
     @Test
@@ -49,7 +49,7 @@ class LyricCreditsRowsStructuralRegressionTest {
             .substringAfter("feature = FutureLyricBlurFeature()")
             .substringBefore("FeatureInstallationPlan(")
         assertTrue(blurPlan.contains("registerResources"))
-        assertTrue(blurPlan.contains("LyricCreditsRowResourceHook.install"))
+        assertTrue(blurPlan.contains("AppleMusicHostFactory.registerLyricAuxiliaryResources"))
     }
 
     @Test
@@ -169,6 +169,12 @@ class LyricCreditsRowsStructuralRegressionTest {
     private fun sourceFile(name: String): File = sequenceOf(
         File("src/main/java/dev/amenhancer/module/hook/$name"),
         File("app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+        File("../app/src/main/java/dev/amenhancer/module/hook/$name"),
+
     ).firstOrNull(File::isFile) ?: error("$name was not found from the unit-test working directory")
 
     private companion object {
