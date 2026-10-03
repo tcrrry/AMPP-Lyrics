@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="62" viewBox="0 0 300 62" role="img" aria-labelledby="title desc">
+  <title id="title">独立模块 APK</title>
+  <desc id="desc">不是 Apple Music 主程序</desc>
+  <rect width="300" height="62" rx="10" fill="#57606a"/>
+  <g fill="#ffffff" text-anchor="middle" font-family="Arial, 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif">
+    <text x="150" y="26" font-size="18" font-weight="700">独立模块 APK</text>
+    <text x="150" y="47" font-size="13">不是 Apple Music 主程序</text>
+  </g>
+</svg>

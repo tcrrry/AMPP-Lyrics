@@ -7,6 +7,18 @@
 
 **单 APK / APKS 整合安装包 · 无需 Root · 无需另装 LSPosed 或模块**
 
+[![普通版 APK｜推荐](docs/images/downloads/ordinary-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.3/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk)
+
+[![共存版 APK｜保留官方版](docs/images/downloads/coexist-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.3/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk)
+
+[![APKS 分包版](docs/images/downloads/split-apks.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.3/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks)
+
+[![独立模块｜非主程序](docs/images/downloads/module-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.3/AMPP-Lyrics-module.apk)
+
+**v1.3 · Apple Music 7.0.0-beta · Android 11+ · arm64**
+
+普通版与共存版选一种即可；想保留官方 Apple Music，选 **共存版 APK**。
+
 **[打开 v1.3 下载页（APK／APKS／模块／共存版）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest)** · [旧版 6.5.3 下载页](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.2) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
 
 </div>
@@ -41,14 +53,26 @@
 
 当前正式版本：**v1.3**，基于 **Apple Music 7.0.0-beta / 1606**，跟进上游 AM++ v1.6.3，并保留本项目歌词增强功能。模块内部版本为 1.6.6 / 116。
 
-**[打开 GitHub 下载页面](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.3)**，展开页面下方 **Assets**，按下表选择文件：
+主页顶部四个按钮可直接下载对应安装包。如果浏览器下载失败，请[打开 GitHub 发布页面](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.3)，展开下方 **Assets**，按下表选择文件：
 
 | 安装文件 | 使用方式 |
 | --- | --- |
-| **AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk（推荐）** | 普通整合版，直接打开 APK 安装，无需 Root 或额外模块。 |
-| AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks | 普通分包版，用 MT 管理器、SAI 等分包安装器完整安装。 |
-| AMPP-Lyrics-module.apk | 独立模块，供兼容的模块框架或自行嵌入使用，不是 Apple Music 主程序。 |
-| AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk | 共存整合版，独立包名，可保留官方版或普通增强版。 |
+| [**普通版 APK（推荐）**](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.3/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk) | 普通整合版，直接打开 APK 安装，无需 Root 或额外模块。 |
+| [**共存版 APK**](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.3/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk) | 共存整合版，独立包名，可保留官方版或普通增强版。 |
+| [APKS 分包版](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.3/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks) | 普通分包版，用 MT 管理器、SAI 等分包安装器完整安装。 |
+| [独立模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.3/AMPP-Lyrics-module.apk) | 供兼容的模块框架或自行嵌入使用，不是 Apple Music 主程序。 |
+
+### 普通版和共存版怎么区分？
+
+| 区分方式 | 普通版（APK／APKS） | 共存版 APK |
+| --- | --- | --- |
+| 安装后应用名称 | **Apple Music** | **AM++ Lyrics 共存版** |
+| Android 包名 | `com.apple.android.music` | `com.tcrrry.ampplyrics.coexist` |
+| 下载文件名 | 以 `-arm64.apk` 或 `-arm64.apks` 结尾 | 以 **`-arm64-coexist.apk`** 结尾；`coexist` 表示共存 |
+| 与官方版同时安装 | 包名相同，不能同时安装；签名不同，不能直接覆盖官方版 | 包名不同，可以与官方版或普通增强版同时安装 |
+| 账号与设置 | 使用普通版自己的数据 | 使用独立数据，需单独登录和设置 |
+
+下载时认按钮上的 **普通版／共存版**；安装后认应用名称。也可以在系统的「设置 → 应用 → 应用信息」中查看，部分系统或 MT 管理器还能显示包名。独立模块的包名是 `dev.amenhancer.module.debug`，不是上述两个音乐应用。
 
 v1.3 在 7.0 原生设置页同时提供 **AM++** 和 **Tcrrry 歌词设置** 两个入口，修复测试版漏掉歌词入口的问题。普通版和共存版新安装默认开启自定义歌词替换与自动歌词，已保存的关闭选项保留。配色选项仍在设置页末尾，无真实逐字计时的歌词仍逐行显示；多源匹配、翻译、发音和手动换源保持可用。
 
