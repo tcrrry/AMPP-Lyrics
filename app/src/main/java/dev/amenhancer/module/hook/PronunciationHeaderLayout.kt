@@ -5,19 +5,20 @@ import android.view.ViewGroup
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
-/** Native ConstraintLayout parameters belong to the host's class loader. */
+/** Auxiliary text shares the row's parent, outside the native word gradient. */
 internal object PronunciationHeaderLayout {
-    private data class Header(val view: WeakReference<View>, val topToTop: Int, val topToBottom: Int,
-        val predecessors: List<WeakReference<View>>)
-    private val headers = WeakHashMap<ViewGroup, Header>()
+    private data class Edge(val view: WeakReference<View>, val first: Int, val second: Int, val margin: Int)
+    private val headers = WeakHashMap<ViewGroup, Edge>()
+    private val footers = WeakHashMap<ViewGroup, Edge>()
 
     private fun field(type: Class<*>, name: String) = type.getField(
         if (type.name == "androidx.constraintlayout.widget.ConstraintLayout\$b") {
-            // Verified against the 6.5.3 constructor/XML parser and RTL resolver.
+            // Verified against the 6.5.3 and 1606 constraint resolvers.
             when (name) {
                 "topToTop" -> "i"
                 "topToBottom" -> "j"
                 "bottomToTop" -> "k"
+                "bottomToBottom" -> "l"
                 "startToStart" -> "t"
                 "endToEnd" -> "v"
                 else -> name
@@ -29,77 +30,101 @@ internal object PronunciationHeaderLayout {
         val parent = container.parent as? ViewGroup ?: return@runCatching false
         val type = container.layoutParams.javaClass
         type.getConstructor(ViewGroup.LayoutParams::class.java)
-        for (name in listOf("topToTop", "topToBottom", "bottomToTop", "startToStart", "endToEnd")) field(type, name)
+        for (name in listOf("topToTop", "topToBottom", "bottomToTop", "bottomToBottom", "startToStart", "endToEnd")) field(type, name)
         parent != container && container.id != View.NO_ID
     }.getOrDefault(false)
 
-    fun moveAbove(container: ViewGroup, view: View) {
+    fun moveAbove(container: ViewGroup, view: View) = move(container, view, above = true)
+    fun moveBelow(container: ViewGroup, view: View) = move(container, view, above = false)
+
+    private fun move(container: ViewGroup, view: View, above: Boolean) {
         check(view.parent === container && supports(container))
-        clear(container)
+        clearEdge(container, above)
         val parent = container.parent as ViewGroup
         val original = container.layoutParams
         val type = original.javaClass
-        val top = field(type, "topToTop")
-        val below = field(type, "topToBottom")
-        val topValue = top.getInt(original)
-        val belowValue = below.getInt(original)
+        val first = field(type, if (above) "topToTop" else "bottomToTop")
+        val second = field(type, if (above) "topToBottom" else "bottomToBottom")
+        val neighborAnchor = field(type, if (above) "bottomToTop" else "topToBottom")
+        val firstValue = first.getInt(original)
+        val secondValue = second.getInt(original)
         val nativeParams = view.layoutParams
-        val headerParams = type.getConstructor(ViewGroup.LayoutParams::class.java)
+        val parameters = type.getConstructor(ViewGroup.LayoutParams::class.java)
             .newInstance(ViewGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT)) as ViewGroup.MarginLayoutParams
-        top.setInt(headerParams, topValue)
-        below.setInt(headerParams, belowValue)
-        field(type, "bottomToTop").setInt(headerParams, container.id)
-        field(type, "startToStart").setInt(headerParams, container.id)
-        field(type, "endToEnd").setInt(headerParams, container.id)
-        headerParams.marginStart = container.paddingStart
-        headerParams.marginEnd = container.paddingEnd
-        headerParams.topMargin = original.let { (it as? ViewGroup.MarginLayoutParams)?.topMargin ?: 0 }
+        first.setInt(parameters, firstValue)
+        second.setInt(parameters, secondValue)
+        field(type, if (above) "bottomToTop" else "topToBottom").setInt(parameters, container.id)
+        field(type, "startToStart").setInt(parameters, container.id)
+        field(type, "endToEnd").setInt(parameters, container.id)
+        parameters.marginStart = container.paddingStart
+        parameters.marginEnd = container.paddingEnd
+        val originalMargin = (original as? ViewGroup.MarginLayoutParams)?.let { if (above) it.topMargin else it.bottomMargin } ?: 0
+        if (above) parameters.topMargin = originalMargin else {
+            parameters.topMargin = (nativeParams as? ViewGroup.MarginLayoutParams)?.topMargin ?: 0
+            parameters.bottomMargin = originalMargin
+        }
         view.id = View.generateViewId()
-        val predecessors = (0 until parent.childCount).map { parent.getChildAt(it) }.filter {
-            it !== container && it.layoutParams.javaClass == type &&
-                field(type, "bottomToTop").getInt(it.layoutParams) == container.id
+        val neighbors = (0 until parent.childCount).map { parent.getChildAt(it) }.filter {
+            it !== container && it.layoutParams.javaClass == type && neighborAnchor.getInt(it.layoutParams) == container.id
         }
         container.removeView(view)
         try {
-            parent.addView(view, headerParams)
-            top.setInt(original, -1)
-            below.setInt(original, view.id)
-            for (previous in predecessors) {
-                field(type, "bottomToTop").setInt(previous.layoutParams, view.id)
-                previous.layoutParams = previous.layoutParams
+            parent.addView(view, parameters)
+            first.setInt(original, if (above) -1 else view.id)
+            second.setInt(original, if (above) view.id else -1)
+            for (neighbor in neighbors) {
+                neighborAnchor.setInt(neighbor.layoutParams, view.id)
+                neighbor.layoutParams = neighbor.layoutParams
             }
-            (original as? ViewGroup.MarginLayoutParams)?.topMargin = 0
+            (original as? ViewGroup.MarginLayoutParams)?.let { if (above) it.topMargin = 0 else it.bottomMargin = 0 }
             container.layoutParams = original
-            headers[container] = Header(WeakReference(view), topValue, belowValue, predecessors.map { WeakReference(it) })
+            (if (above) headers else footers)[container] = Edge(WeakReference(view), firstValue, secondValue, originalMargin)
         } catch (error: Exception) {
             parent.removeView(view)
-            top.setInt(original, topValue)
-            below.setInt(original, belowValue)
-            for (previous in predecessors) field(type, "bottomToTop").setInt(previous.layoutParams, container.id)
-            (original as? ViewGroup.MarginLayoutParams)?.topMargin = headerParams.topMargin
+            first.setInt(original, firstValue)
+            second.setInt(original, secondValue)
+            for (neighbor in neighbors) neighborAnchor.setInt(neighbor.layoutParams, container.id)
+            (original as? ViewGroup.MarginLayoutParams)?.let { if (above) it.topMargin = originalMargin else it.bottomMargin = originalMargin }
             container.addView(view, nativeParams)
             throw error
         }
     }
 
-    fun clear(container: ViewGroup) {
-        val header = headers.remove(container) ?: return
-        val view = header.view.get()
+    private fun clearEdge(container: ViewGroup, above: Boolean) {
+        val edge = (if (above) headers else footers).remove(container) ?: return
+        val view = edge.view.get()
         val parameters = container.layoutParams
-        field(parameters.javaClass, "topToTop").setInt(parameters, header.topToTop)
-        field(parameters.javaClass, "topToBottom").setInt(parameters, header.topToBottom)
-        for (previous in header.predecessors.mapNotNull { it.get() }) {
-            field(previous.layoutParams.javaClass, "bottomToTop").setInt(previous.layoutParams, container.id)
-            previous.layoutParams = previous.layoutParams
+        val type = parameters.javaClass
+        val first = field(type, if (above) "topToTop" else "bottomToTop")
+        val second = field(type, if (above) "topToBottom" else "bottomToBottom")
+        // Read current anchors: another track's auxiliary row may have rewired them.
+        first.setInt(parameters, view?.layoutParams?.let { first.getInt(it) } ?: edge.first)
+        second.setInt(parameters, view?.layoutParams?.let { second.getInt(it) } ?: edge.second)
+        val parent = container.parent as? ViewGroup
+        if (view != null && parent != null) {
+            val neighborAnchor = field(type, if (above) "bottomToTop" else "topToBottom")
+            for (i in 0 until parent.childCount) {
+                val sibling = parent.getChildAt(i)
+                if (sibling !== container && sibling !== view && sibling.layoutParams.javaClass == type &&
+                    neighborAnchor.getInt(sibling.layoutParams) == view.id) {
+                    neighborAnchor.setInt(sibling.layoutParams, container.id)
+                    sibling.layoutParams = sibling.layoutParams
+                }
+            }
         }
-        (parameters as? ViewGroup.MarginLayoutParams)?.topMargin = (view?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin ?: 0
+        val margin = (view?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { if (above) it.topMargin else it.bottomMargin } ?: edge.margin
+        (parameters as? ViewGroup.MarginLayoutParams)?.let { if (above) it.topMargin = margin else it.bottomMargin = margin }
         (view?.parent as? ViewGroup)?.removeView(view)
         container.layoutParams = parameters
     }
 
+    fun clear(container: ViewGroup) {
+        clearEdge(container, above = false)
+        clearEdge(container, above = true)
+    }
+
     fun clearRow(root: ViewGroup) {
-        // Snapshot because removing headers mutates this row's children.
-        val children = (0 until root.childCount).map { root.getChildAt(it) }
+        val children = (0 until root.childCount).map { root.getChildAt(it) }.reversed()
         for (child in children) if (child is ViewGroup) {
             clear(child)
             clearRow(child)

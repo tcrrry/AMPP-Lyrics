@@ -63,7 +63,7 @@ def main():
         method(line, name+'()Ljava/lang/String;')
     constraints = 'androidx/constraintlayout/widget/ConstraintLayout$b'
     method(constraints, '<init>(Landroid/view/ViewGroup$LayoutParams;)V')
-    for name in ('i','j','k','t','v'): field(constraints, name, 'I')
+    for name in ('i','j','k','l','t','v'): field(constraints, name, 'I')
     # Research against the SHA-pinned 1606 mapper: these subtitle bindings
     # derive from the two types accepted by A.U; ruby word bindings do not.
     for concrete, parent in (('E9', 'D9'), ('c9', 'b9')):

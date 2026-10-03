@@ -135,7 +135,11 @@ def main():
         shutil.copyfile(coex,coexist);checksum(coexist)
     report={'release':'v1.3','host':'7.0.0-beta/1606','staticVerified':True,
             'deviceVerified':{'test-r1-ordinary-apk':'User reports normal use except missing separate lyrics settings entry; entry fixed in v1.3',
-                              'v1.3-new-packages':False},
+                              'v1.3-original-apk-and-coexist':'User reports missing pronunciation; corrected in this update',
+                              'v1.3-pronunciation-fix':False},
+            'presentation':{'order':['pronunciation','original','translation'],
+                            'auxiliaryColor':'white_alpha_35','auxiliaryViewAlpha':1.0,
+                            'auxiliaryOutsideWordGradient':True},
             'files':{path.name:{'sha256':single.digest(path),'bytes':path.stat().st_size}
                      for path in args.output.iterdir() if path.suffix in ('.apk','.apks')}}
     (args.output/'v1.3-validation.json').write_text(json.dumps(report,indent=2)+'\n')

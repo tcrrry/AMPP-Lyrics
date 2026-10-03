@@ -23,6 +23,19 @@ internal object NativeLyricsPronunciationSubtitle {
     private fun auxiliaryTextColor(view: TextView): Int =
         runCatching { view.context.getColor(view.resources.getIdentifier("white_alpha_35", "color", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE)) }.getOrDefault(0x59ffffff)
 
+    private val renderingHeader = ThreadLocal<Boolean>()
+
+    internal fun styleAuxiliary(view: TextView) {
+        view.setTextColor(auxiliaryTextColor(view))
+        view.alpha = 1f
+    }
+
+    internal fun renderTranslation(container: ViewGroup, view: TextView) {
+        if (!PronunciationHeaderLayout.supports(container)) return
+        styleAuxiliary(view)
+        PronunciationHeaderLayout.moveBelow(container, view)
+    }
+
     /** U/Z only accepts translation subtitle bindings, not word-pronunciation bindings. */
     internal fun renderHeader(
         container: ViewGroup,
@@ -35,10 +48,14 @@ internal object NativeLyricsPronunciationSubtitle {
         check(layout != 0) { "Missing native auxiliary subtitle layout" }
         val count = container.childCount
         try {
-            inflate(text, layout)
+            val previous = renderingHeader.get()
+            renderingHeader.set(true)
+            try { inflate(text, layout) } finally {
+                if (previous == null) renderingHeader.remove() else renderingHeader.set(previous)
+            }
             check(container.childCount == count + 1) { "Native subtitle did not append one view" }
             val view = container.getChildAt(count) as? TextView ?: error("Native subtitle is not a TextView")
-            view.setTextColor(auxiliaryTextColor(view))
+            styleAuxiliary(view)
             PronunciationHeaderLayout.moveAbove(container, view)
         } catch (error: Exception) {
             // Native DataBinding may attach before rejecting a mismatched binding.
@@ -67,7 +84,7 @@ internal object NativeLyricsPronunciationSubtitle {
             val line = loader.loadClass("com.apple.android.music.ttml.javanative.model.LyricsLine\$LyricsLineNative")
             val constraints = loader.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$b")
             constraints.getConstructor(android.view.ViewGroup.LayoutParams::class.java)
-            for (name in listOf("i", "j", "k", "t", "v")) constraints.getField(name)
+            for (name in listOf("i", "j", "k", "l", "t", "v")) constraints.getField(name)
             val flexbox = loader.loadClass("com.apple.android.music.common.views.FullWidthAlphaGradientFlexboxLayout")
             val subtitle = adapter.getDeclaredMethod(if (modern) "U" else "Z", String::class.java, flexbox,
                 Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Int::class.javaPrimitiveType)
@@ -91,6 +108,21 @@ internal object NativeLyricsPronunciationSubtitle {
             val payloads = listOf("h", "i").map { base.getDeclaredField(it).apply { isAccessible = true }.get(null) }
             var enabled = false
             fun owns(value: Any?): Boolean = enabled && value != null && isManaged(pointer.invoke(value))
+
+            ModernXposedRuntime.hookMethod(subtitle, object : ModernMethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    if (param.throwable != null || renderingHeader.get() == true) return
+                    runCatching {
+                        if (!owns(param.thisObject)) return@runCatching
+                        val container = param.args[1] as ViewGroup
+                        val layouts = listOf("lyrics_translation_line_karaoke", "lyrics_bg_translation_line_karaoke")
+                            .map { container.resources.getIdentifier(it, "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) }
+                        if (param.args[2] !in layouts) return@runCatching
+                        val view = container.getChildAt(container.childCount - 1) as? TextView ?: return@runCatching
+                        renderTranslation(container, view)
+                    }.onFailure { ModernXposedRuntime.log("translation subtitle layout failed open", it) }
+                }
+            })
 
             // A.g0 finishes the primary word map before we create a separate native
             // subtitle. Detaching only that appended subtitle preserves word indices.

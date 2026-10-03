@@ -21,6 +21,7 @@ class PronunciationHeaderLayoutTest {
         @JvmField var topToTop = -1
         @JvmField var topToBottom = -1
         @JvmField var bottomToTop = -1
+        @JvmField var bottomToBottom = -1
         @JvmField var startToStart = -1
         @JvmField var endToEnd = -1
     }
@@ -144,6 +145,88 @@ class PronunciationHeaderLayoutTest {
         assertSame(original, words.getChildAt(0))
         assertEquals(1, root.childCount)
         assertEquals(0, (words.layoutParams as HostParams).topToTop)
+    }
+
+    @Test fun pronunciationOriginalAndTranslationHaveOrderedAnchorsAndEqualBrightness() {
+        val (root, words) = row()
+        words.alpha = 0.4f // native word effects must not dim one auxiliary row alone
+        val original = TextView(activity).apply { text = "君の声" }
+        words.addView(original)
+        NativeLyricsPronunciationSubtitle.renderHeader(words, "ki mi no ko e", false,
+            resolveLayout = { nativeLayouts[it] ?: 0 }) { text, _ ->
+            words.addView(TextView(activity).apply { this.text = text })
+        }
+        val pronunciation = root.getChildAt(1) as TextView
+        val translation = TextView(activity).apply { text = "你的声音"; alpha = 0.7f }
+        words.addView(translation)
+        NativeLyricsPronunciationSubtitle.renderTranslation(words, translation)
+        try {
+            assertSame(root, pronunciation.parent)
+            assertSame(root, translation.parent)
+            assertSame(original, words.getChildAt(0))
+            assertEquals(1, words.childCount)
+            val main = words.layoutParams as HostParams
+            assertEquals(pronunciation.id, main.topToBottom)
+            assertEquals(translation.id, main.bottomToTop)
+            assertEquals(words.id, (translation.layoutParams as HostParams).topToBottom)
+            assertEquals(words.id, (pronunciation.layoutParams as HostParams).bottomToTop)
+            assertEquals(pronunciation.currentTextColor, translation.currentTextColor)
+            assertEquals(89, android.graphics.Color.alpha(pronunciation.currentTextColor))
+            assertEquals(1f, pronunciation.alpha, 0f)
+            assertEquals(pronunciation.alpha, translation.alpha, 0f)
+            assertEquals(0.4f, words.alpha, 0f)
+        } finally { PronunciationHeaderLayout.clearRow(root) }
+        assertEquals(1, root.childCount)
+        assertEquals(0, (words.layoutParams as HostParams).topToTop)
+        assertEquals(-1, (words.layoutParams as HostParams).bottomToTop)
+    }
+
+    @Test fun clearingMainTrackBeforeBackgroundRestoresEveryCrossTrackAnchor() {
+        val (root, words) = row()
+        val background = FrameLayout(activity).apply { id = View.generateViewId() }
+        root.addView(background, HostParams(0, -2).apply { topToBottom = words.id; bottomToBottom = 0 })
+        (words.layoutParams as HostParams).bottomToTop = background.id
+        fun header(container: ViewGroup): TextView = TextView(activity).also {
+            container.addView(it); PronunciationHeaderLayout.moveAbove(container, it)
+        }
+        fun footer(container: ViewGroup): TextView = TextView(activity).also {
+            container.addView(it); NativeLyricsPronunciationSubtitle.renderTranslation(container, it)
+        }
+        header(words)
+        val mainTranslation = footer(words)
+        val bgPronunciation = header(background)
+        footer(background)
+        assertEquals(bgPronunciation.id, (mainTranslation.layoutParams as HostParams).bottomToTop)
+        PronunciationHeaderLayout.clear(words)
+        assertEquals(words.id, (bgPronunciation.layoutParams as HostParams).topToBottom)
+        assertEquals(bgPronunciation.id, (words.layoutParams as HostParams).bottomToTop)
+        PronunciationHeaderLayout.clear(background)
+        assertEquals(2, root.childCount)
+        assertEquals(background.id, (words.layoutParams as HostParams).bottomToTop)
+        assertEquals(words.id, (background.layoutParams as HostParams).topToBottom)
+        assertEquals(0, (background.layoutParams as HostParams).bottomToBottom)
+    }
+
+    @Test fun translationOnlyAndPronunciationOnlyRebindDoNotRetainDisabledSubtitle() {
+        val (root, words) = row()
+        val original = TextView(activity).apply { text = "原文" }
+        words.addView(original)
+        val translation = TextView(activity).apply { text = "译文" }
+        words.addView(translation)
+        NativeLyricsPronunciationSubtitle.renderTranslation(words, translation)
+        assertEquals(0, (words.layoutParams as HostParams).topToTop)
+        PronunciationHeaderLayout.clearRow(root)
+        assertNull(translation.parent)
+        NativeLyricsPronunciationSubtitle.renderHeader(words, "fa yin", false,
+            resolveLayout = { nativeLayouts[it] ?: 0 }) { text, _ ->
+            words.addView(TextView(activity).apply { this.text = text })
+        }
+        assertEquals(2, root.childCount)
+        assertEquals(-1, (words.layoutParams as HostParams).bottomToTop)
+        assertSame(original, words.getChildAt(0))
+        PronunciationHeaderLayout.clearRow(root)
+        assertEquals(1, root.childCount)
+        assertEquals("原文", original.text.toString())
     }
 
     @Test fun unsupportedNativeLayoutsRemainUntouched() {
