@@ -83,6 +83,9 @@ def main():
             raise RuntimeError("Host resource IDs / names changed")
         cached = work / "cached.apk"
         BASE["extract_nested"](result, "assets/npatch/origin.apk", cached)
+        subprocess.run(["java", "-cp", str(args.editor),
+                        str(Path(__file__).with_name("VerifyCoexistenceLayouts.java")),
+                        str(result), str(cached)], check=True)
         with zipfile.ZipFile(cached) as cache, zipfile.ZipFile(original / "base.apk") as base:
             for name in base.namelist():
                 if re.fullmatch(r"classes\d*\.dex", name) and cache.read(name) != base.read(name):

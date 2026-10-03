@@ -1,7 +1,10 @@
 import com.reandroid.apk.ApkModule;
+import com.reandroid.apk.ResFile;
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock;
 import com.reandroid.arsc.chunk.xml.ResXmlAttribute;
 import com.reandroid.arsc.chunk.xml.ResXmlElement;
+import com.reandroid.arsc.chunk.xml.ResXmlDocument;
+import com.reandroid.archive.BlockInputSource;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -17,6 +20,35 @@ class CoexistenceManifest {
             return TARGET + value.substring(ORIGINAL.length());
         }
         return value;
+    }
+
+    static int qualifyLayoutBehaviors(ApkModule apk) throws Exception {
+        int changed = 0;
+        for (ResFile file : apk.listResFiles()) {
+            if (!"layout".equals(file.getTypeNameFromPath()) || !file.isBinaryXml()) continue;
+            ResXmlDocument document = apk.loadResXmlDocument(file.getFilePath());
+            Iterator<ResXmlElement> elements = document.recursiveElements();
+            boolean fileChanged = false;
+            while (elements.hasNext()) {
+                Iterator<ResXmlAttribute> attributes = elements.next().getAttributes();
+                while (attributes.hasNext()) {
+                    ResXmlAttribute attribute = attributes.next();
+                    String value = attribute.getValueAsString();
+                    // CoordinatorLayout resolves leading dots against Context's
+                    // installation package. Host classes keep their original names.
+                    if ("layout_behavior".equals(attribute.getName()) && value != null && value.startsWith(".")) {
+                        attribute.setValueAsString(ORIGINAL + value);
+                        fileChanged = true;
+                        changed++;
+                    }
+                }
+            }
+            if (fileChanged) {
+                document.refreshFull();
+                apk.add(new BlockInputSource<>(file.getInputSource(), document));
+            }
+        }
+        return changed;
     }
 
     public static void main(String[] args) throws Exception {
@@ -64,8 +96,10 @@ class CoexistenceManifest {
             }
         }
         manifest.getMainActivity().removeAttributesWithId(0x01010001);
+        int qualifiedBehaviors = qualifyLayoutBehaviors(apk);
         apk.writeApk(new File(args[1]));
         apk.close();
         System.out.println("Prepared isolated host: " + TARGET);
+        System.out.println("Qualified " + qualifiedBehaviors + " relative layout behavior classes");
     }
 }

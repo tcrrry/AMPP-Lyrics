@@ -46,3 +46,13 @@ NPatch 1.0.7（741）提供 `--newpackage`。检查对应的 Manifest 修改代�
 第二版与初版共存测试包的安装身份、签名相同，可以覆盖升级共存测试包；普通版附件保持不变。资源兼容和诊断改动通过构建验证后发布，账号、播放、封面与歌词仍需用户复测。
 
 用户另反馈：普通版正常；共存初版点击资料库的播放列表、艺人、专辑、歌曲等分类入口均立即闪退，而从“最近添加”点击专辑可进入；暂无崩溃堆栈，不能确认与资源/Provider 问题同源。第二版需要复测全部资料库分类入口，若仍闪退应依据 AndroidRuntime 崩溃日志继续定位。
+
+## 第三版：资料库分类页布局修正
+
+用户反馈最新共存 r2 中具体专辑详情可打开，但资料库“播放列表、歌手、专辑、歌曲”等分类入口会闪退。检查已发布 r2 的内嵌宿主发现，共用的 `library_details_page_fragment` 使用 `.collection.mediaapi.fragment.ScrollConfigurableAppBarLayoutBehavior`；CoordinatorLayout 会按 Context 的安装包名补全相对类名，得到不存在的 `com.tcrrry.ampplyrics.coexist.collection...`。宿主类名仍在 `com.apple.android.music` 下。
+
+r3 在共存打包时将 `layout_behavior` 中以点开头的宿主类名补全为原始完整类名。实际 r2 底包回归检查发现 3 个布局中的 4 处需要补全：资料库分类页、专辑布局与播放列表布局。修复前校验失败，修复后通过；比较 ZIP 条目确认此步骤仅改变这 3 个布局，DEX、资源表、Manifest 与原生库未改变。
+
+`VerifyCoexistenceLayouts.java` 检查最终 APK 及 NPatch 内嵌 origin，拒绝残留的相对行为类名，并确认资料库分类页保留正确的滚动行为类。原有签名、包名、资源 ID、宿主 DEX 和嵌入模块校验继续执行。
+
+新文件为 `AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r3.apk`，上传至 v1.2；不替换 r2 或普通 APK/APKS/模块附件。可覆盖安装相同签名和包名的旧共存版。共存版新安装仍需手动开启自定义歌词替换；已经保存的配置保留。静态缺陷已修正，所有分类入口是否恢复仍需用户实机复测，不能以构建或静态校验代替手机测试。
