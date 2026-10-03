@@ -66,13 +66,13 @@ python3 scripts/package-single-apk.py input.apks AMPP-Lyrics-AppleMusic-6.5.3-ar
 
 ```sh
 python3 scripts/package-coexist-apk.py input.apks app/build/outputs/apk/debug/app-debug.apk \
-  AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test.apk \
+  AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r2.apk \
   --editor /path/to/APKEditor-1.4.9.jar \
   --npatch /path/to/jar-v1.0.7-741-release.jar \
   --apksigner /path/to/build-tools/35.0.0/apksigner \
   --aapt2 /path/to/build-tools/35.0.0/aapt2
 ```
 
-模块构建使用 Java 17，NPatch 打包使用 Java 21。`CoexistenceManifest.java` 移除 shared UID、隔离 Provider 和自身权限、设置独立名称，并取消 BROWSABLE 外部链接注册。模块将安装身份与原始资源命名空间分开，并在共存进程内重定向自身 Intent / Provider URI。打包脚本校验资源、原始 DEX、原生库、签名、内嵌模块及隔离结构。
+模块构建使用 Java 17，NPatch 打包使用 Java 21。`CoexistenceManifest.java` 移除 shared UID、隔离 Provider 和自身权限、设置独立名称，并取消 BROWSABLE 外部链接注册。模块将安装身份与原始资源命名空间分开，并在共存进程内重定向自身 Intent / Provider URI。第二版还将共存包名的动态资源查找映射回原资源命名空间，并将自身 UriMatcher authority 与隔离 Provider 保持一致，保留独立安装身份。打包脚本校验资源、原始 DEX、原生库、签名、内嵌模块及隔离结构。
 
 也可运行 GitHub Actions“构建备用共存 APK（测试版）”；它分别测试默认与共存模块身份，仅上传共存测试 APK 及其校验文件，不替换原有附件。详细测试范围见[共存评估](coexistence-feasibility.md)。

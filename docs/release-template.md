@@ -27,7 +27,7 @@
 | **APK 整合包（推荐，优先下载）** | [下载 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)，直接交给系统安装器安装，无需分包安装器；已有用户实机安装验证通过。 |
 | **APKS 整合包（备用）** | [下载 APKS](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks)，使用 MT 管理器 / SAI 等分包安装器安装。 |
 | **模块 APK（进阶用户）** | [下载模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-module.apk)，供已有兼容模块环境或自行嵌入的进阶用户使用，不能单独作为 Apple Music 播放器使用。 |
-| **共存 APK（测试备用）** | [下载共存测试 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test.apk)，独立包名，可保留现有应用；需要单独登录，等待用户实机验证。 |
+| **共存 APK（测试备用）** | [下载共存测试 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r2.apk)，独立包名，可保留现有应用；第二版可覆盖升级共存初版；修正资源查找与封面 Provider 匹配，并增加歌词开关提示，待实机复测。 |
 
 APK 和 APKS 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**；选择其中一种即可。`.sha256` 文件只用于校验。
 
@@ -41,7 +41,7 @@ APK 和 APKS 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**�
 
 共存版移除共享 UID，隔离 Provider / 自身权限，并使用专用模块适配安装身份。原始类名、资源命名空间、Apple Music DEX 和 arm64 原生库保留。为避免争抢官方外部入口，共存版不注册浏览器音乐链接及第三方音乐 SDK 认证入口，请从自己的图标进入登录。
 
-此包用于用户实机验证，尚未确认安装共存、账号登录、DRM、在线/离线播放和歌词功能；测试说明见[主分支共存评估](https://github.com/tcrrry/AMPP-Lyrics/blob/main/docs/coexistence-feasibility.md)。不需要为试用卸载现有应用。
+用户反馈初版可登录，开启“自定义歌词替换”后歌词匹配正常；先前未收到匹配输入是独立配置的开关未开启。第二版针对列表文字重叠和封面空白，修正动态资源查找的包名兼容及封面 Provider 的 UriMatcher authority，并在歌词页显示匹配开关、Apple Music ID；显示效果及用户反馈的资料库分类入口闪退仍待实机复测；暂未取得闪退堆栈，不将本次兼容修正等同于闪退已解决。首次使用请在“自定义歌词”开启“自定义歌词替换”和“自动实时补全”，保存后完全退出重开。DRM、在线/离线播放和歌词稳定性仍未确认；测试说明见[主分支共存评估](https://github.com/tcrrry/AMPP-Lyrics/blob/main/docs/coexistence-feasibility.md)。不需要为试用卸载现有应用。
 
 所有整合包仍基于 Apple Music 6.5.3（1599），要求 Android 11 及以上，只包含 arm64-v8a / xxxhdpi 变体，并非全架构通用包；模块内部版本为 1.6.3（113）。账号、订阅和播放权限仍按原服务规则。
 
@@ -63,5 +63,5 @@ APK 和 APKS 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**�
 309062ad1c1987160e493277a396ab784b1c052e6bf96c68b8ba92a5188a5781  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk
 e08466d26ba06c55b8f491a52e4c7bd383602f68cb3ce06af1182c0167123f10  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks
 e14317e4faedd01a9131ff4258a2f0291e8d69a30fa22278962da027e6107873  AMPP-Lyrics-module.apk
-5fccb283e21d1a27f5c47ffcd23c858dc140405d1c4063d56f753b936923ed49  AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test.apk
+4d13fbd0d41f0d56e0ba7910619c9223cc2bd3ab39dc1b3ac9274d60a7aba467  AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r2.apk
 ```
