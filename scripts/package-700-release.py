@@ -48,10 +48,10 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     module = args.output/'AMPP-Lyrics-module.apk'
     shutil.copyfile(args.module, module)
-    module_identity = "name='dev.amenhancer.module.debug' versionCode='118' versionName='1.6.8-debug'"
+    module_identity = "name='dev.amenhancer.module.debug' versionCode='119' versionName='1.6.9-debug'"
     if module_identity not in run(args.aapt2,'dump','badging',module):
         p.error('Wrong ordinary v1.3 module')
-    if "name='dev.amenhancer.module.coexist' versionCode='118' versionName='1.6.8-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
+    if "name='dev.amenhancer.module.coexist' versionCode='119' versionName='1.6.9-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
         p.error('Wrong coexist v1.3 module')
     checksum(module)
     apk = args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk'
@@ -137,7 +137,10 @@ def main():
             'deviceVerified':{'test-r1-ordinary-apk':'User reports normal use except missing separate lyrics settings entry; entry fixed in v1.3',
                               'v1.3-original-apk-and-coexist':'User reports missing pronunciation; corrected in this update',
                               'v1.3-pronunciation-fix':'User confirms word original renders normally; line pronunciation order and brightness were incorrect',
-                              'v1.3-line-and-translation-fix':False},
+                              'v1.3-line-and-translation-fix':False,
+                              'v1.3-offset-and-settings-fix':False},
+            'settings':{'offsetSavedDuringInput':True,'offsetReloadDebounceMs':250,
+                        'offsetReloadWithoutSearchInvalidation':True,'scrollRestoredAfterLayout':True},
             'presentation':{'order':['pronunciation','original','translation'],
                             'auxiliaryColor':'white_alpha_35','auxiliaryViewAlpha':1.0,
                             'auxiliaryOutsideWordGradient':True,

@@ -102,4 +102,22 @@ class DesktopLyricsTtmlConverterTest {
             assertFalse(requireNotNull(DesktopLyricsPresentation.fromTtml(ttml)).pronunciation)
         }
     }
+    @Test fun offsetShiftsLineTimingInBothDirectionsAndKeepsTranslationKeys() {
+        val result = DirectLyricsRepository.Result(lyrics = "[00:10]hello\n[00:15]world", translatedLyrics = "[00:10]你好\n[00:15]世界")
+        val early = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 20000L, 1500))
+        val late = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 20000L, -1500))
+        assertTrue(early.contains("<p begin=\"0:08.500\""))
+        assertTrue(late.contains("<p begin=\"0:11.500\""))
+        assertTrue(early.contains("<text for=\"L1\">你好</text>"))
+        assertTrue(late.contains("<text for=\"L1\">你好</text>"))
+    }
+
+    @Test fun offsetShiftsActualWordSpansRatherThanOnlyLineStart() {
+        val result = DirectLyricsRepository.Result(lyrics = "[00:10]hello", wordLyrics = "[10000,2000](10000,1000,0)hel(11000,1000,0)lo")
+        val early = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 20000L, 1500))
+        val late = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 20000L, -1500))
+        assertTrue(early.contains("<span begin=\"0:08.500\" end=\"0:09.500\">hel</span>"))
+        assertTrue(late.contains("<span begin=\"0:11.500\" end=\"0:12.500\">hel</span>"))
+    }
+
 }

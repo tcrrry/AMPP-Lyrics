@@ -77,4 +77,33 @@ class SettingsUiThemeAndroidTest {
         assertEquals(4, replacement.selectionEnd)
         assertTrue(replacement.hasFocus())
     }
+    @Test fun ordinaryRefreshRestoresScrollAfterLayoutWithoutRestoringOldApiProfileText() {
+        val root = FrameLayout(activity)
+        fun scroll(value: String): android.widget.ScrollView = android.widget.ScrollView(activity).apply {
+            addView(android.widget.LinearLayout(activity).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                addView(EditText(activity).apply { hint = "HTTPS 服务地址"; setText(value) })
+                addView(View(activity), android.widget.LinearLayout.LayoutParams(300, 2500))
+            })
+        }
+        val old = scroll("旧API配置")
+        root.addView(old)
+        activity.setContentView(root)
+        fun layout() {
+            root.measure(View.MeasureSpec.makeMeasureSpec(400, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY))
+            root.layout(0, 0, 400, 600)
+        }
+        layout(); old.scrollTo(0, 450)
+        lateinit var replacement: android.widget.ScrollView
+        SettingsUiTheme.refreshPreservingScroll(root) {
+            root.removeAllViews(); replacement = scroll("新API配置"); root.addView(replacement)
+        }
+        layout()
+        assertEquals(450, replacement.scrollY)
+        assertEquals("新API配置", ((replacement.getChildAt(0) as ViewGroup).getChildAt(0) as EditText).text.toString())
+        replacement.scrollTo(0, 800)
+        layout()
+        assertEquals(800, replacement.scrollY)
+    }
+
 }

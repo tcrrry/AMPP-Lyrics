@@ -72,4 +72,50 @@ class LyricsSettingsRefreshAndroidTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
         assertEquals(1, refreshes)
     }
+    @Test fun offsetInputPersistsBeforeRefreshAndRestoresOnRebind() {
+        val label = android.widget.TextView(activity)
+        val slider = TcrrryLyricsSettingsUi.offsetSlider(activity, 123L, "QQ音乐", label)
+        var refresh: Pair<Long, Boolean>? = null
+        dev.amenhancer.module.hook.CurrentLyricsSourceStatus.installRefreshHandler { id, user -> refresh = id to user; true }
+        activity.setContentView(slider)
+        assertTrue(slider.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id,
+            android.os.Bundle().apply { putFloat(android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, 65f) }))
+        assertEquals(1500, dev.amenhancer.module.hook.CurrentLyricsSourceStatus.offsetMs(activity, 123L, "QQ音乐"))
+        assertEquals("+1.5s", label.text.toString())
+        assertNull(refresh)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+        assertEquals(123L to false, refresh)
+        assertEquals("QQ音乐", dev.amenhancer.module.hook.CurrentLyricsSourceStatus.selectedSource(activity, 123L))
+        val rebuilt = TcrrryLyricsSettingsUi.offsetSlider(activity, 123L, "QQ音乐", label)
+        assertEquals(65, rebuilt.progress)
+    }
+
+    @Test fun offsetCanReturnToZeroAndMoveBothWaysWithoutRebuildingSlider() {
+        val slider = TcrrryLyricsSettingsUi.offsetSlider(activity, 456L, "网易云音乐", android.widget.TextView(activity))
+        val applied = mutableListOf<Int>()
+        dev.amenhancer.module.hook.CurrentLyricsSourceStatus.installRefreshHandler { id, _ ->
+            applied += dev.amenhancer.module.hook.CurrentLyricsSourceStatus.offsetMs(activity, id, "网易云音乐"); true
+        }
+        activity.setContentView(slider)
+        for (progress in listOf(65f, 50f, 35f)) {
+            slider.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id,
+                android.os.Bundle().apply { putFloat(android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, progress) })
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+        }
+        assertEquals(listOf(1500, 0, -1500), applied)
+    }
+
+    @Test fun offsetChangeDoesNotAffectOtherSongsOrProviders() {
+        val status = dev.amenhancer.module.hook.CurrentLyricsSourceStatus
+        status.setOffsetMs(activity, 789L, "QQ音乐", 400)
+        status.setOffsetMs(activity, 999L, "网易云音乐", -300)
+        val slider = TcrrryLyricsSettingsUi.offsetSlider(activity, 789L, "网易云音乐", android.widget.TextView(activity))
+        activity.setContentView(slider)
+        slider.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id,
+            android.os.Bundle().apply { putFloat(android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, 60f) })
+        assertEquals(1000, status.offsetMs(activity, 789L, "网易云音乐"))
+        assertEquals(400, status.offsetMs(activity, 789L, "QQ音乐"))
+        assertEquals(-300, status.offsetMs(activity, 999L, "网易云音乐"))
+    }
+
 }

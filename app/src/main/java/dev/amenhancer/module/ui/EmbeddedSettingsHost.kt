@@ -2225,7 +2225,7 @@ internal class EmbeddedSettingsHost private constructor(
             }
         }
         dialogReference = weakDialog
-        pageRefresh = { renderPage() }
+        pageRefresh = { SettingsUiTheme.refreshPreservingScroll(pageContent) { renderPage() } }
         renderPage()
         dialog.show()
     }

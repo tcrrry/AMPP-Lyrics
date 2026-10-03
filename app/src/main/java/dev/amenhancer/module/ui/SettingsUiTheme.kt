@@ -114,14 +114,29 @@ internal object SettingsUiTheme {
         if (root is ViewGroup) for (i in 0 until root.childCount) addAll(descendants(root.getChildAt(i)))
     }
 
+    /** Restore after layout, when a replacement ScrollView has its real scroll range. */
+    fun refreshPreservingScroll(root: View, render: () -> Unit) {
+        val positions = descendants(root).filterIsInstance<ScrollView>().map { it.scrollY }
+        render()
+        descendants(root).filterIsInstance<ScrollView>().zip(positions).forEach { (view, y) ->
+            if (view.isLaidOut) view.scrollTo(0, y) else {
+                view.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+                    override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, oldL: Int, oldT: Int, oldR: Int, oldB: Int) {
+                        view.removeOnLayoutChangeListener(this)
+                        view.scrollTo(0, y)
+                    }
+                })
+            }
+        }
+    }
+
     /** Appearance changes preserve unsaved API fields, selection, focus and scroll. */
     fun refreshPreservingInput(root: View, render: () -> Unit) {
         data class Field(val hint: String?, val value: String, val start: Int, val end: Int, val focused: Boolean)
         val fields = descendants(root).filterIsInstance<EditText>().map {
             Field(it.hint?.toString(), it.text.toString(), it.selectionStart, it.selectionEnd, it.hasFocus())
         }
-        val offsets = descendants(root).filterIsInstance<ScrollView>().map { it.scrollY }
-        render()
+        refreshPreservingScroll(root, render)
         descendants(root).filterIsInstance<EditText>().zip(fields).forEach { (input, old) ->
             if (input.hint?.toString() == old.hint) {
                 input.setText(old.value)
@@ -129,7 +144,6 @@ internal object SettingsUiTheme {
                 if (old.focused) input.requestFocus()
             }
         }
-        descendants(root).filterIsInstance<ScrollView>().zip(offsets).forEach { (view, y) -> view.post { view.scrollTo(0, y) } }
     }
 
     /** Returns an acknowledgement for explicit refreshes, avoiding a second poll refresh. */

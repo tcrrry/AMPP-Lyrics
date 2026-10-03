@@ -46,7 +46,7 @@ internal object TcrrryLyricsSettingsUi {
         val selected = CurrentLyricsSourceStatus.selectedSource(activity, id)
         val applied = CurrentLyricsSourceStatus.appliedSource(activity, id)
         val provider = applied?.takeIf { it.startsWith("desktop-lyrics:") }?.substringAfter(':') ?: selected
-        val offset = provider?.let { CurrentLyricsSourceStatus.offsetMs(activity, id, it) } ?: 0
+        var offsetDragging = false
         parent.setBackgroundColor(SettingsUiTheme.colors(activity).background)
         parent.setPadding(dp(activity, 18), dp(activity, 16), dp(activity, 18), dp(activity, 28))
 
@@ -122,32 +122,10 @@ internal object TcrrryLyricsSettingsUi {
             addView(LinearLayout(activity).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 addView(title(activity, "歌词偏移", 18f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                val value = label(activity, formatOffset(offset), 13f, SettingsUiTheme.colors(activity).text)
+                val value = label(activity, formatOffset(provider?.let { CurrentLyricsSourceStatus.offsetMs(activity, id, it) } ?: 0), 13f, SettingsUiTheme.colors(activity).text)
                 addView(value)
                 addView(View(activity), LinearLayout.LayoutParams(0, 1))
-                val bar = SeekBar(activity).apply {
-                    max = 100
-                    progress = offset / 100 + 50
-                    progressTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).primary)
-                    progressBackgroundTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).outline)
-                    thumbTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).text)
-                    isEnabled = id > 0L && provider in SOURCES
-                    splitTrack = false
-                    setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                        override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                            if (fromUser) value.text = formatOffset((progress - 50) * 100)
-                        }
-                        override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-                        override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                            val source = provider ?: return
-                            val next = ((seekBar?.progress ?: 50) - 50) * 100
-                            CurrentLyricsSourceStatus.selectSource(activity, id, source)
-                            CurrentLyricsSourceStatus.setOffsetMs(activity, id, source, next)
-                            if (next != offset) CurrentLyricsSourceStatus.refresh(id)
-                            refreshPage()
-                        }
-                    })
-                }
+                val bar = offsetSlider(activity, id, provider, value) { offsetDragging = it }
                 // Keep the value beside the title while the slider gets its own row.
                 setTag(bar)
             })
@@ -161,8 +139,8 @@ internal object TcrrryLyricsSettingsUi {
             addView(action(activity, "重置当前来源偏移") {
                 if (id > 0L && provider != null) {
                     CurrentLyricsSourceStatus.setOffsetMs(activity, id, provider, 0)
-                    CurrentLyricsSourceStatus.refresh(id)
-                    refreshPage()
+                    slider.progress = 50
+                    CurrentLyricsSourceStatus.refreshSilently(id)
                 }
             }, fullMargin(activity, 10))
         }, fullMargin(activity, 12))
@@ -185,10 +163,50 @@ internal object TcrrryLyricsSettingsUi {
             override fun run() {
                 if (!parent.isAttachedToWindow) return
                 if (CurrentLyricsSourceStatus.description(activity, id) != initial ||
-                    CurrentLyricsSourceStatus.translationStatus(activity, id) != initialTranslation) refreshPage()
+                    CurrentLyricsSourceStatus.translationStatus(activity, id) != initialTranslation) {
+                    if (offsetDragging) parent.postDelayed(this, 1_000L) else refreshPage()
+                }
                 else parent.postDelayed(this, 1_000L)
             }
         }, 1_000L)
+    }
+
+    /** Persist user input before asynchronous status updates can rebuild the page. */
+    internal fun offsetSlider(activity: Activity, id: Long, source: String?, value: TextView,
+        tracking: (Boolean) -> Unit = {}): SeekBar {
+        val offset = source?.let { CurrentLyricsSourceStatus.offsetMs(activity, id, it) } ?: 0
+        val bar = SeekBar(activity)
+        val applyOffset = Runnable {
+            if (source == null || id <= 0L) return@Runnable
+            CurrentLyricsSourceStatus.refreshSilently(id)
+        }
+        return bar.apply {
+            max = 100
+            progress = offset / 100 + 50
+            progressTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).primary)
+            progressBackgroundTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).outline)
+            thumbTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).text)
+            isEnabled = id > 0L && source in SOURCES && source != null
+            splitTrack = false
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    val next = (progress - 50) * 100
+                    value.text = formatOffset(next)
+                    if (fromUser && source != null) {
+                        CurrentLyricsSourceStatus.selectSource(activity, id, source)
+                        CurrentLyricsSourceStatus.setOffsetMs(activity, id, source, next)
+                        removeCallbacks(applyOffset)
+                        postDelayed(applyOffset, 250L)
+                    }
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) { tracking(true) }
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                    tracking(false)
+                    removeCallbacks(applyOffset)
+                    applyOffset.run()
+                }
+            })
+        }
     }
 
     /** Status is informational; it updates itself without a click action. */
