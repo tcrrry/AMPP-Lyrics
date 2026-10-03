@@ -95,6 +95,7 @@ class OrdinarySettingsWritePolicyTest {
                 phoneLiquidGlassEnabled = true,
                 futureBlurEnabled = false,
                 lyricBlurRadiusOffsetPx = 6,
+                customLyricsEnabled = false,
                 fontManifest = committedManifest,
             ),
         )
