@@ -127,14 +127,14 @@ internal object StaticCollapsedInterceptGuard {
 
     private fun isTransformedFlatRoot(child: View): Boolean {
         val resources = child.resources
-        val flatRootId = resources.getIdentifier(FLAT_ROOT, "id", ModuleConstants.TARGET_PACKAGE)
+        val flatRootId = resources.getIdentifier(FLAT_ROOT, "id", ModuleConstants.RESOURCE_PACKAGE)
         if (flatRootId == 0) return false
         val root = generateSequence(child) { it.parent as? View }
             .firstOrNull { it.id == flatRootId }
             ?: return false
-        val tabsFrameId = resources.getIdentifier(TABS_FRAME, "id", ModuleConstants.TARGET_PACKAGE)
-        val playerContainerId = resources.getIdentifier(PLAYER_CONTAINER, "id", ModuleConstants.TARGET_PACKAGE)
-        val playerSheetId = resources.getIdentifier(PLAYER_SHEET, "id", ModuleConstants.TARGET_PACKAGE)
+        val tabsFrameId = resources.getIdentifier(TABS_FRAME, "id", ModuleConstants.RESOURCE_PACKAGE)
+        val playerContainerId = resources.getIdentifier(PLAYER_CONTAINER, "id", ModuleConstants.RESOURCE_PACKAGE)
+        val playerSheetId = resources.getIdentifier(PLAYER_SHEET, "id", ModuleConstants.RESOURCE_PACKAGE)
         if (tabsFrameId == 0 || playerContainerId == 0 || playerSheetId == 0) return false
         if (child.id !in setOf(flatRootId, playerContainerId, playerSheetId)) return false
         return root.getTag(R.id.am_enhancer_dual_pane_state) != null &&
@@ -144,14 +144,14 @@ internal object StaticCollapsedInterceptGuard {
 
     private fun isInPlayerButtonRegion(child: View, event: MotionEvent): Boolean {
         val resources = child.resources
-        val flatRootId = resources.getIdentifier(FLAT_ROOT, "id", ModuleConstants.TARGET_PACKAGE)
+        val flatRootId = resources.getIdentifier(FLAT_ROOT, "id", ModuleConstants.RESOURCE_PACKAGE)
         if (flatRootId == 0) return false
         val root = generateSequence(child) { it.parent as? View }
             .firstOrNull { it.id == flatRootId }
             ?: return false
         val buttonIds = listOf(PLAYER_LYRICS, PLAYER_QUEUE)
             .mapNotNull { name ->
-                resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE).takeIf { it != 0 }
+                resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE).takeIf { it != 0 }
             }
         val x = event.rawX.roundToInt()
         val y = event.rawY.roundToInt()

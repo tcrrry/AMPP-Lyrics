@@ -1,0 +1,60 @@
+name: 构建备用共存 APK（测试版）
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  coexist-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      APK: AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test.apk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;35.0.0 build-tools;37.0.0 platforms;android-37.0
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 测试两种模块身份并构建共存模块
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest :app:testCoexistUnitTest :app:lintCoexist :app:assembleCoexist --no-daemon
+      - name: 下载固定底包与工具
+        run: |
+          set -euo pipefail
+          mkdir -p inputs dist
+          gh release download v1.1 --pattern 'AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks*' --dir inputs
+          (cd inputs && sha256sum -c AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks.sha256)
+          gh release download V1.4.9 --repo REAndroid/APKEditor --pattern '*.jar' --dir inputs
+          gh release download v1.0.7 --repo 7723mod/NPatch --pattern '*.jar' --dir inputs
+      - name: 构建并静态校验共存 APK
+        run: |
+          set -euo pipefail
+          python3 scripts/package-coexist-apk.py \
+            inputs/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks \
+            app/build/outputs/apk/coexist/app-coexist.apk "dist/$APK" \
+            --editor inputs/APKEditor-1.4.9.jar \
+            --npatch inputs/jar-v1.0.7-741-release.jar \
+            --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            --aapt2 "$ANDROID_HOME/build-tools/35.0.0/aapt2"
+      - name: 保存共存测试 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AMPP-Lyrics-coexist-test
+          path: dist/*
+          if-no-files-found: error
+      - name: 添加备用共存下载（保留现有附件）
+        run: |
+          set -euo pipefail
+          # Upload only new filenames. Never replace the regular APK/APKS/module.
+          gh release upload v1.1 "dist/$APK" "dist/$APK.sha256"

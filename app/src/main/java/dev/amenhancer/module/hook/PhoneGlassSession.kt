@@ -145,7 +145,7 @@ internal open class PhoneGlassSession(
     protected fun resourceId(name: String, type: String): Int {
         val key = "$type/$name"
         resourceIds[key]?.let { return it }
-        val id = activity.resources.getIdentifier(name, type, ModuleConstants.TARGET_PACKAGE)
+        val id = activity.resources.getIdentifier(name, type, ModuleConstants.RESOURCE_PACKAGE)
         if (id != 0) resourceIds[key] = id
         return id
     }
@@ -274,7 +274,7 @@ internal open class PhoneGlassSession(
             miniRoot?.let { states.remove(it)?.restore(it) }
             miniContent?.let { states.remove(it)?.restore(it) }
             miniRoot = root
-            miniContent = root.findViewById(activity.resources.getIdentifier("mini_player_content", "id", ModuleConstants.TARGET_PACKAGE))
+            miniContent = root.findViewById(activity.resources.getIdentifier("mini_player_content", "id", ModuleConstants.RESOURCE_PACKAGE))
             val bg = backdrop ?: return
             val glass = GlassHostView(moduleContext()).also { miniGlass = it }
             glass.alpha = 0f
@@ -466,7 +466,7 @@ internal open class PhoneGlassSession(
             }
             content.layoutParams = params
             listOf("video_surface_container", "mini_player_play_btn", "mini_player_next_btn").forEach { name ->
-                val id = activity.resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE)
+                val id = activity.resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE)
                 content.findViewById<View>(id)?.let { child ->
                     save(child)
                     child.layoutParams = child.layoutParams.apply {

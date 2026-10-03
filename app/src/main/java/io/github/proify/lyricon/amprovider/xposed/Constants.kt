@@ -8,7 +8,7 @@ package io.github.proify.lyricon.amprovider.xposed
 
 object Constants {
     const val PROVIDER_PACKAGE_NAME: String = "com.juren233.hyperlyricsenhanced"
-    const val APPLE_MUSIC_PACKAGE_NAME: String = "com.apple.android.music"
+    const val APPLE_MUSIC_PACKAGE_NAME: String = dev.amenhancer.module.ModuleConstants.TARGET_PACKAGE
     const val APPLE_MEDIA3_METADATA_ID_KEY: String =
         "com.apple.android.music.playback.metadata.METADATA_KEY_MEDIA_ID"
 

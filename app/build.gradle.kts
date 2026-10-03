@@ -39,6 +39,7 @@ android {
         targetSdk = 37
         versionCode = 113
         versionName = "1.6.3"
+        buildConfigField("String", "HOST_PACKAGE", "\"com.apple.android.music\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -58,6 +59,13 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+        }
+        create("coexist") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".coexist"
+            versionNameSuffix = "-coexist"
+            matchingFallbacks += "debug"
+            buildConfigField("String", "HOST_PACKAGE", "\"com.tcrrry.ampplyrics.coexist\"")
         }
         release {
             isMinifyEnabled = false

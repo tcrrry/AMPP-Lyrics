@@ -110,7 +110,7 @@ private object RightLyricsPaneLayout {
     }
 
     private fun targetId(resources: android.content.res.Resources, name: String): Int =
-        resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE)
+        resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE)
             .takeIf { it != 0 }
             ?: error("id/$name resource ID was unavailable")
 
@@ -258,7 +258,7 @@ private object TranslationsPopupOffsetHook {
         val popupMenuId = resources.getIdentifier(
             TRANSLATIONS_POPUP_MENU,
             "id",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         ).takeIf { it != 0 } ?: run {
             sparseDebug("translations popup offset skipped: id/translations_popup_menu missing")
             return
@@ -304,9 +304,9 @@ private object TranslationsPopupOffsetHook {
      * keeps the shift on popups anchored inside the lyrics sheet only.
      */
     private fun findLyricsSheetRoot(anchor: View, resources: android.content.res.Resources): View? {
-        val controlsId = resources.getIdentifier(CONTROLS, "id", ModuleConstants.TARGET_PACKAGE)
+        val controlsId = resources.getIdentifier(CONTROLS, "id", ModuleConstants.RESOURCE_PACKAGE)
             .takeIf { it != 0 } ?: return null
-        val gradientsId = resources.getIdentifier(RECYCLER_VIEW_GRADIENTS, "id", ModuleConstants.TARGET_PACKAGE)
+        val gradientsId = resources.getIdentifier(RECYCLER_VIEW_GRADIENTS, "id", ModuleConstants.RESOURCE_PACKAGE)
             .takeIf { it != 0 } ?: return null
         var candidate = anchor.parent as? View
         while (candidate != null) {
@@ -526,14 +526,14 @@ internal class AppleMusicDualPaneTarget(
                     val bottomNavigationId = resources.getIdentifier(
                         "bottom_navigation",
                         "id",
-                        ModuleConstants.TARGET_PACKAGE,
+                        ModuleConstants.RESOURCE_PACKAGE,
                     )
                     if (bottomNavigationId == 0) return
                     if (navigation.id != bottomNavigationId) return
                     val tabsHeightId = resources.getIdentifier(
                         "navigation_tabs_height",
                         "dimen",
-                        ModuleConstants.TARGET_PACKAGE,
+                        ModuleConstants.RESOURCE_PACKAGE,
                     )
                     if (tabsHeightId == 0) return
                     val tabsHeight = resources.getDimensionPixelSize(tabsHeightId)
@@ -843,12 +843,12 @@ internal class AppleMusicDualPaneTarget(
                     val stackedRootId = resources.getIdentifier(
                         "bottom_navigation_root_stacked",
                         "id",
-                        ModuleConstants.TARGET_PACKAGE,
+                        ModuleConstants.RESOURCE_PACKAGE,
                     )
                     val flatRootId = resources.getIdentifier(
                         "bottom_navigation_root_flat",
                         "id",
-                        ModuleConstants.TARGET_PACKAGE,
+                        ModuleConstants.RESOURCE_PACKAGE,
                     )
                     val flatRoot = if (flatRootId != 0) {
                         root.findViewById<View>(flatRootId)
@@ -1045,7 +1045,7 @@ internal object TabletModeQualifier {
         val tabletId = context.resources.getIdentifier(
             "is_tablet",
             "bool",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         )
         if (tabletId == 0) return false
         return runCatching { context.resources.getBoolean(tabletId) }.getOrDefault(false)
@@ -1235,7 +1235,7 @@ private object ConstraintLayoutPane {
             BOTTOM_NAVIGATION_ROOT_STACKED,
             BOTTOM_NAVIGATION_ROOT_FLAT,
         ).mapNotNull { name ->
-            resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE)
+            resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE)
                 .takeIf { it != 0 }
         }
         val suppliedRoot = view as? ViewGroup
@@ -1325,8 +1325,8 @@ private object ConstraintLayoutPane {
 
     fun install(root: ViewGroup): DualPaneState {
         val resources = root.resources
-        val playerRootId = resources.getIdentifier(PLAYER_ROOT, "id", ModuleConstants.TARGET_PACKAGE)
-        val playerHostId = resources.getIdentifier(PLAYER_FRAGMENTS_HOST, "id", ModuleConstants.TARGET_PACKAGE)
+        val playerRootId = resources.getIdentifier(PLAYER_ROOT, "id", ModuleConstants.RESOURCE_PACKAGE)
+        val playerHostId = resources.getIdentifier(PLAYER_FRAGMENTS_HOST, "id", ModuleConstants.RESOURCE_PACKAGE)
         require(playerRootId != 0 && playerHostId != 0) { "player root/host resource IDs were unavailable" }
 
         val playerRoot = root.findViewById<View>(playerRootId) as? ViewGroup
@@ -1406,13 +1406,13 @@ private object ConstraintLayoutPane {
         val artworkId = playerRoot.resources.getIdentifier(
             ARTWORK_CONTAINER,
             "id",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         )
         if (artworkId == 0) return null
         val barrierId = playerRoot.resources.getIdentifier(
             METADATA_BARRIER_TOP,
             "id",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         )
         if (barrierId == 0) return null
         val nativeSizeByArtwork = WeakHashMap<View, Int>()
@@ -1562,7 +1562,7 @@ private object ConstraintLayoutPane {
         val elevationId = resources.getIdentifier(
             PLAYER_CONTAINER_ELEVATION,
             "dimen",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         )
         if (elevationId != 0) tabsFrame.elevation = resources.getDimension(elevationId)
         tabsFrame.requestLayout()
@@ -1725,7 +1725,7 @@ private object ConstraintLayoutPane {
     private fun installTabsDivider(tabsFrame: FrameLayout, resources: android.content.res.Resources) {
         val dividerId = targetId(resources, NAVIGATION_TABS_DIVIDER)
         if (tabsFrame.findViewById<View>(dividerId) != null) return
-        val separatorId = resources.getIdentifier("separator_color", "color", ModuleConstants.TARGET_PACKAGE)
+        val separatorId = resources.getIdentifier("separator_color", "color", ModuleConstants.RESOURCE_PACKAGE)
         val divider = View(tabsFrame.context).apply {
             id = dividerId
             if (separatorId != 0) setBackgroundColor(resources.getColor(separatorId, tabsFrame.context.theme))
@@ -1778,7 +1778,7 @@ private object ConstraintLayoutPane {
         resources: android.content.res.Resources,
         name: String,
         type: String = "id",
-    ): Int = resources.getIdentifier(name, type, ModuleConstants.TARGET_PACKAGE)
+    ): Int = resources.getIdentifier(name, type, ModuleConstants.RESOURCE_PACKAGE)
         .takeIf { it != 0 }
         ?: error("$type/$name resource ID was unavailable")
 

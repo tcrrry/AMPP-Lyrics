@@ -131,6 +131,7 @@ class HookEntry : XposedModule() {
         }
         if (!bootstrap.prepare(param.packageName, processName, param.isFirstPackage)) return
         ModernXposedRuntime.attach(this)
+        CoexistenceRoutingRuntime.install()
         val targetClassLoader = param.classLoader
         installApplicationBootstrap(param.applicationInfo.className, targetClassLoader)
     }

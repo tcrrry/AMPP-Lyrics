@@ -48,7 +48,7 @@ internal object NativeLyricsSourceMenu {
         val fragment = loader.loadClass("com.apple.android.music.player.fragment.PlayerLyricsViewFragment")
         fun bind(root: View?, fragment: Any?) {
             root ?: return
-            val id = root.resources.getIdentifier("translations_button", "id", ModuleConstants.TARGET_PACKAGE)
+            val id = root.resources.getIdentifier("translations_button", "id", ModuleConstants.RESOURCE_PACKAGE)
             val button = root.findViewById<View>(id) ?: return
             registerAnchor(button)
             if (fragment != null) {
@@ -78,7 +78,7 @@ internal object NativeLyricsSourceMenu {
             override fun beforeHookedMethod(param: MethodHookParam) {
                 val root = runCatching { param.thisObject?.let { ModernXposedRuntime.callMethod(it, "getView") as? View } }.getOrNull()
                     ?: return
-                val id = root.resources.getIdentifier("translations_button", "id", ModuleConstants.TARGET_PACKAGE)
+                val id = root.resources.getIdentifier("translations_button", "id", ModuleConstants.RESOURCE_PACKAGE)
                 root.findViewById<View>(id)?.let(::unregisterAnchor)
             }
         })
@@ -90,7 +90,7 @@ internal object NativeLyricsSourceMenu {
                     if (!anchors.containsKey(anchor)) return
                     val popup = param.thisObject as? PopupWindow ?: return
                     val menu = popup.contentView as? LinearLayout ?: return
-                    val id = menu.resources.getIdentifier("translations_popup_menu", "id", ModuleConstants.TARGET_PACKAGE)
+                    val id = menu.resources.getIdentifier("translations_popup_menu", "id", ModuleConstants.RESOURCE_PACKAGE)
                     if (id == 0 || menu.id != id) return
                     runCatching {
                         publishAnchorPage(anchor)

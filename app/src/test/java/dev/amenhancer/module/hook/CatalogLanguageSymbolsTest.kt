@@ -1,5 +1,7 @@
 package dev.amenhancer.module.hook
 
+import dev.amenhancer.module.ModuleConstants
+
 import android.content.Context
 import com.apple.android.music.commerce.jsinterface.ITunes
 import aa.d
@@ -115,7 +117,7 @@ class CatalogLanguageSymbolsTest {
             classes = mapOf(storeFrontArrayName to LanguageArrayFixture::class.java),
         )
         val resolution = IndexedTargetSymbolResolver(
-            TargetBuild("com.apple.android.music", "6.5.1", 1583L),
+            TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.1", 1583L),
             source,
         ).resolve(AppleMusicSymbols.StoreFrontLanguageArrayMethod)
 
@@ -131,7 +133,7 @@ class CatalogLanguageSymbolsTest {
             classes = mapOf(storeFrontArrayName to LanguageArrayFixture::class.java),
         )
         val resolution = IndexedTargetSymbolResolver(
-            TargetBuild("com.apple.android.music", "6.5.0", 1580L),
+            TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.0", 1580L),
             source,
         ).resolve(AppleMusicSymbols.StoreFrontLanguageArrayMethod)
 

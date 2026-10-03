@@ -10,6 +10,18 @@ import org.junit.Test
 
 class EmbeddedBootstrapTest {
     @Test
+    fun `each artifact rejects the other installed host identity`() {
+        val otherHost = if (ModuleConstants.TARGET_PACKAGE == "com.apple.android.music") {
+            "com.tcrrry.ampplyrics.coexist"
+        } else {
+            "com.apple.android.music"
+        }
+        assertFalse(EmbeddedBootstrap().prepare(otherHost, otherHost, true))
+        assertFalse(EmbeddedBootstrap().supports(TargetBuild(otherHost, "6.5.3", 1599L)))
+        assertEquals("com.apple.android.music", ModuleConstants.RESOURCE_PACKAGE)
+    }
+
+    @Test
     fun `an empty package-ready process name is deferred to application verification`() {
         val bootstrap = EmbeddedBootstrap()
 
