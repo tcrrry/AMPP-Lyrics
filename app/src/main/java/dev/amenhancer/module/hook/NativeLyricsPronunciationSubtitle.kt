@@ -1,13 +1,14 @@
 package dev.amenhancer.module.hook
 
 import android.annotation.SuppressLint
+import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import dev.amenhancer.module.lyrics.DesktopLyricsPresentation
 import java.util.Collections
 import java.util.WeakHashMap
 
-/** Keep managed romanization in Apple's non-karaoke subtitle TextView. */
+/** Keep managed auxiliary tracks ordered and outside original-lyrics highlighting. */
 internal object NativeLyricsPronunciationSubtitle {
     private val managed = Collections.synchronizedMap(WeakHashMap<Any, Boolean>())
     internal data class Selection(val owner: Any, val lineId: Int, val pronunciation: Boolean, val translation: Boolean) {
@@ -23,9 +24,34 @@ internal object NativeLyricsPronunciationSubtitle {
     private fun auxiliaryTextColor(view: TextView): Int =
         runCatching { view.context.getColor(view.resources.getIdentifier("white_alpha_35", "color", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE)) }.getOrDefault(0x59ffffff)
 
+    private val auxiliaryStyles = Collections.synchronizedMap(WeakHashMap<TextView, Int>())
+    internal fun releaseAuxiliary(view: View) { auxiliaryStyles.remove(view) }
+    internal fun protectedAlpha(view: Any?, requested: Float): Float =
+        if (auxiliaryStyles.containsKey(view)) 1f else requested
+    internal fun protectedColor(view: Any?, requested: Int): Int = auxiliaryStyles[view] ?: requested
+
+    private fun installAuxiliaryStyleGuard() {
+        ModernXposedRuntime.hookMethod(View::class.java.getDeclaredMethod("setAlpha", Float::class.javaPrimitiveType), object : ModernMethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                param.args[0] = protectedAlpha(param.thisObject, param.args[0] as Float)
+            }
+        })
+        ModernXposedRuntime.hookMethod(TextView::class.java.getDeclaredMethod("setTextColor", Int::class.javaPrimitiveType), object : ModernMethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                param.args[0] = protectedColor(param.thisObject, param.args[0] as Int)
+            }
+        })
+        ModernXposedRuntime.hookMethod(TextView::class.java.getDeclaredMethod("setTextColor", android.content.res.ColorStateList::class.java), object : ModernMethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                auxiliaryStyles[param.thisObject]?.let { param.args[0] = android.content.res.ColorStateList.valueOf(it) }
+            }
+        })
+    }
+
     private val renderingHeader = ThreadLocal<Boolean>()
 
     internal fun styleAuxiliary(view: TextView) {
+        auxiliaryStyles[view] = auxiliaryTextColor(view)
         view.setTextColor(auxiliaryTextColor(view))
         view.alpha = 1f
     }
@@ -68,15 +94,21 @@ internal object NativeLyricsPronunciationSubtitle {
     private val selection = ThreadLocal<Selection?>()
 
     fun remember(pointer: Any, ttml: String) {
-        if (DesktopLyricsPresentation.fromTtml(ttml)?.pronunciation == true && TtmlTimingPolicy.isWord(ttml)) {
-            managed[pointer] = true
+        if (DesktopLyricsPresentation.fromTtml(ttml) != null) {
+            managed[pointer] = TtmlTimingPolicy.isWord(ttml)
         } else managed.remove(pointer)
     }
 
     internal fun isManaged(pointer: Any?): Boolean = pointer != null && managed.containsKey(pointer)
 
+    internal fun isManagedWord(pointer: Any?): Boolean = pointer != null && managed[pointer] == true
+    internal fun isManagedLine(pointer: Any?): Boolean = pointer != null && managed[pointer] == false
+
     fun install(loader: ClassLoader, build: TargetBuild = TargetBuild.UNKNOWN) {
         val modern = build.versionName == "7.0.0-beta" && build.versionCode == 1606L
+        runCatching { installAuxiliaryStyleGuard() }
+            .onFailure { ModernXposedRuntime.log("auxiliary brightness guard unavailable", it) }
+        if (modern) NativeLineLyricsPresentation.install(loader)
         runCatching {
             val adapter = loader.loadClass("com.apple.android.music.player.A")
             val base = loader.loadClass(if (modern) "com.apple.android.music.player.n1" else "com.apple.android.music.player.i1")
@@ -107,7 +139,7 @@ internal object NativeLyricsPronunciationSubtitle {
             val cachedText = loader.loadClass(if (modern) "com.apple.android.music.player.n1\$b" else "com.apple.android.music.player.i1\$b").getDeclaredField("v").apply { isAccessible = true }
             val payloads = listOf("h", "i").map { base.getDeclaredField(it).apply { isAccessible = true }.get(null) }
             var enabled = false
-            fun owns(value: Any?): Boolean = enabled && value != null && isManaged(pointer.invoke(value))
+            fun owns(value: Any?): Boolean = enabled && value != null && isManagedWord(pointer.invoke(value))
 
             ModernXposedRuntime.hookMethod(subtitle, object : ModernMethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {

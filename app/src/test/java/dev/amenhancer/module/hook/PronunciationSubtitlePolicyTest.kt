@@ -27,19 +27,20 @@ class PronunciationSubtitlePolicyTest {
         assertFalse(NativeLyricsPronunciationSubtitle.isManaged(pointer))
         assertFalse(NativeLyricsPronunciationSubtitle.isManaged(null))
     }
-    @Test fun `only exact marked Word pronunciation pointer is registered`() {
+    @Test fun `marked Word and Line pointers select separate rendering paths`() {
         val marker = DesktopLyricsPresentation("QQ音乐", true, true, false, false, true).marker()
         val pointer = Any()
         NativeLyricsPronunciationSubtitle.remember(pointer, "$marker<tt itunes:timing=\"Word\"></tt>")
         assertTrue(NativeLyricsPronunciationSubtitle.isManaged(pointer))
         assertFalse(NativeLyricsPronunciationSubtitle.isManaged(Any()))
         NativeLyricsPronunciationSubtitle.remember(pointer, "$marker<tt itunes:timing=\"Line\"></tt>")
-        assertFalse(NativeLyricsPronunciationSubtitle.isManaged(pointer))
+        assertTrue(NativeLyricsPronunciationSubtitle.isManagedLine(pointer))
+        assertFalse(NativeLyricsPronunciationSubtitle.isManagedWord(pointer))
     }
-    @Test fun `source with no pronunciation is not registered`() {
+    @Test fun `source without pronunciation still protects its translation`() {
         val marker = DesktopLyricsPresentation("网易云音乐", true, true, false, false, false).marker()
         val pointer = Any()
         NativeLyricsPronunciationSubtitle.remember(pointer, "$marker<tt itunes:timing=\"Word\"></tt>")
-        assertFalse(NativeLyricsPronunciationSubtitle.isManaged(pointer))
+        assertTrue(NativeLyricsPronunciationSubtitle.isManagedWord(pointer))
     }
 }

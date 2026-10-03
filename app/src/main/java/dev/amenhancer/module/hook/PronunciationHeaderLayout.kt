@@ -11,7 +11,7 @@ internal object PronunciationHeaderLayout {
     private val headers = WeakHashMap<ViewGroup, Edge>()
     private val footers = WeakHashMap<ViewGroup, Edge>()
 
-    private fun field(type: Class<*>, name: String) = type.getField(
+    internal fun field(type: Class<*>, name: String) = type.getField(
         if (type.name == "androidx.constraintlayout.widget.ConstraintLayout\$b") {
             // Verified against the 6.5.3 and 1606 constraint resolvers.
             when (name) {
@@ -114,6 +114,7 @@ internal object PronunciationHeaderLayout {
         }
         val margin = (view?.layoutParams as? ViewGroup.MarginLayoutParams)?.let { if (above) it.topMargin else it.bottomMargin } ?: edge.margin
         (parameters as? ViewGroup.MarginLayoutParams)?.let { if (above) it.topMargin = margin else it.bottomMargin = margin }
+        if (view != null) NativeLyricsPronunciationSubtitle.releaseAuxiliary(view)
         (view?.parent as? ViewGroup)?.removeView(view)
         container.layoutParams = parameters
     }

@@ -48,10 +48,10 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     module = args.output/'AMPP-Lyrics-module.apk'
     shutil.copyfile(args.module, module)
-    module_identity = "name='dev.amenhancer.module.debug' versionCode='117' versionName='1.6.7-debug'"
+    module_identity = "name='dev.amenhancer.module.debug' versionCode='118' versionName='1.6.8-debug'"
     if module_identity not in run(args.aapt2,'dump','badging',module):
         p.error('Wrong ordinary v1.3 module')
-    if "name='dev.amenhancer.module.coexist' versionCode='117' versionName='1.6.7-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
+    if "name='dev.amenhancer.module.coexist' versionCode='118' versionName='1.6.8-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
         p.error('Wrong coexist v1.3 module')
     checksum(module)
     apk = args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk'
@@ -136,10 +136,13 @@ def main():
     report={'release':'v1.3','host':'7.0.0-beta/1606','staticVerified':True,
             'deviceVerified':{'test-r1-ordinary-apk':'User reports normal use except missing separate lyrics settings entry; entry fixed in v1.3',
                               'v1.3-original-apk-and-coexist':'User reports missing pronunciation; corrected in this update',
-                              'v1.3-pronunciation-fix':False},
+                              'v1.3-pronunciation-fix':'User confirms word original renders normally; line pronunciation order and brightness were incorrect',
+                              'v1.3-line-and-translation-fix':False},
             'presentation':{'order':['pronunciation','original','translation'],
                             'auxiliaryColor':'white_alpha_35','auxiliaryViewAlpha':1.0,
-                            'auxiliaryOutsideWordGradient':True},
+                            'auxiliaryOutsideWordGradient':True,
+                            'timingModes':['Word','Line'], 'wordTranslationWithoutPronunciation':True,
+                            'lineAuxiliaryNativeAlphaGuard':True},
             'files':{path.name:{'sha256':single.digest(path),'bytes':path.stat().st_size}
                      for path in args.output.iterdir() if path.suffix in ('.apk','.apks')}}
     (args.output/'v1.3-validation.json').write_text(json.dumps(report,indent=2)+'\n')

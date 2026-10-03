@@ -61,6 +61,25 @@ def main():
     method(line, 'getLineId()I')
     for name in ('getHtmlPronunciationLineText', 'getHtmlPronunciationBackgroundVocalsLineText'):
         method(line, name+'()Ljava/lang/String;')
+    line_adapter = 'com/apple/android/music/player/Y0'
+    method(line_adapter, 'y()Lcom/apple/android/music/ttml/javanative/model/SongInfo$SongInfoPtr;')
+    method(line_adapter, 'f(I)I')
+    method(line_adapter, 'k('+holder+'I)V')
+    method(line_adapter, 'l('+holder+'ILjava/util/List;)V')
+    method(line_adapter, 'U(Lcom/apple/android/music/player/Y0$j;I)V')
+    field(base+'$b', 'u', 'Landroidx/databinding/ViewDataBinding;')
+    for name in ('b0', 'Z', 'a0'):
+        field('q8/l9', name, 'Lcom/apple/android/music/common/views/CustomTextView;')
+    # Style interception relies on the actual auxiliary class inheriting framework setters.
+    checks += 1
+    auxiliary_type = 'Lcom/apple/android/music/common/views/CustomTextView;'
+    while auxiliary_type in classes:
+        contract = classes[auxiliary_type]
+        if any(m.startswith(('setAlpha(', 'setTextColor(')) for m in contract['methods']):
+            raise RuntimeError('Auxiliary view overrides guarded framework setters: '+auxiliary_type)
+        auxiliary_type = contract['super']
+    if auxiliary_type != 'Landroid/widget/TextView;':
+        raise RuntimeError('Auxiliary view does not inherit guarded TextView setters')
     constraints = 'androidx/constraintlayout/widget/ConstraintLayout$b'
     method(constraints, '<init>(Landroid/view/ViewGroup$LayoutParams;)V')
     for name in ('i','j','k','l','t','v'): field(constraints, name, 'I')
