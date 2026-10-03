@@ -1,16 +1,16 @@
 {
-  "source": "898ccace171647f6820e78da345d4d97736f78fb",
-  "run": "37102178535",
+  "source": "654b3204eac2137c70f2687c865c9fdb595f249a",
+  "run": "37102477622",
   "steps": {
-    "validation": "failure",
-    "inputs": "skipped",
-    "package": "skipped",
-    "release": "skipped"
+    "validation": "success",
+    "inputs": "success",
+    "package": "success",
+    "release": "success"
   },
   "tests": {
     "app": {
       "tests": 917,
-      "failures": 1,
+      "failures": 0,
       "errors": 0,
       "skipped": 0
     },
@@ -21,5 +21,9 @@
       "skipped": 0
     }
   },
-  "checksums": []
+  "checksums": [
+    "9d2666590aa22fd6c737c48a1686963a5c19d6e37c8292aab0fa6223e438a9fd  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk",
+    "a892a0ad2ebd65bc7d95fc1a36ece981230a139992452dcbbbb9b5e4b35cf3d5  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks",
+    "0d3c4f22e1c074ef5cd1ac15daba38ff0cf9d1f56113ebaf47c0df4655550e52  AMPP-Lyrics-module.apk"
+  ]
 }
