@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       apk_source:
-        description: 静态校验的试验版单 APK 临时下载地址
+        description: 静态校验的单 APK 临时下载地址
         required: true
         type: string
       module_source:

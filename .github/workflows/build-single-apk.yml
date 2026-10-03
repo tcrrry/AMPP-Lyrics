@@ -1,4 +1,4 @@
-name: 构建并发布 v1.1 单 APK（试验版）
+name: 构建并发布 v1.1 单 APK
 
 on:
   push:

@@ -5,9 +5,9 @@
 
 **为 Apple Music 补充多源歌词、逐字歌词、译文与发音**
 
-**APKS / 单 APK 整合安装包 · 无需 Root · 无需另装 LSPosed 或模块**
+**单 APK / APKS 整合安装包 · 无需 Root · 无需另装 LSPosed 或模块**
 
-[下载 APKS（普通用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks) · [单 APK（试验版）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk) · [模块 APK（进阶用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-module.apk) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
+**[下载 APK（推荐）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)** · [下载 APKS（备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks) · [模块 APK（进阶用户）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-module.apk) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
 
 </div>
 
@@ -15,7 +15,7 @@
 
 本项目基于 **[Zennmn / AM-plus-plus（AM++）](https://github.com/Zennmn/AM-plus-plus)** 制作，在 AM++ 的 Apple Music 增强功能上，融入我的 **[桌面歌词 / Desktop Lyrics](https://github.com/tcrrry/desktop-lyrics)** 项目中的歌词匹配与翻译能力。
 
-面向普通用户提供已经嵌入模块的 Apple Music **APKS 整合包**，通过 MT 管理器、SAI 等分包安装器安装；另提供可直接交给系统安装器安装的 **单 APK 整合包（试验版）**。两者均不需要 Root、LSPosed 或另装模块 APK。单 APK 尚未完成实机安装、登录和播放验收。
+面向普通用户优先推荐已嵌入模块的 Apple Music **单 APK 整合包**，直接打开即可交给系统安装器安装，已有用户实机安装验证通过。另提供 **APKS 整合包**，通过 MT 管理器、SAI 等分包安装器安装。两者均不需要 Root、LSPosed 或另装模块 APK。
 
 歌词功能在 Apple Music 内部显示；桌面歌词项目中的独立悬浮窗不包含在这个整合包里。Apple Music 的账号、订阅和播放权限仍按原服务规则使用。
 
@@ -45,8 +45,8 @@
 
 | 安装文件 | 适合谁 | 使用方式 |
 | --- | --- | --- |
-| **[APKS 整合包](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks)** | **普通用户，优先选择** | 用 MT 管理器等分包安装器安装，直接使用，无需 Root 或额外模块框架。 |
-| [单 APK 整合包（试验版）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk) | 想直接安装单文件的 arm64 设备用户 | 直接打开 APK 安装；已完成静态校验，尚需实机验证安装、登录及播放。 |
+| **[APK 整合包（推荐）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)** | **普通用户，优先选择** | 直接打开 APK 安装，无需分包安装器；已有用户实机安装验证通过。 |
+| [APKS 整合包（备用）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks) | 需要分包安装方式的用户 | 用 MT 管理器、SAI 等分包安装器安装，无需 Root 或额外模块框架。 |
 | [模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/latest/download/AMPP-Lyrics-module.apk) | 已有兼容模块环境、或需要自行嵌入的进阶用户 | 独立模块，不是 Apple Music 主程序，不能单独安装后直接播放音乐。 |
 
 v1.1 在 v1 / r25 基础上加入发音覆盖率评分，并允许更完整的发音结果刷新播放页。歌曲匹配可信度优先，同档内译文、逐字、发音覆盖率权重依次为 200、100、50；手动指定来源仍然优先。已安装 v1 或 r25 的用户需安装新版整合包才能获得这次优化。旧版 v1 保留在发布列表中。
@@ -55,8 +55,8 @@ v1.1 在 v1 / r25 基础上加入发音覆盖率评分，并允许更完整的�
 
 ## 安装与使用（无需 Root）
 
-1. 选择 **APKS 整合包**或 **单 APK 整合包（试验版）**，不用另外下载模块 APK。
-2. APKS 使用 MT 管理器等分包安装器安装；单 APK 直接打开，按系统提示允许安装应用。
+1. 优先下载 **APK 整合包**，不用另外下载模块 APK；需要分包安装方式时选择 **APKS 整合包**。
+2. APK 直接打开，按系统提示允许安装应用；APKS 使用 MT 管理器等分包安装器安装。
 3. 不要把 `.apks` 改成 `.apk`，也不要只安装从压缩包里取出的某一个分包。
 4. 安装完成后打开 Apple Music，按正常流程登录并播放音乐；需要订阅的功能仍需要 Apple Music 订阅。
 5. 在 Apple Music 设置中打开 **Tcrrry 歌词设置**，或长按播放页歌词菜单中的来源项进入；AM++ 原有功能使用单独的 **AM++ 模块设置**入口。
@@ -75,13 +75,13 @@ v1.1 在 v1 / r25 基础上加入发音覆盖率评分，并允许更完整的�
 - 单 APK 由相同的原始分包合并后重新嵌入 v1.1 模块，也只包含 arm64-v8a 与 xxxhdpi 资源，不是全架构通用包。
 - 整合包的 Apple Music 主程序要求 **Android 11（API 30）及以上**；模块最低系统要求不代表整合包最低要求。
 - 当前整合包针对 **Apple Music 6.5.3（1599）** 构建；其他版本需要另外适配。
-- 跨机型和其他屏幕密度尚未完成全面验证，遇到问题请附上手机型号、Android 版本和安装／显示情况。
+- 单 APK 已有用户实机安装验证通过；登录、播放和歌词显示，以及跨机型和其他屏幕密度尚未完成全面验证，遇到问题请附上手机型号、Android 版本和安装／显示情况。
 
 ## 常见问题
 
 ### 需要 Root 或安装 LSPosed 吗？
 
-**APKS 和单 APK 整合包均不需要。** 模块已嵌入；APKS 用分包安装器，单 APK 用系统安装器。
+**APK 和 APKS 整合包均不需要。** 模块已嵌入；APK 用系统安装器，APKS 用分包安装器。
 
 ### 整合包和模块 APK 都要安装吗？
 

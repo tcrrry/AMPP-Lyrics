@@ -24,15 +24,15 @@
 
 | 安装包 | 下载与使用 |
 | --- | --- |
-| **APKS 整合包** | [下载 APKS](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks)，使用 MT 管理器 / SAI 等分包安装器安装。 |
-| **单 APK 整合包（试验版）** | [下载单 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)，直接交给系统安装器安装，无需分包安装器。 |
-| **模块 APK** | [下载模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-module.apk)，供已有兼容模块环境或自行嵌入的进阶用户使用，不能单独作为 Apple Music 播放器使用。 |
+| **APK 整合包（推荐，优先下载）** | [下载 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk)，直接交给系统安装器安装，无需分包安装器；已有用户实机安装验证通过。 |
+| **APKS 整合包（备用）** | [下载 APKS](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks)，使用 MT 管理器 / SAI 等分包安装器安装。 |
+| **模块 APK（进阶用户）** | [下载模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.1/AMPP-Lyrics-module.apk)，供已有兼容模块环境或自行嵌入的进阶用户使用，不能单独作为 Apple Music 播放器使用。 |
 
-APKS 和单 APK 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**；选择其中一种即可。`.sha256` 文件只用于校验。
+APK 和 APKS 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK**；选择其中一种即可。`.sha256` 文件只用于校验。
 
-### 新增单 APK（2026-10-02）
+### 单 APK 安装反馈（2026-10-03）
 
-从 v1.1 APKS 保留的原始分包合并后重新嵌入相同模块，沿用 NPatch 1.0.7（741）、现有配置及测试签名。只改变打包形态，模块功能与 v1.1 一致。单 APK 已通过静态校验，**尚未完成实机安装、登录、播放和歌词显示测试**。
+从 v1.1 APKS 保留的原始分包合并后重新嵌入相同模块，沿用 NPatch 1.0.7（741）、现有配置及测试签名。只改变打包形态，模块功能与 v1.1 一致。单 APK 已通过静态校验，**已有用户反馈实机安装正常，现优先推荐 APK**。登录、播放和歌词显示仍需进一步验证，不将安装成功等同于全部功能验证通过。
 
 两种整合包仍基于 Apple Music 6.5.3（1599），要求 Android 11 及以上，只包含 arm64-v8a / xxxhdpi 变体，并非全架构通用包；模块内部版本为 1.6.3（113）。账号、订阅和播放权限仍按原服务规则。
 
@@ -49,7 +49,7 @@ APKS 和单 APK 都已嵌入模块，**无需 Root、LSPosed 或另装模块 APK
 ## SHA-256
 
 ```text
-e08466d26ba06c55b8f491a52e4c7bd383602f68cb3ce06af1182c0167123f10  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks
 309062ad1c1987160e493277a396ab784b1c052e6bf96c68b8ba92a5188a5781  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apk
+e08466d26ba06c55b8f491a52e4c7bd383602f68cb3ce06af1182c0167123f10  AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks
 e14317e4faedd01a9131ff4258a2f0291e8d69a30fa22278962da027e6107873  AMPP-Lyrics-module.apk
 ```
