@@ -13,7 +13,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      APK: AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test.apk
+      APK: AMPP-Lyrics-AppleMusic-6.5.3-arm64-coexist-test-r2.apk
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

@@ -31,4 +31,19 @@ class CoexistenceRoutingPolicyTest {
         assertEquals("content://$target.provider/x",
             CoexistenceRoutingPolicy.contentUri("content://$target.provider/x", target))
     }
+    @Test
+    fun `context package resolves ids in the original resource table`() {
+        assertEquals(CoexistenceRoutingPolicy.ORIGINAL,
+            CoexistenceRoutingPolicy.resourcePackage(target, target))
+        assertEquals("com.apple.android.music:id/track_title",
+            CoexistenceRoutingPolicy.resourceName("$target:id/track_title", target))
+        listOf("android", "dev.amenhancer.module.coexist", "com.apple.android.musicother", null).forEach {
+            assertEquals(it, CoexistenceRoutingPolicy.resourcePackage(it, target))
+        }
+        listOf("track_title", "android:id/content", "2131234567", null).forEach {
+            assertEquals(it, CoexistenceRoutingPolicy.resourceName(it, target))
+        }
+        assertEquals(target, CoexistenceRoutingPolicy.resourcePackage(target, CoexistenceRoutingPolicy.ORIGINAL))
+    }
+
 }

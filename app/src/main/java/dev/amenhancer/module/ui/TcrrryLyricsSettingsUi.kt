@@ -20,6 +20,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import dev.amenhancer.module.CurrentSongDetails
+import dev.amenhancer.module.model.ModuleSettings
 import dev.amenhancer.module.hook.CurrentLyricsSourceStatus
 import dev.amenhancer.module.hook.EmbeddedMlKit
 import dev.amenhancer.module.hook.TcrrryLyricsHistory
@@ -40,7 +41,7 @@ internal object TcrrryLyricsSettingsUi {
     private val SOURCES = listOf<String?>(null, "QQ音乐", "网易云音乐", "LRCLIB")
 
     fun render(activity: Activity, parent: LinearLayout, song: CurrentSongDetails?, refreshPage: () -> Unit,
-        refreshAppearance: () -> Unit) {
+        refreshAppearance: () -> Unit, settings: ModuleSettings, openMatchingSettings: () -> Unit) {
         val id = song?.appleMusicId ?: 0L
         val selected = CurrentLyricsSourceStatus.selectedSource(activity, id)
         val applied = CurrentLyricsSourceStatus.appliedSource(activity, id)
@@ -52,11 +53,21 @@ internal object TcrrryLyricsSettingsUi {
         parent.addView(card(activity).apply {
             addView(title(activity, song?.title ?: "暂无播放歌曲", 19f))
             addView(label(activity, song?.artist.orEmpty(), 13f, SettingsUiTheme.colors(activity).secondary))
+            val matchingDisabled = !settings.customLyricsEnabled || !settings.automaticLyricsEnabled
+            if (matchingDisabled) {
+                addView(label(activity,
+                    "自动匹配尚未开启：请在自定义歌词中开启“自定义歌词替换”和“自动实时补全”，保存后完全退出重开应用。",
+                    13f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 10))
+                addView(action(activity, "前往开启歌词匹配", click = openMatchingSettings), fullMargin(activity, 10))
+            }
             addView(sourceStatusLabel(activity) { CurrentLyricsSourceStatus.description(activity, id) },
                 fullMargin(activity, 12))
             addView(action(activity, "查看匹配输入") {
                 SettingsUiTheme.dialogBuilder(activity).setTitle("传入歌词匹配器的信息")
-                    .setMessage(CurrentLyricsSourceStatus.matchInput(activity, id))
+                    .setMessage("Apple Music ID：${id.takeIf { it > 0L } ?: "未取得"}\n" +
+                        "自定义歌词替换：${if (settings.customLyricsEnabled) "开启" else "关闭"}\n" +
+                        "自动实时补全：${if (settings.automaticLyricsEnabled) "开启" else "关闭"}\n\n" +
+                        CurrentLyricsSourceStatus.matchInput(activity, id))
                     .setPositiveButton("知道了", null).show()
             }, fullMargin(activity, 10))
         })

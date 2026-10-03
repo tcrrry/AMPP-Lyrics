@@ -3,6 +3,8 @@ package dev.amenhancer.module.hook
 import android.content.ComponentName
 import android.content.ContentResolver
 import android.content.Intent
+import android.content.res.Resources
+import java.lang.reflect.Executable
 import android.net.Uri
 import dev.amenhancer.module.ModuleConstants
 import java.lang.reflect.Modifier
@@ -13,6 +15,15 @@ internal object CoexistenceRoutingPolicy {
 
     fun packageName(value: String?, target: String): String? =
         if (value == ORIGINAL) target else value
+
+    // Manifest identity differs from the unchanged resources.arsc package.
+    // ConstraintLayout and host code resolve IDs using Context.getPackageName().
+    fun resourcePackage(value: String?, target: String): String? =
+        if (target != ORIGINAL && value == target) ORIGINAL else value
+
+    fun resourceName(value: String?, target: String): String? =
+        if (target != ORIGINAL && value?.startsWith("$target:") == true)
+            ORIGINAL + value.removePrefix(target) else value
 
     fun authority(value: String?, target: String): String? = when {
         value == ORIGINAL -> target
@@ -37,10 +48,20 @@ internal object CoexistenceRoutingRuntime {
         val target = ModuleConstants.TARGET_PACKAGE
         if (target == CoexistenceRoutingPolicy.ORIGINAL) return
 
+        fun installHook(method: Executable, callback: ModernMethodHook) {
+            runCatching { ModernXposedRuntime.hookMethod(method, callback) }
+                .onFailure { ModernXposedRuntime.log("coexist hook unavailable: $method", it) }
+        }
         fun hook(type: Class<*>, name: String, rewrite: (ModernMethodHook.MethodHookParam) -> Unit) {
-            ModernXposedRuntime.hookAllMethods(type, name, object : ModernMethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) = rewrite(param)
-            })
+            type.declaredMethods.filter { it.name == name }.forEach { method ->
+                installHook(method, object : ModernMethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) = rewrite(param)
+                })
+            }
+        }
+        hook(Resources::class.java, "getIdentifier") { param ->
+            param.args[0] = CoexistenceRoutingPolicy.resourceName(param.args[0] as? String, target)
+            param.args[2] = CoexistenceRoutingPolicy.resourcePackage(param.args[2] as? String, target)
         }
         // Preserve class names; redirect only the installed package identity.
         hook(Intent::class.java, "setPackage") { param ->
@@ -55,7 +76,7 @@ internal object CoexistenceRoutingRuntime {
         ComponentName::class.java.declaredConstructors
             .filter { it.parameterTypes.contentEquals(arrayOf(String::class.java, String::class.java)) }
             .forEach { constructor ->
-                ModernXposedRuntime.hookMethod(constructor, object : ModernMethodHook() {
+                installHook(constructor, object : ModernMethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         param.args[0] = CoexistenceRoutingPolicy.packageName(param.args[0] as? String, target)
                     }
@@ -79,7 +100,7 @@ internal object CoexistenceRoutingRuntime {
                     method.parameterTypes.none { it == Uri::class.java }) {
                     method.parameterTypes.indexOfFirst { it == String::class.java }
                 } else -1
-                ModernXposedRuntime.hookMethod(method, object : ModernMethodHook() {
+                installHook(method, object : ModernMethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         param.args.forEachIndexed { index, value ->
                             when {

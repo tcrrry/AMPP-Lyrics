@@ -2141,7 +2141,11 @@ internal class EmbeddedSettingsHost private constructor(
             headerDivider.visibility = if (subPage) View.VISIBLE else View.GONE
             if (page == EmbeddedSettingsPage.TCRRRY_LYRICS) {
                 TcrrryLyricsSettingsUi.render(activity, content, controller.currentSongDetails(),
-                    refreshPage = { pageRefresh?.invoke() }, refreshAppearance = { refreshAppearance() })
+                    refreshPage = { pageRefresh?.invoke() }, refreshAppearance = { refreshAppearance() },
+                    settings = draft, openMatchingSettings = {
+                        page = EmbeddedSettingsPage.CUSTOM_LYRICS
+                        renderPage()
+                    })
             } else if (customLyricsPage) {
                 renderEmbeddedCustomLyricsPage(
                     activity = activity,
