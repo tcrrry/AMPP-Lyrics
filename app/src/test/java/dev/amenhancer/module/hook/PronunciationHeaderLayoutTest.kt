@@ -92,6 +92,60 @@ class PronunciationHeaderLayoutTest {
         assertEquals(background.id, (words.layoutParams as HostParams).bottomToTop)
     }
 
+    // 1606 A.U accepts D9/b9 auxiliary bindings; M9/O9 word-pronunciation
+    // bindings are rejected even though all four roots are CustomTextView.
+    private val nativeLayouts = mapOf(
+        "lyrics_translation_line_karaoke" to 0x7f0d0422,
+        "lyrics_bg_translation_line_karaoke" to 0x7f0d0414,
+        "lyrics_word_pronunciation" to 0x7f0d0425,
+        "lyrics_word_pronunciation_bg" to 0x7f0d0426,
+    )
+
+    @Test fun pronunciationUsesAcceptedNativeSubtitleBindingForBothVocalTracks() {
+        for (background in listOf(false, true)) {
+            val (root, words) = row()
+            val original = TextView(activity).apply { text = "君の声" }
+            words.addView(original)
+            try {
+                NativeLyricsPronunciationSubtitle.renderHeader(words, "ki mi no ko e", background,
+                    resolveLayout = { nativeLayouts[it] ?: 0 }) { text, layout ->
+                    val rendered = TextView(activity).apply { this.text = text; textSize = 17f }
+                    words.addView(rendered)
+                    // Like Apple's U, fail after inflation for an incompatible binding.
+                    if (layout !in setOf(0x7f0d0422, 0x7f0d0414)) error("unrecognized layout binding")
+                }
+                assertEquals(1, words.childCount)
+                assertSame(original, words.getChildAt(0))
+                val header = root.getChildAt(1) as TextView
+                assertEquals("ki mi no ko e", header.text.toString())
+                assertEquals(View.VISIBLE, header.visibility)
+                assertEquals(header.id, (words.layoutParams as HostParams).topToBottom)
+            } finally { PronunciationHeaderLayout.clearRow(root) }
+            assertEquals(1, root.childCount)
+            assertEquals("君の声", original.text.toString())
+        }
+    }
+
+    @Test fun rejectedNativeBindingDoesNotLeaveEmptyInflatedViewInWordContainer() {
+        val (root, words) = row()
+        val original = TextView(activity)
+        words.addView(original)
+        try {
+            NativeLyricsPronunciationSubtitle.renderHeader(words, "kimi", false,
+                resolveLayout = { 0x7f0d0425 }) { _, _ ->
+                words.addView(TextView(activity))
+                error("unrecognized layout binding: M9")
+            }
+            fail("Expected native binding failure")
+        } catch (expected: IllegalStateException) {
+            assertEquals("unrecognized layout binding: M9", expected.message)
+        }
+        assertEquals(1, words.childCount)
+        assertSame(original, words.getChildAt(0))
+        assertEquals(1, root.childCount)
+        assertEquals(0, (words.layoutParams as HostParams).topToTop)
+    }
+
     @Test fun unsupportedNativeLayoutsRemainUntouched() {
         val root = FrameLayout(activity)
         val words = FrameLayout(activity)

@@ -48,10 +48,10 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     module = args.output/'AMPP-Lyrics-module.apk'
     shutil.copyfile(args.module, module)
-    module_identity = "name='dev.amenhancer.module.debug' versionCode='116' versionName='1.6.6-debug'"
+    module_identity = "name='dev.amenhancer.module.debug' versionCode='117' versionName='1.6.7-debug'"
     if module_identity not in run(args.aapt2,'dump','badging',module):
         p.error('Wrong ordinary v1.3 module')
-    if "name='dev.amenhancer.module.coexist' versionCode='116' versionName='1.6.6-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
+    if "name='dev.amenhancer.module.coexist' versionCode='117' versionName='1.6.7-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
         p.error('Wrong coexist v1.3 module')
     checksum(module)
     apk = args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk'

@@ -64,13 +64,19 @@ def main():
     constraints = 'androidx/constraintlayout/widget/ConstraintLayout$b'
     method(constraints, '<init>(Landroid/view/ViewGroup$LayoutParams;)V')
     for name in ('i','j','k','t','v'): field(constraints, name, 'I')
+    # Research against the SHA-pinned 1606 mapper: these subtitle bindings
+    # derive from the two types accepted by A.U; ruby word bindings do not.
+    for concrete, parent in (('E9', 'D9'), ('c9', 'b9')):
+        checks += 1
+        if classes['Lq8/'+concrete+';']['super'] != 'Lq8/'+parent+';':
+            raise RuntimeError('Native auxiliary subtitle binding changed: '+concrete)
     vector = 'com/apple/android/mediaservices/javanative/common/StringVector$StringVectorNative'
     method(vector, 'size()J')
     method(vector, 'get(J)Ljava/lang/String;')
     method('com/apple/android/music/playback/util/LocaleUtil', 'matchToSystemLyricsScript(L'+vector+';)Ljava/lang/String;', True)
     resources = subprocess.check_output([str(args.aapt2), 'dump', 'resources', str(args.apk)], text=True)
     for name in ('layout/lyrics_word_karaoke','layout/lyrics_word_karaoke_bg',
-                 'layout/lyrics_word_pronunciation','layout/lyrics_word_pronunciation_bg',
+                 'layout/lyrics_translation_line_karaoke','layout/lyrics_bg_translation_line_karaoke',
                  'color/white_alpha_35','id/translations_button','id/translations_popup_menu'):
         checks += 1
         if not re.search(r'resource 0x[0-9a-f]+ '+name+r'\b', resources):

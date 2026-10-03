@@ -23,6 +23,30 @@ internal object NativeLyricsPronunciationSubtitle {
     private fun auxiliaryTextColor(view: TextView): Int =
         runCatching { view.context.getColor(view.resources.getIdentifier("white_alpha_35", "color", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE)) }.getOrDefault(0x59ffffff)
 
+    /** U/Z only accepts translation subtitle bindings, not word-pronunciation bindings. */
+    internal fun renderHeader(
+        container: ViewGroup,
+        text: String,
+        background: Boolean,
+        resolveLayout: (String) -> Int = { name -> container.resources.getIdentifier(name, "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) },
+        inflate: (String, Int) -> Unit,
+    ) {
+        val layout = resolveLayout(if (background) "lyrics_bg_translation_line_karaoke" else "lyrics_translation_line_karaoke")
+        check(layout != 0) { "Missing native auxiliary subtitle layout" }
+        val count = container.childCount
+        try {
+            inflate(text, layout)
+            check(container.childCount == count + 1) { "Native subtitle did not append one view" }
+            val view = container.getChildAt(count) as? TextView ?: error("Native subtitle is not a TextView")
+            view.setTextColor(auxiliaryTextColor(view))
+            PronunciationHeaderLayout.moveAbove(container, view)
+        } catch (error: Exception) {
+            // Native DataBinding may attach before rejecting a mismatched binding.
+            while (container.childCount > count) container.removeViewAt(count)
+            throw error
+        }
+    }
+
     private val nativeLine = ThreadLocal<Any?>()
     private val selection = ThreadLocal<Selection?>()
 
@@ -83,7 +107,7 @@ internal object NativeLyricsPronunciationSubtitle {
                         val value = nativeLine.get() ?: return@runCatching
                         val container = param.args[2] as ViewGroup
                         if (!PronunciationHeaderLayout.supports(container)) return@runCatching
-                        // Native 6.5.3 main/background word and subtitle layout IDs.
+                        // Main/background word layouts identify the native row being rebuilt.
                         val background = when (param.args[3]) {
                             container.resources.getIdentifier("lyrics_word_karaoke", "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) -> false
                             container.resources.getIdentifier("lyrics_word_karaoke_bg", "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) -> true
@@ -91,13 +115,9 @@ internal object NativeLyricsPronunciationSubtitle {
                         }
                         val text = (if (background) backgroundPronunciation else pronunciation).invoke(value) as? String
                         if (text.isNullOrBlank()) return@runCatching
-                        subtitle.invoke(param.thisObject, text, container,
-                            container.resources.getIdentifier(if (background) "lyrics_word_pronunciation_bg" else "lyrics_word_pronunciation", "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE), param.args[5], 1)
-                        val pronunciationView = container.getChildAt(container.childCount - 1)
-                        // r24 moved this subtitle outside the native gradient, leaving it
-                        // opaque white. Use the same 35% white resource as auxiliary lyrics.
-                        (pronunciationView as? TextView)?.let { it.setTextColor(auxiliaryTextColor(it)) }
-                        PronunciationHeaderLayout.moveAbove(container, pronunciationView)
+                        renderHeader(container, text, background) { value, layout ->
+                            subtitle.invoke(param.thisObject, value, container, layout, param.args[5], 1)
+                        }
                     }.onFailure { ModernXposedRuntime.log("pronunciation header rendering failed open", it) }
                 }
             })

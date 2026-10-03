@@ -3,6 +3,11 @@ on:
   push:
     branches: [release/v1.3-700]
   workflow_dispatch:
+    inputs:
+      replace_existing:
+        description: Replace the existing v1.3 assets after validation (with rollback)
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -15,6 +20,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      REPLACE_EXISTING: ${{ github.event_name == 'workflow_dispatch' && inputs.replace_existing }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -85,29 +91,56 @@ jobs:
           p.write_text(json.dumps(data, indent=2) + '\n')
           PY
           (cd dist && sha256sum -c *.sha256)
-      - name: 直接上传发布草稿（不保存 Actions 产物）
+      - name: 直接上传 Release（不保存 Actions 产物）
         run: |
           set -euo pipefail
           if ! gh release view v1.3 >/dev/null 2>&1; then
             gh release create v1.3 --target "$GITHUB_SHA" --draft --title 'AM++ Lyrics v1.3 · Apple Music 7.0.0-beta' --notes-file docs/release-v1.3.md
           fi
-          test "$(gh release view v1.3 --json isDraft --jq .isDraft)" = true
-          gh release edit v1.3 --target "$GITHUB_SHA" --notes-file docs/release-v1.3.md
-          gh release view v1.3 --json assets --jq .assets > /tmp/existing-assets.json
-          for file in dist/*; do
-            name=$(basename "$file")
-            if jq -e --arg name "$name" 'any(.[]; .name == $name)' /tmp/existing-assets.json >/dev/null; then
-              test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' /tmp/existing-assets.json)" = "sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
-            else
-              gh release upload v1.3 "$file"
-            fi
-          done
-          gh release view v1.3 --json assets --jq .assets > /tmp/uploaded-assets.json
-          python3 - <<'PY'
-          import hashlib, json, pathlib
-          assets = {a['name']: a for a in json.loads(pathlib.Path('/tmp/uploaded-assets.json').read_text())}
-          for p in pathlib.Path('dist').iterdir():
-              assert assets[p.name]['size'] == p.stat().st_size, p.name
-              assert assets[p.name]['digest'] == 'sha256:' + hashlib.file_digest(p.open('rb'), 'sha256').hexdigest(), p.name
-          print('All Release uploads verified; draft ready for publication.')
+          if test "$REPLACE_EXISTING" = true; then
+            test "$(gh release view v1.3 --json isDraft --jq .isDraft)" = false
+            mkdir backup
+            gh api "repos/$GH_REPO/releases" > /tmp/releases-before.json
+            gh release download v1.3 --dir backup
+            gh api "repos/$GH_REPO/git/ref/tags/v1.3" --jq .object.sha > /tmp/previous-tag.txt
+            python3 scripts/verify-release-transfer.py backup --snapshot /tmp/releases-before.json
+            python3 - <<'PY'
+          import json, pathlib
+          releases = json.loads(pathlib.Path('/tmp/releases-before.json').read_text())
+          pathlib.Path('/tmp/previous-notes.md').write_text(next(r['body'] for r in releases if r['tag_name'] == 'v1.3'))
           PY
+            rollback() {
+              status=$?
+              set +e
+              if test "$status" != 0; then
+                echo 'Upload failed; restoring previous v1.3 assets and tag.'
+                gh release upload v1.3 backup/* --clobber
+                gh api --method PATCH "repos/$GH_REPO/git/refs/tags/v1.3" -f sha="$(cat /tmp/previous-tag.txt)" -F force=true --silent
+                gh release edit v1.3 --notes-file /tmp/previous-notes.md --target "$(cat /tmp/previous-tag.txt)"
+              fi
+              exit "$status"
+            }
+            trap rollback EXIT
+            for file in dist/*; do gh release upload v1.3 "$file" --clobber; done
+          else
+            test "$(gh release view v1.3 --json isDraft --jq .isDraft)" = true
+            gh release view v1.3 --json assets --jq .assets > /tmp/existing-assets.json
+            for file in dist/*; do
+              name=$(basename "$file")
+              if jq -e --arg name "$name" 'any(.[]; .name == $name)' /tmp/existing-assets.json >/dev/null; then
+                test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' /tmp/existing-assets.json)" = "sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
+              else
+                gh release upload v1.3 "$file"
+              fi
+            done
+          fi
+          gh api "repos/$GH_REPO/releases" > /tmp/releases-after.json
+          python3 scripts/verify-release-transfer.py dist --snapshot /tmp/releases-after.json
+          if test "$REPLACE_EXISTING" = true; then
+            python3 scripts/verify-release-transfer.py --historical /tmp/releases-before.json /tmp/releases-after.json
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/v1.3" -f sha="$GITHUB_SHA" -F force=true --silent
+            gh release edit v1.3 --target "$GITHUB_SHA" --notes-file docs/release-v1.3.md --latest=true
+            trap - EXIT
+          else
+            gh release edit v1.3 --target "$GITHUB_SHA" --notes-file docs/release-v1.3.md
+          fi
