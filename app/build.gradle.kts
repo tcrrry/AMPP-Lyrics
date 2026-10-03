@@ -26,6 +26,7 @@ val releaseSigningAvailable = listOf(
     releaseKeyAlias,
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
+val coexistenceBuild = providers.gradleProperty("amppCoexistence").orNull == "true"
 
 android {
     buildFeatures { compose = true; buildConfig = true }
@@ -39,7 +40,11 @@ android {
         targetSdk = 37
         versionCode = 113
         versionName = "1.6.3"
-        buildConfigField("String", "HOST_PACKAGE", "\"com.apple.android.music\"")
+        buildConfigField("String", "HOST_PACKAGE", if (coexistenceBuild) {
+            "\"com.tcrrry.ampplyrics.coexist\""
+        } else {
+            "\"com.apple.android.music\""
+        })
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -57,15 +62,8 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
-        }
-        create("coexist") {
-            initWith(getByName("debug"))
-            applicationIdSuffix = ".coexist"
-            versionNameSuffix = "-coexist"
-            matchingFallbacks += "debug"
-            buildConfigField("String", "HOST_PACKAGE", "\"com.tcrrry.ampplyrics.coexist\"")
+            applicationIdSuffix = if (coexistenceBuild) ".coexist" else ".debug"
+            versionNameSuffix = if (coexistenceBuild) "-coexist" else "-debug"
         }
         release {
             isMinifyEnabled = false

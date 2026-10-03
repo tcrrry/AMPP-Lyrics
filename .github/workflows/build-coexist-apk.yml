@@ -28,7 +28,8 @@ jobs:
       - name: 测试两种模块身份并构建共存模块
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest :app:testCoexistUnitTest :app:lintCoexist :app:assembleCoexist --no-daemon
+          ./gradlew :app:testDebugUnitTest --no-daemon
+          ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug -PamppCoexistence=true --no-daemon
       - name: 下载固定底包与工具
         run: |
           set -euo pipefail
@@ -42,7 +43,7 @@ jobs:
           set -euo pipefail
           python3 scripts/package-coexist-apk.py \
             inputs/AMPP-Lyrics-AppleMusic-6.5.3-arm64.apks \
-            app/build/outputs/apk/coexist/app-coexist.apk "dist/$APK" \
+            app/build/outputs/apk/debug/app-debug.apk "dist/$APK" \
             --editor inputs/APKEditor-1.4.9.jar \
             --npatch inputs/jar-v1.0.7-741-release.jar \
             --apksigner "$ANDROID_HOME/build-tools/35.0.0/apksigner" \

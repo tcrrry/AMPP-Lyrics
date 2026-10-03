@@ -36,7 +36,7 @@ def main():
             parser.error(f"Unexpected {name} checksum")
     module_badging = output([args.aapt2, "dump", "badging", args.module])
     if f"name='{MODULE_PACKAGE}'" not in module_badging:
-        parser.error("Build :app:assembleCoexist; do not use the standard module")
+        parser.error("Build :app:assembleDebug -PamppCoexistence=true; do not use the standard module")
     with tempfile.TemporaryDirectory(prefix="ampp-coexist-") as directory:
         work = Path(directory)
         patched, original = work / "patched", work / "original"
