@@ -185,6 +185,8 @@ internal class FragmentSettingsSessions(
         val viewModel = WeakReference(viewModel)
         var active = true
         var category: Any? = null
+        var originalItems: List<*>? = null
+        var displayedItems: Any? = null
     }
     var onLyrics: ((Any) -> Unit)? = null
     private val fragments = WeakHashMap<Any, Session>()
@@ -226,7 +228,12 @@ internal class FragmentSettingsSessions(
     fun transform(viewModel: Any, original: Any?): Any? {
         val session = viewModels[viewModel] ?: return original
         if (!session.active || session.fragment.get() == null) return original
-        return models.prependUnique(original, checkNotNull(session.category))
+        val items = original as? List<*> ?: return original
+        if (session.originalItems == items && session.displayedItems != null) return session.displayedItems
+        return models.prependUnique(items, checkNotNull(session.category)).also {
+            session.originalItems = items.toList()
+            session.displayedItems = it
+        }
     }
 
     @Synchronized

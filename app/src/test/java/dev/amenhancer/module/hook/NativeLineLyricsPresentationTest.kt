@@ -38,6 +38,16 @@ class NativeLineLyricsPresentationTest {
     }
     private fun apply() = NativeLineLyricsPresentation.apply(root, original, pronunciation, translation)
 
+    @Test fun emphasisPlacesSmallOriginalAboveLargePhoneticsAndTranslation() {
+        NativeLineLyricsPresentation.apply(root, original, pronunciation, translation, primaryPronunciation = true)
+        assertEquals(0, params(pronunciation).topToTop)
+        assertEquals(pronunciation.id, params(original).topToBottom)
+        assertEquals(original.id, params(translation).topToBottom)
+        assertEquals(pronunciation.currentTextColor, translation.currentTextColor)
+        NativeLineLyricsPresentation.apply(root, original, pronunciation, translation, primaryPronunciation = false)
+        assertEquals(pronunciation.id, params(original).topToBottom)
+        NativeLineLyricsPresentation.clear(root)
+    }
     @Test fun lineOrderPreservesNativeBindingViewsAndOriginalText() {
         original.text = "フツフツと鳴り出す青春の音"
         pronunciation.text = "fu tsu fu tsu"

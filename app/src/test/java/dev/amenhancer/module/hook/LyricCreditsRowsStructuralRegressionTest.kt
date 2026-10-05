@@ -111,7 +111,7 @@ class LyricCreditsRowsStructuralRegressionTest {
         val creditsBlock = portSource
             .substringAfter("creditsRows.forEach { (child, _) ->")
             .substringBefore("instrumentalRows.forEach")
-        assertTrue(creditsBlock.contains("if (includeFocus) lastLyricFocusBlur else 0f"))
+        assertTrue(creditsBlock.contains("if (focusEnabled) lastLyricFocusBlur else 0f"))
         assertTrue(creditsBlock.contains("lastLyricFocusBlur"))
         assertFalse(creditsBlock.contains("applyRadiusOffset("))
         assertFalse(creditsBlock.contains("MAX_BLUR_RADIUS"))
@@ -140,7 +140,7 @@ class LyricCreditsRowsStructuralRegressionTest {
             .substringAfter("val targets")
             .substringBefore("visibleRows.forEach")
         assertTrue(fallback.contains("lastLyricFocusBlur"))
-        assertTrue(fallback.contains("if (includeFocus) {"))
+        assertTrue(fallback.contains("if (focusEnabled) {"))
         assertTrue(fallback.contains("BidirectionalBlurPolicy.MAX_BLUR_RADIUS"))
         assertTrue(fallback.contains("BidirectionalBlurPolicy.applyRadiusOffset("))
         assertTrue(fallback.contains("offsetPx = blurRadiusOffsetPx"))

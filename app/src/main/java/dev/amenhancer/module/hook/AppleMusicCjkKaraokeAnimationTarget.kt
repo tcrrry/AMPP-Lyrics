@@ -14,12 +14,15 @@ import java.util.WeakHashMap
 
 /**
  * Narrow Apple Music 6.5.2/1586 adapter for the native karaoke rush-gradient
- * path. The host owns all duration/length trigger conditions; AM++ only
- * allows its CJK classifier override for one unmerged native CJK word.
+ * path. Scoped trigger controls preserve real word timing and grouping;
+ * CJK promotion remains restricted to one unmerged native CJK word.
  */
 internal class AppleMusicCjkKaraokeAnimationTarget(
     private val symbols: TargetSymbolResolver,
     private val foregroundTextField: String = "U",
+    private val enableLongLatinWords: Boolean = false,
+    private val glowSettings: () -> dev.amenhancer.module.model.ModuleSettings =
+        dev.amenhancer.module.config.TargetConfigClient::currentSettings,
 ) : CjkKaraokeAnimationTarget {
     private val a0Depth: ThreadLocal<Int> = ThreadLocal.withInitial { 0 }
     private val a0SingleWordStack: ThreadLocal<MutableList<CjkEntryState?>> =
@@ -47,6 +50,7 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
     private var glowTimingHookInstalled = false
     @Volatile
     private var hooksReady = false
+    private val wordPosition = NativeGlowWordPosition()
 
     override fun install(): TargetCapabilityInstall {
         hooksReady = false
@@ -114,9 +118,10 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
         glowEndHookInstalled = installGlowAnimatorEndHook(a0)
         glowViewEndHookInstalled = installGlowViewEndHook(a0)
         glowTimingHookInstalled = installGlowTimingHook(a0)
+        val metadataRestoreInstalled = installGradientMetadataRestoreHook(a0)
 
         val hooksInstalled = a0Installed && helperInstalled && glowEndHookInstalled &&
-            glowViewEndHookInstalled && glowTimingHookInstalled
+            glowViewEndHookInstalled && glowTimingHookInstalled && metadataRestoreInstalled
         hooksReady = hooksInstalled
         if (!hooksInstalled) {
             // Hooks cannot be removed reliably through the modern runtime.  Keep
@@ -129,6 +134,25 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
         return TargetCapabilityInstall.Active(
             "Installed exact single-unmerged-CJK glow end cleanup: ${a0.toGenericString()}",
         )
+    }
+
+    /** Gate values are local in V by this point. d0/c0 must see real word metadata. */
+    private fun installGradientMetadataRestoreHook(a0: Executable): Boolean = runCatching {
+        if (a0.declaringClass.name != "com.apple.android.music.player.A") return@runCatching true
+        val gradient = a0.declaringClass.declaredMethods.single { it.name == "d0" && it.parameterCount == 9 }
+        ModernXposedRuntime.hookMethod(gradient, object : ModernMethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                restoreGradientMetadata(param.args.getOrNull(2))
+            }
+        })
+    }.onFailure { ModernXposedRuntime.log("Glow/word gradient metadata isolation unavailable", it) }.getOrDefault(false)
+
+    private fun restoreGradientMetadata(entry: Any?) {
+        val state = a0Stack().lastOrNull()?.takeIf { it.entry === entry } ?: return
+        runCatching {
+            state.originalTextLength?.let { cachedFields(state.entry.javaClass)["g"]?.setInt(state.entry, it) }
+            state.originalDuration?.let { cachedFields(state.entry.javaClass)["f"]?.setInt(state.entry, it) }
+        }.onFailure { ModernXposedRuntime.log("Glow metadata restore before gradient failed open", it) }
     }
 
     /**
@@ -230,15 +254,16 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
         animator.addListener(object : AnimatorListenerAdapter() {
             private var cleaned = false
 
-            private fun cleanup() {
+            private fun cleanup(reason: String) {
                 if (cleaned) return
                 cleaned = true
+                LyricsPlaybackDiagnostics.record("glow-$reason", "view=${LyricsPlaybackDiagnostics.identity(viewRef.get())} duration=${animatorRef.get()?.duration}")
                 cleanupGlowAnimator(animatorRef.get(), viewRef.get())
             }
 
-            override fun onAnimationCancel(animation: Animator) = cleanup()
+            override fun onAnimationCancel(animation: Animator) = cleanup("cancel")
 
-            override fun onAnimationEnd(animation: Animator) = cleanup()
+            override fun onAnimationEnd(animation: Animator) = cleanup("end")
         })
     }
 
@@ -428,7 +453,22 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
         runCatching {
             val state = a0Stack().lastOrNull() ?: return@runCatching
             val after = specialAnimatorSnapshot(state.entry)
-            if (!hasNewCjkGlowAnimator(state.specialAnimatorsBefore, after)) return@runCatching
+            val started = hasNewCjkGlowAnimator(state.specialAnimatorsBefore, after)
+            LyricsPlaybackDiagnostics.record("glow-result", "started=$started before=${state.specialAnimatorsBefore.size} after=${after.size} views=${state.views.map { LyricsPlaybackDiagnostics.identity(it) }}")
+            if (!started) return@runCatching
+            if (state.originalDuration != null) {
+                // The temporary 1000 ms value opens the host gate, then only its
+                // special glow envelope returns to the real duration. Word masks
+                // use the unchanged native duration argument and are never retimed.
+                val added = after.filterIsInstance<Animator>().filter { candidate ->
+                    state.specialAnimatorsBefore.none { it === candidate }
+                }
+                for (animation in added) {
+                    animation.duration = promotedGlowDuration(animation.duration, state.originalDuration)
+                    animation.startDelay = promotedGlowDuration(animation.startDelay, state.originalDuration)
+                }
+            }
+            if (!state.trackGlow) return@runCatching
             synchronized(trackedGlowViews) {
                 state.views.forEach { view ->
                     if (!trackedGlowViews.containsKey(view)) {
@@ -452,13 +492,18 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
                 a0Depth.set(depth - 1)
             }
             val stack = a0Stack()
-            if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex)
+            if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex)?.let { state ->
+                runCatching { state.originalTextLength?.let { length -> cachedFields(state.entry.javaClass)["g"]?.setInt(state.entry, length) } }
+                    .onFailure { ModernXposedRuntime.log("long-word glow metadata restore failed", it) }
+                runCatching { state.originalDuration?.let { duration -> cachedFields(state.entry.javaClass)["f"]?.setInt(state.entry, duration) } }
+                    .onFailure { ModernXposedRuntime.log("glow duration metadata restore failed", it) }
+            }
             if (stack.isEmpty()) a0SingleWordStack.remove()
         }.onFailure { error -> ModernXposedRuntime.log("CJK karaoke a0 depth cleanup failed open", error) }
     }
 
     private fun isSingleWordScope(): Boolean = runCatching {
-        hooksReady && (a0Depth.get() ?: 0) > 0 && a0Stack().lastOrNull() != null
+        hooksReady && (a0Depth.get() ?: 0) > 0 && a0Stack().lastOrNull()?.trackGlow == true
     }
         .getOrElse { error ->
             ModernXposedRuntime.log("CJK karaoke single-word gate read failed open", error)
@@ -468,7 +513,7 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
     private fun a0Stack(): MutableList<CjkEntryState?> =
         a0SingleWordStack.get() ?: mutableListOf<CjkEntryState?>().also(a0SingleWordStack::set)
 
-    /** Reads only the host's grouping metadata; Apple retains all trigger gates. */
+    /** Reads native grouping metadata and scopes configurable glow gates to this call. */
     private fun readSingleWordGateEntry(param: ModernMethodHook.MethodHookParam): CjkEntryState? =
         runCatching {
             val holder = param.args.getOrNull(0) ?: return@runCatching null
@@ -507,12 +552,40 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
                 },
                 isBackground = background,
             )
-            if (!isSingleUnmergedCjkWord(timing)) return@runCatching null
-            CjkEntryState(
+            val cjk = isSingleUnmergedCjkWord(timing)
+            val longLatin = enableLongLatinWords && isSingleUnmergedLatinWordShape(timing)
+            val settings = glowSettings()
+            val policy = LyricGlowTriggerPolicy(settings.lyricGlowSensitivity, settings.lyricGlowPosition)
+            val terminal = if (policy.position == dev.amenhancer.module.model.LyricGlowPosition.ALL) false else {
+                val row = (param.args.getOrNull(1) as? Number)?.toInt() ?: return@runCatching null
+                wordPosition.terminalIds(param.thisObject ?: return@runCatching null, row)
+                    .any { id -> map.get(id) === entry }
+            }
+            val base = if (longLatin) maxOf(1500, text.toString().trim().length * 120) else 1000
+            val allowed = !background && policy.allows(cumulativeDuration, terminal, base)
+            val promote = allowed && cumulativeDuration in 1..999 &&
+                (cjk || longLatin || isSingleUnmergedLatinWordShape(timing, 1))
+            LyricsPlaybackDiagnostics.record("glow-gate", "row=${param.args.getOrNull(1)} word=$wordId duration=$nativeDuration mergedDuration=$cumulativeDuration chars=$cumulativeLength splits=${timing.splitBindingCount} bg=$background cjk=${isSingleUnmergedCjkWord(timing)} latin=$longLatin")
+            LyricsPlaybackDiagnostics.record("glow-policy", "sensitivity=${policy.sensitivity} position=${policy.position.storageValue} tail=${if (policy.position == dev.amenhancer.module.model.LyricGlowPosition.ALL) "unchecked" else terminal} threshold=${policy.threshold(base, terminal)} allowed=$allowed promoted=$promote")
+            val patchedLength = when {
+                !allowed && !background && cumulativeDuration >= 1000 && cumulativeLength <= 7 -> 8
+                allowed && longLatin -> 7
+                else -> cumulativeLength
+            }
+            val state = CjkEntryState(
                 entry = entry,
                 views = foregroundEntryViews(entry),
                 specialAnimatorsBefore = specialAnimatorSnapshot(entry),
+                originalTextLength = cumulativeLength.takeIf { patchedLength != it },
+                originalDuration = cumulativeDuration.takeIf { promote },
+                trackGlow = cjk || (allowed && (longLatin || promote)),
             )
+            // In the verified native animation method, g controls the
+            // seven-character exclusion: seven allows long Latin, eight denies glow. Restore it after this scoped call;
+            // word indices, text, duration and layout grouping remain native.
+            if (patchedLength != cumulativeLength) cachedFields(entry.javaClass).getValue("g").setInt(entry, patchedLength)
+            if (promote) cachedFields(entry.javaClass).getValue("f").setInt(entry, 1000)
+            state
         }.getOrElse { error ->
             ModernXposedRuntime.log("CJK single-word gate failed closed: ${error.cjkShortMessage()}")
             null
@@ -563,6 +636,9 @@ internal class AppleMusicCjkKaraokeAnimationTarget(
         val entry: Any,
         val views: List<Any>,
         val specialAnimatorsBefore: List<Any>,
+        val originalTextLength: Int? = null,
+        val originalDuration: Int? = null,
+        val trackGlow: Boolean = true,
     )
 
     private data class CjkGlowBaseline(

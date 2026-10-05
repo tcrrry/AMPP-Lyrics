@@ -38,8 +38,8 @@ android {
         applicationId = "dev.amenhancer.module"
         minSdk = 26
         targetSdk = 37
-        versionCode = 119
-        versionName = "1.6.9"
+        versionCode = 137
+        versionName = "1.7.0"
         buildConfigField("String", "HOST_PACKAGE", if (coexistenceBuild) {
             "\"com.tcrrry.ampplyrics.coexist\""
         } else {
@@ -63,7 +63,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = if (coexistenceBuild) ".coexist" else ".debug"
-            versionNameSuffix = if (coexistenceBuild) "-coexist" else "-debug"
+            versionNameSuffix = if (coexistenceBuild) "-coexist" else ""
         }
         release {
             isMinifyEnabled = false
@@ -79,6 +79,7 @@ android {
     packaging {
         resources {
             merges += "META-INF/xposed/*"
+            merges += listOf("META-INF/LICENSE.md", "META-INF/NOTICE.md", "META-INF/CONTRIBUTORS.md")
         }
     }
 }
@@ -98,6 +99,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     // org.json is part of the Android runtime but not of the local JVM; the

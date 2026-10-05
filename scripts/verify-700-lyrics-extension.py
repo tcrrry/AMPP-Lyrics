@@ -37,10 +37,93 @@ def main():
         c = classes['L'+owner+';']
         if c['fields'].get(name) != descriptor or bool(c['field_access'][name] & 8) != static:
             raise RuntimeError(f'Wrong field contract: {owner}.{name}')
+    # Word timing enum and independently adjustable line anticipation.
+    processor = 'com/apple/android/music/ttml/javanative/SongInfoTimeProcessorJavaCpp$SongInfoTimeProcessorNative'
+    method(processor, 'suggestLineOffset(I)V')
+    method(processor, 'getSuggestedLineOffset()I')
+    method('com/apple/android/music/ttml/javanative/model/SongInfo$SongInfoNative', 'getTiming()J')
+    for name in ('None', 'Line', 'Word'):
+        field('Ek/a', name, 'LEk/a;', static=True)
+    method('com/apple/android/music/ttml/f', 'a()Lcom/apple/android/music/ttml/SongInfoTimeProcessor;')
+    method('com/apple/android/music/player/fragment/PlayerLyricsViewFragment', 'd2(Lcom/apple/android/music/player/fragment/PlayerLyricsViewFragment;I)V', static=True)
+    # Immediate reanchoring reuses the native current-ID scroll callback after layout.
+    lyrics = 'com/apple/android/music/player/fragment/PlayerLyricsViewFragment'
+    method(lyrics, 'onResume()V')
+    field(lyrics, 'n0', 'Lq8/Y4;')
+    field('q8/Y4', 'f0', 'Landroidx/recyclerview/widget/RecyclerView;')
+    # Header refresh must not depend on native lyrics availability.
+    method('q8/Y4', 'q0(Lcom/apple/android/music/model/PlaybackItem;)V')
+    method('q8/Y4', 'p0(Lcom/apple/android/music/model/CollectionItemView;)V')
+    method('androidx/databinding/ViewDataBinding', 'n()V')
+    # Replay the page's own listener to recover its item, duration and lyric document together.
+    field('com/apple/android/music/player/fragment/e', 'g0', 'Lcom/apple/android/music/player/fragment/e$d;')
+    method('com/apple/android/music/player/fragment/e$d', 'onMediaMetadataChanged(Lz3/w;)V')
+    method('androidx/recyclerview/widget/RecyclerView', 'getScrollState()I')
+    field(lyrics, 'h1', 'Lcom/apple/android/music/ttml/javanative/model/SongInfo$SongInfoPtr;')
+    field(lyrics, 'p0', 'Lcom/apple/android/music/player/n1;')
+    field(lyrics, 'V0', 'Z')
+    field(lyrics, 'Z0', 'Lcom/apple/android/music/player/fragment/L;')
+    method('com/apple/android/music/player/n1', 'w()Ljava/util/TreeSet;')
+    method('com/apple/android/music/player/fragment/L', 'b(II)V')
+    method('com/apple/android/music/player/n1', 'N()V')
+    method('com/apple/android/music/player/n1', 'P(Z)V')
+    method('androidx/recyclerview/widget/RecyclerView$f', 'g()V')
+    field(lyrics, 'b1', 'Lcom/apple/android/music/ttml/f;')
+    names = ('f', 'g', 'n', 'p', 'r')
+    for field_name, callback in zip(('c1', 'd1', 'e1', 'f1', 'g1'), names):
+        field(lyrics, field_name, 'L'+lyrics+'$'+callback+';')
+    method('com/apple/android/music/ttml/f', 'c(Lcom/apple/android/music/ttml/javanative/model/SongInfo$SongInfoPtr;J'+
+           ''.join('L'+lyrics+'$'+name+';' for name in names)+')J')
+    method('com/apple/android/music/ttml/f', 'd(Lcom/apple/android/music/ttml/javanative/model/SongInfo$SongInfoPtr;'+
+           ''.join('L'+lyrics+'$'+name+';' for name in names)+')J')
+    # Idle return redirects only the explicit native u1 call to RecyclerView's own scroller.
+    field(lyrics, 's0', 'L'+lyrics+'$w;')
+    field(lyrics, 't0', 'L'+lyrics+'$u;')
+    method('androidx/recyclerview/widget/LinearLayoutManager', 'u1(II)V')
+    method('androidx/recyclerview/widget/RecyclerView', 'u0(I)V')
+    method('androidx/recyclerview/widget/t', 'i(Landroid/view/View;I)I')
+    method('androidx/recyclerview/widget/t', 'e(Landroid/view/View;Landroidx/recyclerview/widget/RecyclerView$z;Landroidx/recyclerview/widget/RecyclerView$y$a;)V')
+    field('androidx/recyclerview/widget/RecyclerView$y', 'a', 'I')
+    field('androidx/recyclerview/widget/RecyclerView$y', 'b', 'Landroidx/recyclerview/widget/RecyclerView;')
+    method('androidx/recyclerview/widget/RecyclerView$y$a', 'b(IIILandroid/view/animation/BaseInterpolator;)V')
+    field('androidx/recyclerview/widget/RecyclerView$k', 'e', 'J')
+    field('lc/A', 'w', 'Landroid/view/animation/PathInterpolator;', True)
+    # Visibility/emphasis interlock listens to the same selected-state observer as Apple.
+    method('com/apple/android/music/player/fragment/PlayerLyricsViewFragment$37', 'onChanged(Ljava/lang/Boolean;)V')
+    method('com/apple/android/music/player/viewmodel/PlayerLyricsViewModel', 'getPronunciationSelectedLiveResult()Landroidx/lifecycle/G;')
+    method('androidx/lifecycle/G', 'getValue()Ljava/lang/Object;')
+    field('com/apple/android/music/player/fragment/PlayerLyricsViewFragment', 'o1', 'Lcom/apple/android/music/player/viewmodel/PlayerLyricsViewModel;')
     base = 'com/apple/android/music/player/n1'
     adapter = 'com/apple/android/music/player/A'
     flex = 'Lcom/apple/android/music/common/views/FullWidthAlphaGradientFlexboxLayout;'
     holder = 'Landroidx/recyclerview/widget/RecyclerView$D;'
+    field(adapter+'$a', 'G', 'Landroid/util/ArrayMap;')
+    field('com/apple/android/music/player/viewmodel/PlayerLyricsViewModel$e', 'a', 'I')
+    method(adapter, 'o0(I)Z')
+    method(adapter, 'F('+holder+')V')
+    method('androidx/recyclerview/widget/RecyclerView$D', 'd()I')
+    for name in ('i0', 't0'):
+        method(adapter, name+'(Lcom/apple/android/music/player/A$a;I)V')
+    checks += 1
+    if 'smoothScrollToPosition(I)V' in classes['Landroidx/recyclerview/widget/RecyclerView;']['methods']:
+        raise RuntimeError('1606 RecyclerView recovery contract changed: inspect the native method')
+    word = 'com/apple/android/music/ttml/javanative/model/LyricsWord$LyricsWordNative'
+    method(word, 'getHtmlLineText()Ljava/lang/String;')
+    word_ptr = 'com/apple/android/music/ttml/javanative/model/LyricsWord$LyricsWordPtr'
+    word_vector = 'com/apple/android/music/ttml/javanative/model/LyricsWordVector'
+    method(word, 'getWordId()I')
+    method('com/apple/android/music/player/u', 'onAnimationUpdate(Landroid/animation/ValueAnimator;)V')
+    method('com/apple/android/music/player/A', 'c0(FLcom/apple/android/music/common/views/FullWidthAlphaGradientFlexboxLayout;Lcom/apple/android/music/common/views/FullWidthAlphaGradientFlexboxLayout$a;Lcom/apple/android/music/player/viewmodel/PlayerLyricsViewModel$e;Landroidx/databinding/ViewDataBinding;Z)F', static=True)
+    method('com/apple/android/music/player/A', 'd0(Ljava/lang/Integer;[Lcom/apple/android/music/common/views/FullWidthAlphaGradientFlexboxLayout$a;Lcom/apple/android/music/player/viewmodel/PlayerLyricsViewModel$e;Ljava/util/List;Lcom/apple/android/music/common/views/FullWidthAlphaGradientFlexboxLayout;ZZZI)Ljava/util/ArrayList;')
+    method(word, 'getLyricsLine()Lcom/apple/android/music/ttml/javanative/model/LyricsLine$LyricsLinePtr;')
+    method(word_ptr, 'get()L'+word+';')
+    method(word_vector, 'size()J')
+    method(word_vector, 'get(J)L'+word_ptr+';')
+    checks += 1
+    if classes['L'+word+';']['super'] != 'Lcom/apple/android/music/ttml/javanative/model/LyricsTiming;':
+        raise RuntimeError('Native word timing superclass changed')
+    for name in ('getBegin', 'getEnd'):
+        method('com/apple/android/music/ttml/javanative/model/LyricsTiming', name+'()I')
     method(adapter, 'U(Ljava/lang/String;'+flex+'IZI)V')
     method(adapter, 'b0(Lcom/apple/android/music/ttml/javanative/model/LyricsWordVector;Landroid/util/ArrayMap;'+flex+'IIZZ)Landroid/util/ArrayMap;')
     method(adapter, 'y()Lcom/apple/android/music/ttml/javanative/model/SongInfo$SongInfoPtr;')
@@ -59,6 +142,7 @@ def main():
     method('com/apple/android/music/ttml/javanative/model/LyricsLine$LyricsLinePtr', 'get()Lcom/apple/android/music/ttml/javanative/model/LyricsLine$LyricsLineNative;')
     line = 'com/apple/android/music/ttml/javanative/model/LyricsLine$LyricsLineNative'
     method(line, 'getLineId()I')
+    method(line, 'getWords()Lcom/apple/android/music/ttml/javanative/model/LyricsWordVector;')
     for name in ('getHtmlPronunciationLineText', 'getHtmlPronunciationBackgroundVocalsLineText'):
         method(line, name+'()Ljava/lang/String;')
     line_adapter = 'com/apple/android/music/player/Y0'

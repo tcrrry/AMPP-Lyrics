@@ -11,8 +11,16 @@ internal object CurrentLyricsSourceStatus {
     @Volatile private var refreshHandler: ((Long, Boolean) -> Boolean)? = null
 
     @Volatile private var pageHandler: ((Any) -> Unit)? = null
+    @Volatile private var identityPageHandler: ((Any) -> Unit)? = null
+    fun installIdentityPageHandler(handler: (Any) -> Unit): HostSubscription {
+        identityPageHandler = handler
+        return HostSubscription { if (identityPageHandler === handler) identityPageHandler = null }
+    }
     fun installPageHandler(handler: (Any) -> Unit) { pageHandler = handler }
-    fun rememberVisiblePage(fragment: Any) { pageHandler?.invoke(fragment) }
+    fun rememberVisiblePage(fragment: Any) {
+        identityPageHandler?.invoke(fragment)
+        pageHandler?.invoke(fragment)
+    }
 
     fun installRefreshHandler(handler: (Long, Boolean) -> Boolean) { refreshHandler = handler }
     fun refresh(id: Long): Boolean = refreshHandler?.invoke(id, true) ?: false
@@ -118,6 +126,7 @@ internal object CurrentLyricsSourceStatus {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("source_$id", effectiveSource)
             .putString("detail_$id", detail)
+            .putBoolean("pronunciation_$id", presentation?.pronunciation == true)
             .apply()
     }
 
@@ -130,7 +139,15 @@ internal object CurrentLyricsSourceStatus {
             .putInt("applied_pid", Process.myPid())
             .putString("applied_source", source)
             .putString("applied_detail", if (manual) "" else prefs.getString("detail_$id", ""))
+            .putBoolean("applied_pronunciation", !manual && prefs.getBoolean("pronunciation_$id", false))
             .apply()
+    }
+
+    fun canEmphasizePronunciation(context: Context, id: Long): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return id > 0L && prefs.getLong("applied_id", 0L) == id &&
+            prefs.getInt("applied_pid", 0) == Process.myPid() &&
+            prefs.getBoolean("applied_pronunciation", false)
     }
 
     fun description(context: Context, currentId: Long?): String {

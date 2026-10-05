@@ -27,7 +27,7 @@ class CurrentSongIdentityStructuralRegressionTest {
         assertTrue(target.contains("private val cache: CurrentSongIdentityCache"))
         assertTrue(target.contains("PlayerMetadataPublishMethod"))
         assertTrue(target.contains("MetadataToPlaybackItemMethod"))
-        assertTrue(target.contains("cache.publish(item, seam.detailsOfItem(item))"))
+        assertTrue(target.contains("cache.publish(item, seam.detailsOfItem(item), param.args.getOrNull(0))"))
         assertFalse(target.contains("SharedPreferences"))
         assertFalse(target.contains("openRemoteFile"))
         assertFalse(target.contains("HttpLyricTransport"))

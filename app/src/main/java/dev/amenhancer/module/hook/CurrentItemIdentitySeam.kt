@@ -60,11 +60,15 @@ internal class CurrentItemIdentitySeam(
         return null
     }
 
-    /** The current lyrics item Adam ID of an I2 fragment, or null when unavailable. */
+    /** The actual current item from the verified lyrics fragment field. */
+    fun currentItemOf(fragment: Any?): Any? = if (fragment == null) null else
+        runCatching { currentItemField.get(fragment) }.getOrNull()
+
+    /** The current lyrics item Adam ID, or null when unavailable. */
     fun currentItemAdamIdOf(fragment: Any?): Long? {
         if (fragment == null) return null
         return runCatching {
-            val item = currentItemField.get(fragment) ?: return@runCatching null
+            val item = currentItemOf(fragment) ?: return@runCatching null
             parseCurrentItemAdamId(currentItemGetId.invoke(item))
         }.getOrNull()
     }

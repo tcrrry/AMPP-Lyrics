@@ -81,7 +81,8 @@ object AppleMusicHostFactory {
             ),
             bidirectionalLyricBlur = AppleMusicBidirectionalLyricBlurTarget(resolver),
             cjkKaraokeAnimation = AppleMusicCjkKaraokeAnimationTarget(resolver,
-                profile.document.optJSONObject("cjk")?.optString("foregroundTextField", "U") ?: "U"),
+                profile.document.optJSONObject("cjk")?.optString("foregroundTextField", "U") ?: "U",
+                enableLongLatinWords = build.versionName == "7.0.0-beta" && build.versionCode == 1606L),
             lyricsTypeface = AppleMusicLyricsTypefaceTarget(
                 symbols = resolver,
                 session = lyricsTypefaceSession as LyricsTypefaceSession,

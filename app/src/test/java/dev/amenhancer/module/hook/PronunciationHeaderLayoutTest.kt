@@ -38,6 +38,36 @@ class PronunciationHeaderLayoutTest {
         return root to words
     }
 
+    @Test fun emphasizedPhoneticsHaveOriginalSubtitleBeforeTranslationAndRecycleCleanly() {
+        val (root, words) = row()
+        val translation = TextView(activity).apply { text = "译文" }
+        words.addView(translation)
+        NativeLyricsPronunciationSubtitle.renderTranslation(words, translation)
+        val original = TextView(activity).apply { text = "原文" }
+        words.addView(original)
+        PronunciationHeaderLayout.moveBetween(words, original)
+        assertSame(root, original.parent)
+        assertSame(root, translation.parent)
+        assertEquals(words.id, (original.layoutParams as HostParams).topToBottom)
+        assertEquals(translation.id, (original.layoutParams as HostParams).bottomToTop)
+        assertEquals(original.id, (translation.layoutParams as HostParams).topToBottom)
+        assertEquals(original.id, (words.layoutParams as HostParams).bottomToTop)
+        PronunciationHeaderLayout.clearRow(root)
+        assertEquals(1, root.childCount)
+        assertEquals(-1, (words.layoutParams as HostParams).bottomToTop)
+        assertNull(original.parent)
+        assertNull(translation.parent)
+    }
+    @Test fun emphasizedOriginalSubtitleWorksWithoutTranslation() {
+        val (root, words) = row()
+        val original = TextView(activity)
+        words.addView(original)
+        PronunciationHeaderLayout.moveBetween(words, original)
+        assertSame(root, original.parent)
+        assertEquals(words.id, (original.layoutParams as HostParams).topToBottom)
+        PronunciationHeaderLayout.clearRow(root)
+        assertEquals(1, root.childCount)
+    }
     @Test fun headerAnchorsAboveOriginalWithoutChangingWordIndicesOrStyle() {
         val (root, words) = row()
         val first = TextView(activity)

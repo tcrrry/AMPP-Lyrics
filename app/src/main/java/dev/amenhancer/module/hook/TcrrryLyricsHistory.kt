@@ -53,6 +53,7 @@ internal object TcrrryLyricsHistory {
         lyrics = value.optString("lyrics"), translatedLyrics = value.optString("translatedLyrics"),
         wordLyrics = value.optString("wordLyrics"), durationMs = value.optLong("duration"),
         romanizedLyrics = value.optString("romanizedLyrics"),
+        romanizedWordLyrics = value.optString("romanizedWordLyrics"),
         source = value.optString("source"), recordId = value.optString("recordId"),
         title = value.optString("title"), artist = value.optString("artist"), score = value.optInt("matchScore"),
     )

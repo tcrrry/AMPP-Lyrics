@@ -27,7 +27,8 @@ internal class DesktopLyricsSource(
     private val repository: DirectLyricsRepository = DirectLyricsRepository(),
 ) {
     private val supplement = DesktopLyricsSupplement(context)
-    private val completedTranslations = ConcurrentHashMap<String, DesktopLyricsSupplement.Outcome>()
+    private val completedTranslations = TranslationOutcomeCache()
+    private val translationRevisions = ConcurrentHashMap<Long, Int>()
     private val translating = ConcurrentHashMap.newKeySet<String>()
     private val activeTranslationKeys = ConcurrentHashMap<Long, String>()
     private val translationExecutor = ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS,
@@ -52,6 +53,8 @@ internal class DesktopLyricsSource(
 
     fun invalidate(appleMusicId: Long) {
         activeTranslationKeys.remove(appleMusicId)
+        translationRevisions.compute(appleMusicId) { _, previous -> (previous ?: 0) + 1 }
+        completedTranslations.invalidate(appleMusicId)
         val prefix = "$appleMusicId|"
         searches.entries.filter { it.key.startsWith(prefix) }.forEach {
             if (searches.remove(it.key, it.value)) {
@@ -87,13 +90,14 @@ internal class DesktopLyricsSource(
         val offset = CurrentLyricsSourceStatus.offsetMs(context, track.appleMusicId, result.source)
         val translationPrefs = context.getSharedPreferences("supplement_translation", Context.MODE_PRIVATE)
         val mode = translationPrefs.getString("mode", "off").orEmpty()
-        val translationKey = "$key|${result.source}|${result.recordId}|$mode|" +
+        val translationKey = "$key|${result.source}|${result.recordId}|$mode|${translationRevisions[track.appleMusicId] ?: 0}|" +
             "${translationPrefs.getString("active_api_profile", "")}|" +
             "${translationPrefs.getString("offline_source_language", "auto")}|" +
-            "${result.lyrics.hashCode()}|${result.wordLyrics.hashCode()}|${result.translatedLyrics.hashCode()}|${result.romanizedLyrics.hashCode()}"
+            "${result.lyrics.hashCode()}|${result.wordLyrics.hashCode()}|${result.translatedLyrics.hashCode()}|${result.romanizedLyrics.hashCode()}|${result.romanizedWordLyrics.hashCode()}"
         activeTranslationKeys[track.appleMusicId] = translationKey
+        val translationOutcome = completedTranslations[translationKey]
         val complete = if (mode in setOf("api", "offline")) {
-            completedTranslations[translationKey]?.also {
+            translationOutcome?.also {
                 CurrentLyricsSourceStatus.rememberTranslationStatus(context, track.appleMusicId, it.status)
             }?.result ?: result.also {
                 if (translating.add(translationKey)) {
@@ -101,11 +105,8 @@ internal class DesktopLyricsSource(
                     runCatching { translationExecutor.execute {
                         try {
                             val filled = supplement.fill(result, mode)
-                            if (completedTranslations.size >= 64) {
-                                completedTranslations.keys.firstOrNull()?.let(completedTranslations::remove)
-                            }
-                            completedTranslations[translationKey] = filled
                             if (activeTranslationKeys[track.appleMusicId] == translationKey) {
+                                completedTranslations[translationKey] = filled
                                 CurrentLyricsSourceStatus.rememberTranslationStatus(context, track.appleMusicId, filled.status)
                                 if (DesktopLyricsUpdatePolicy.changed(result, filled.result, track.durationMs))
                                     CurrentLyricsSourceStatus.refreshSilently(track.appleMusicId)
@@ -121,14 +122,32 @@ internal class DesktopLyricsSource(
         } else result.also {
             CurrentLyricsSourceStatus.rememberTranslationStatus(context, track.appleMusicId, "补充翻译已关闭")
         }
-        val ttml = DesktopLyricsTtmlConverter.convert(complete, track.durationMs, offset) ?: run {
+        val pronunciationEnabled = context.getSharedPreferences("japanese_pronunciation", Context.MODE_PRIVATE)
+            .getBoolean("enabled", true)
+        val primaryPronunciation = context.getSharedPreferences("japanese_pronunciation", Context.MODE_PRIVATE)
+            .getBoolean("primary", false) && NativeLyricsEmphasisVisibility.visible(context)
+        val withJapanesePronunciation = if (pronunciationEnabled) runCatching {
+            dev.amenhancer.module.lyrics.JapanesePronunciationSupplement.fill(complete)
+        }.getOrElse {
+            ModernXposedRuntime.log("Japanese pronunciation unavailable: ${it.javaClass.simpleName}")
+            complete
+        } else complete
+        val withPronunciation = runCatching {
+            dev.amenhancer.module.lyrics.LanguagePronunciationSupplement.fill(context, track.appleMusicId, withJapanesePronunciation)
+        }.getOrElse {
+            ModernXposedRuntime.log("Language pronunciation unavailable: ${it.javaClass.simpleName}")
+            withJapanesePronunciation
+        }
+        val ttml = DesktopLyricsTtmlConverter.convert(withPronunciation, track.durationMs, offset, primaryPronunciation) ?: run {
             CurrentLyricsSourceStatus.rememberMatchStatus(context, track.appleMusicId, "已找到 ${result.source}，歌词格式转换失败")
             return null
         }
         CurrentLyricsSourceStatus.rememberMatchStatus(context, track.appleMusicId, "已找到 ${result.source}，正在装载歌词")
         return AutoLyricsCandidate(
             source = "${CustomLyricsSources.DESKTOP_LYRICS}:${result.source}",
-            ttml = ttml,
+            ttml = ttml.replaceFirst("?>", "?>" + dev.amenhancer.module.lyrics.JapanesePronunciationSupplement.cacheMarker(pronunciationEnabled, primaryPronunciation) +
+                dev.amenhancer.module.lyrics.LanguagePronunciationSupplement.marker(context, track.appleMusicId) +
+                TranslationOutcomeCache.marker(mode !in setOf("api", "offline") || translationOutcome?.retryable == false)),
             displayName = "${track.title} - ${track.artist}",
         )
     }

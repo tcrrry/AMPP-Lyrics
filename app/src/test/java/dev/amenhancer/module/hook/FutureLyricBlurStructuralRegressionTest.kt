@@ -96,8 +96,8 @@ class FutureLyricBlurStructuralRegressionTest {
     }
 
     @Test
-    fun `manual lyric scrolling restores blur after one second`() {
-        assertTrue(portSource.contains("SCROLL_RESTORE_DELAY_MS = 1_000L"))
+    fun `manual lyric scrolling restores blur after the shared browsing timeout`() {
+        assertTrue(portSource.contains("SCROLL_RESTORE_DELAY_MS = 3_500L"))
         assertTrue(portSource.contains("postDelayed(restoreBlurRunnable, SCROLL_RESTORE_DELAY_MS)"))
     }
 

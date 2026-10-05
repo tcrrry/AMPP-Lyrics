@@ -10,7 +10,7 @@ import java.util.WeakHashMap
 
 /** Keep managed auxiliary tracks ordered and outside original-lyrics highlighting. */
 internal object NativeLyricsPronunciationSubtitle {
-    private data class Managed(val word: Boolean, val pronunciation: Boolean)
+    private data class Managed(val word: Boolean, val pronunciation: Boolean, val primaryPronunciation: Boolean)
     private val managed = Collections.synchronizedMap(WeakHashMap<Any, Managed>())
     internal data class Selection(val owner: Any, val lineId: Int, val pronunciation: Boolean, val translation: Boolean) {
         companion object {
@@ -97,7 +97,7 @@ internal object NativeLyricsPronunciationSubtitle {
     fun remember(pointer: Any, ttml: String) {
         val presentation = DesktopLyricsPresentation.fromTtml(ttml)
         if (presentation != null) {
-            managed[pointer] = Managed(TtmlTimingPolicy.isWord(ttml), presentation.pronunciation)
+            managed[pointer] = Managed(TtmlTimingPolicy.isWord(ttml), presentation.pronunciation, presentation.primaryPronunciation)
         } else managed.remove(pointer)
     }
 
@@ -105,6 +105,8 @@ internal object NativeLyricsPronunciationSubtitle {
 
     internal fun isManagedWord(pointer: Any?): Boolean = pointer != null && managed[pointer]?.word == true
     internal fun isManagedLine(pointer: Any?): Boolean = pointer != null && managed[pointer]?.word == false
+
+    internal fun isPronunciationPrimary(pointer: Any?): Boolean = pointer != null && managed[pointer]?.primaryPronunciation == true
 
     internal fun hasManagedPronunciation(pointer: Any?): Boolean = pointer != null && managed[pointer]?.pronunciation == true
 
@@ -201,6 +203,14 @@ internal object NativeLyricsPronunciationSubtitle {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     runCatching {
                         val target = param.thisObject ?: return@runCatching
+                        // This hook is registered before the blur/tail hooks. Check the shared
+                        // gate BEFORE clearing headers or forcing a word-map rebuild.
+                        if (modern && param.method == fullBind && NativeLyricsTailBindGuard.beforeBind(
+                                target, param.args[0]!!, param.args[1] as Int)) {
+                            LyricsPlaybackDiagnostics.record("tail-bind", "path=subtitle-full pos=${param.args[1]}")
+                            param.result = null
+                            return@runCatching
+                        }
                         if (param.method == fullBind) {
                             (rowView.get(param.args[0]) as? ViewGroup)?.let { PronunciationHeaderLayout.clearRow(it) }
                         }
@@ -217,7 +227,9 @@ internal object NativeLyricsPronunciationSubtitle {
                             @Suppress("UNCHECKED_CAST")
                             val tracked = pending.get(param.args[0]) as MutableSet<Any?>
                             if (changes.isEmpty()) tracked.clear() else tracked.addAll(changes.filter { it in payloads })
-                            fullBind.invoke(target, param.args[0], position)
+                            NativeLyricsTailBindGuard.updatingAuxiliary(explicitChange = changes.any { it in payloads }) {
+                                fullBind.invoke(target, param.args[0], position)
+                            }
                             param.result = null
                             return@runCatching
                         }

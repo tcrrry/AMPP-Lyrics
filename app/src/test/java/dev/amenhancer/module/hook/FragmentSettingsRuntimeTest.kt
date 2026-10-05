@@ -32,6 +32,23 @@ class FragmentSettingsRuntimeTest {
     }
 
     @Test
+    fun `equal native lists reuse the composition model but content changes replace it`() {
+        val hooks = RecordingHooks()
+        val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), hooks)
+        runtime.install(NO_UI_OBSERVER)
+        val fragment = SettingsHostFragment()
+        hooks.before("r1", fragment)
+        val item = Any()
+        val first = hooks.after("getPreferenceItems", fragment.vm, listOf(item)) as List<*>
+        assertSame(first, hooks.after("getPreferenceItems", fragment.vm, listOf(item)))
+        val changed = hooks.after("getPreferenceItems", fragment.vm, listOf(item, Any())) as List<*>
+        assertNotSame(first, changed)
+        assertEquals(3, changed.size)
+        hooks.before("onDestroyView", fragment)
+        assertEquals(listOf(item), hooks.after("getPreferenceItems", fragment.vm, listOf(item)))
+    }
+
+    @Test
     fun `every partial registration failure leaves stored callbacks dormant`() {
         for (failureAt in 1..6) {
             val hooks = RecordingHooks(failureAt)

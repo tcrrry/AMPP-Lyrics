@@ -1,4 +1,4 @@
-"""Produce v1.3 ordinary APK/APKS/module and coexist APK from the verified 1606 inputs."""
+"""Produce v1.4 ordinary APK/APKS/module and coexist APK from the verified 1606 inputs."""
 import argparse
 import importlib.util
 import json
@@ -48,17 +48,17 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     module = args.output/'AMPP-Lyrics-module.apk'
     shutil.copyfile(args.module, module)
-    module_identity = "name='dev.amenhancer.module.debug' versionCode='119' versionName='1.6.9-debug'"
+    module_identity = "name='dev.amenhancer.module.debug' versionCode='137' versionName='1.7.0'"
     if module_identity not in run(args.aapt2,'dump','badging',module):
-        p.error('Wrong ordinary v1.3 module')
-    if "name='dev.amenhancer.module.coexist' versionCode='119' versionName='1.6.9-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
-        p.error('Wrong coexist v1.3 module')
+        p.error('Wrong ordinary v1.4 module')
+    if "name='dev.amenhancer.module.coexist' versionCode='137' versionName='1.7.0-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
+        p.error('Wrong coexist v1.4 module')
     checksum(module)
     apk = args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk'
     subprocess.run(['python3', str(Path(__file__).with_name('package-700-single-apk.py')),
                     str(args.input), str(module), str(apk),
                     *[item for name in ('editor','npatch','aapt2','apksigner') for item in ('--'+name,str(getattr(args,name)))]],check=True)
-    with tempfile.TemporaryDirectory(prefix='ampp-v13-') as folder:
+    with tempfile.TemporaryDirectory(prefix='ampp-v14-') as folder:
         work = Path(folder)
         security = work/'bc.security'
         security.write_text('security.provider.13=org.bouncycastle.jce.provider.BouncyCastleProvider\n')
@@ -133,12 +133,11 @@ def main():
         if single.digest(embedded)!=single.digest(args.coexist_module):raise RuntimeError('Coexist module changed')
         coexist=args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk'
         shutil.copyfile(coex,coexist);checksum(coexist)
-    report={'release':'v1.3','host':'7.0.0-beta/1606','staticVerified':True,
-            'deviceVerified':{'test-r1-ordinary-apk':'User reports normal use except missing separate lyrics settings entry; entry fixed in v1.3',
-                              'v1.3-original-apk-and-coexist':'User reports missing pronunciation; corrected in this update',
-                              'v1.3-pronunciation-fix':'User confirms word original renders normally; line pronunciation order and brightness were incorrect',
-                              'v1.3-line-and-translation-fix':False,
-                              'v1.3-offset-and-settings-fix':False},
+    report={'release':'v1.4','host':'7.0.0-beta/1606','staticVerified':True,
+            'deviceVerified':False,
+            'previousUserFeedback':'Ordinary r17 accepted; new settings placement and other package forms need device confirmation',
+            'glow':{'settingsPage':'Tcrrry', 'sensitivityRange':[50,200],
+                    'positions':['all','tail','tail-preferred'], 'diagnosticsEnabled':False},
             'settings':{'offsetSavedDuringInput':True,'offsetReloadDebounceMs':250,
                         'offsetReloadWithoutSearchInvalidation':True,'scrollRestoredAfterLayout':True},
             'presentation':{'order':['pronunciation','original','translation'],
@@ -148,8 +147,8 @@ def main():
                             'lineAuxiliaryNativeAlphaGuard':True},
             'files':{path.name:{'sha256':single.digest(path),'bytes':path.stat().st_size}
                      for path in args.output.iterdir() if path.suffix in ('.apk','.apks')}}
-    (args.output/'v1.3-validation.json').write_text(json.dumps(report,indent=2)+'\n')
-    print('PASS: four v1.3 installation artifacts, signatures, identities and original host contents verified')
+    (args.output/'v1.4-validation.json').write_text(json.dumps(report,indent=2)+'\n')
+    print('PASS: four v1.4 installation artifacts, signatures, identities and original host contents verified')
 
 
 if __name__=='__main__':main()

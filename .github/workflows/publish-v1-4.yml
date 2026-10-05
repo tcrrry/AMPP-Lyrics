@@ -1,0 +1,103 @@
+name: 发布 v1.4（四种安装包）
+on:
+  push:
+    branches: [release/v1.4-700]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-v1-4
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'tcrrry/AMPP-Lyrics'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        id: java17
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;37.0.0 platforms;android-37.0
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 保存历史发布快照
+        run: gh api "repos/$GH_REPO/releases?per_page=100" > /tmp/v14-releases-before.json
+      - name: 测试、Lint 与构建普通及共存模块
+        run: |
+          set -euo pipefail
+          mkdir -p modules inputs
+          python3 scripts/verify-profile-data.py
+          python3 scripts/verify-glass-reference.py
+          bash gradlew test :app:lintDebug :glass:lintDebug :glass-lab:lintDebug :app:assembleDebug :glass-lab:assembleDebug :glass-lab:assembleDebugAndroidTest --no-daemon --max-workers=4
+          cp app/build/outputs/apk/debug/app-debug.apk modules/ordinary.apk
+          python3 scripts/report-v1.4-tests.py inputs/normal-tests.json
+          bash gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug -PamppCoexistence=true --no-daemon --max-workers=4
+          cp app/build/outputs/apk/debug/app-debug.apk modules/coexist.apk
+          python3 scripts/report-v1.4-tests.py inputs/coexist-tests.json
+      - name: 核验两种模块的内置发音资源
+        run: |
+          set -euo pipefail
+          curl --fail --location https://repo.maven.apache.org/maven2/com/atilika/kuromoji/kuromoji-ipadic/0.9.0/kuromoji-ipadic-0.9.0.jar --output /tmp/kuromoji-ipadic.jar
+          for module in modules/ordinary.apk modules/coexist.apk; do
+            python3 scripts/verify-japanese-pronunciation.py "$module" /tmp/kuromoji-ipadic.jar
+            python3 scripts/verify-bundled-pronunciation.py "$module"
+          done
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: 下载固定输入并打包四种安装包
+        env:
+          JAVAC_17: ${{ steps.java17.outputs.path }}/bin/javac
+        run: |
+          set -euo pipefail
+          gh release download embedded-2026.08.10-r1 --repo Zennmn/AM-plus-plus --pattern '103-version-com.apple.android.music-npatched.apks' --dir inputs
+          gh release download V1.4.9 --repo REAndroid/APKEditor --pattern 'APKEditor-1.4.9.jar' --dir inputs
+          gh release download v1.0.7 --repo 7723mod/NPatch --pattern 'jar-v1.0.7-741-release.jar' --dir inputs
+          python3 scripts/package-700-release.py \
+            --input inputs/103-version-com.apple.android.music-npatched.apks \
+            --module modules/ordinary.apk --coexist-module modules/coexist.apk \
+            --output dist --editor inputs/APKEditor-1.4.9.jar \
+            --npatch inputs/jar-v1.0.7-741-release.jar \
+            --aapt2 "$ANDROID_HOME/build-tools/37.0.0/aapt2" \
+            --apksigner "$ANDROID_HOME/build-tools/37.0.0/apksigner" \
+            --javac "$JAVAC_17"
+          python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path('dist/v1.4-validation.json')
+          data = json.loads(p.read_text())
+          data['sourceCommit'] = os.environ['GITHUB_SHA']
+          data['actionsRun'] = os.environ['GITHUB_RUN_ID']
+          data['tests'] = {kind: json.loads(pathlib.Path(f'inputs/{kind}-tests.json').read_text()) for kind in ('normal', 'coexist')}
+          data['lintAndBuild'] = 'PASS normal and coexist'
+          p.write_text(json.dumps(data, indent=2) + '\n')
+          PY
+          (cd dist && sha256sum -c *.sha256)
+      - name: 发布新的 v1.4 并核验历史附件
+        run: |
+          set -euo pipefail
+          if ! gh release view v1.4 >/dev/null 2>&1; then
+            gh release create v1.4 --target "$GITHUB_SHA" --draft --title 'AM++ Lyrics v1.4 · Apple Music 7.0.0-beta' --notes-file docs/release-v1.4.md
+          fi
+          test "$(gh release view v1.4 --json isDraft --jq .isDraft)" = true
+          gh release view v1.4 --json assets --jq .assets > /tmp/v14-existing-assets.json
+          for file in dist/*; do
+            name=$(basename "$file")
+            if jq -e --arg name "$name" 'any(.[]; .name == $name)' /tmp/v14-existing-assets.json >/dev/null; then
+              test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' /tmp/v14-existing-assets.json)" = "sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
+            else
+              gh release upload v1.4 "$file"
+            fi
+          done
+          gh api "repos/$GH_REPO/releases?per_page=100" > /tmp/v14-releases-after.json
+          python3 scripts/verify-release-transfer.py dist --snapshot /tmp/v14-releases-after.json --tag v1.4
+          python3 scripts/verify-release-transfer.py --historical /tmp/v14-releases-before.json /tmp/v14-releases-after.json --tag v1.4
+          gh release edit v1.4 --draft=false --prerelease=false --latest=true

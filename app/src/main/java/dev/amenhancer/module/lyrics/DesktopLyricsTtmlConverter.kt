@@ -13,10 +13,20 @@ internal object DesktopLyricsTtmlConverter {
     private val wordToken = Regex("\\((\\d+),(\\d+)(?:,\\d+)?\\)")
     private val lrcStamp = Regex("\\[(\\d{1,3}):(\\d{2})(?:[.:](\\d{1,3}))?\\]")
 
+    internal fun pronunciationLines(result: DirectLyricsRepository.Result): List<Pair<Long, String>> {
+        val words = parseWords(result.wordLyrics)
+        return if (words.isNotEmpty()) words.map { it.start to it.words.joinToString("") { word -> word.text } }
+        else parseLrc(result.lyrics).map { it.start to it.text }
+    }
+
+    internal fun pronunciationEntries(result: DirectLyricsRepository.Result): List<Pair<Long, String>> =
+        parseLrc(result.romanizedLyrics).map { it.start to it.text }
+
     fun convert(
         result: DirectLyricsRepository.Result,
         expectedDurationMs: Long = 0L,
         offsetMs: Int = 0,
+        primaryPronunciation: Boolean = false,
     ): String? {
         val timed = parseLrc(result.lyrics)
         val ordinary = if (timed.isNotEmpty()) timed else {
@@ -49,27 +59,63 @@ internal object DesktopLyricsTtmlConverter {
         val translated = selectedTranslations.map { it?.text }
         val hasTranslation = translated.any { !it.isNullOrBlank() }
         val romanized = parseLrc(result.romanizedLyrics)
-        val pronunciation = lines.map { line ->
+        val selectedPronunciation = lines.map { line ->
             romanized.minByOrNull { kotlin.math.abs(it.start - line.start) }
-                ?.takeIf { kotlin.math.abs(it.start - line.start) <= 1_200L }
-                ?.text?.takeUnless { it.equals(line.words.joinToString("") { word -> word.text }.trim(), ignoreCase = true) }
+                ?.takeIf { candidate ->
+                    val distance = kotlin.math.abs(candidate.start - line.start)
+                    distance <= 1_200L && distance == lines.minOf { other -> kotlin.math.abs(candidate.start - other.start) }
+                }
+                ?.takeUnless { it.text.equals(line.words.joinToString("") { word -> word.text }.trim(), ignoreCase = true) }
         }
+        val pronunciation = selectedPronunciation.map { it?.text }
         val hasPronunciation = pronunciation.any { !it.isNullOrBlank() }
+        val emphasizePronunciation = primaryPronunciation && hasPronunciation
+        val nativePronunciationWords = parseWords(result.romanizedWordLyrics)
+        val mapped = if (emphasizePronunciation && words.isNotEmpty()) lines.mapIndexed { index, line ->
+            pronunciation[index]?.takeIf(String::isNotBlank)?.let { text ->
+                nativePronunciationWords.minByOrNull { kotlin.math.abs(it.start - line.start) }
+                    ?.takeIf { kotlin.math.abs(it.start - line.start) <= 1200L &&
+                        normalizedReading(it.words.joinToString("") { word -> word.text }) == normalizedReading(text) &&
+                        it.words.all { word -> word.start >= line.start - 1200L && word.end <= line.end + 1200L } }
+                    ?.words ?: alignPronunciation(line, text, selectedPronunciation[index]?.start?.let { start ->
+                        result.supplementalPronunciationUnits[start]?.map { JapanesePronunciationSupplement.ReadingUnit(it.start, it.end, it.text) }
+                    })
+            }
+        } else emptyList()
+        // Never create phonetic sub-word timestamps. Incomplete alignment uses
+        // native Line mode for the whole displayed track, avoiding fake precision.
+        val displayedWordTimed = words.isNotEmpty() && (!emphasizePronunciation ||
+            pronunciation.indices.all { pronunciation[it].isNullOrBlank() || mapped.getOrNull(it) != null })
+        val displayedLines = if (emphasizePronunciation) lines.mapIndexed { index, line ->
+            val phonetic = pronunciation[index]?.takeIf(String::isNotBlank)
+            when {
+                phonetic == null -> line
+                displayedWordTimed -> line.copy(words = requireNotNull(mapped[index]))
+                else -> line.copy(words = listOf(Word(line.start, line.end, phonetic)))
+            }
+        } else lines
+        val auxiliaryPronunciation = if (emphasizePronunciation) lines.mapIndexed { index, line ->
+            if (pronunciation[index].isNullOrBlank()) null else line.words.joinToString("") { it.text }
+        } else pronunciation
         val usedSupplement = selectedTranslations.filterNotNull().any { it.start in result.supplementalTranslationStarts }
         val presentation = DesktopLyricsPresentation(
             source = result.source.takeIf { it in setOf("QQ音乐", "网易云音乐", "LRCLIB") } ?: "未知",
-            wordTimed = words.isNotEmpty(),
+            wordTimed = displayedWordTimed,
             platformTranslation = selectedTranslations.filterNotNull().any { it.start !in result.supplementalTranslationStarts },
             apiTranslation = usedSupplement && result.supplementalTranslationKind == "api",
             offlineTranslation = usedSupplement && result.supplementalTranslationKind == "offline",
             pronunciation = hasPronunciation,
+            primaryPronunciation = emphasizePronunciation,
+            nativePronunciation = selectedPronunciation.filterNotNull().any { it.start !in result.supplementalPronunciationStarts },
+            offlinePronunciation = selectedPronunciation.filterNotNull().any { it.start in result.supplementalPronunciationStarts },
+            offlinePronunciationLanguages = selectedPronunciation.filterNotNull().mapNotNull { result.supplementalPronunciationLanguages[it.start] }.toSet(),
         )
         val ttml = buildString {
             append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
             append(presentation.marker())
             append("<tt xmlns=\"http://www.w3.org/ns/ttml\" ")
             append("xmlns:itunes=\"http://music.apple.com/lyric-ttml-internal\" ")
-            append("itunes:timing=\"${if (words.isNotEmpty()) "Word" else "Line"}\"")
+            append("itunes:timing=\"${if (displayedWordTimed) "Word" else "Line"}\"")
             // Match the existing AMLL converter's language workaround: Android
             // Apple Music only exposes both auxiliary tracks under this profile.
             if (hasTranslation || hasPronunciation) append(" xml:lang=\"ko\"")
@@ -85,7 +131,7 @@ internal object DesktopLyricsTtmlConverter {
                 }
                 if (hasPronunciation) {
                     append("<transliterations><transliteration xml:lang=\"ko-Latn\">")
-                    pronunciation.forEachIndexed { index, value ->
+                    auxiliaryPronunciation.forEachIndexed { index, value ->
                         append("<text for=\"L${index + 1}\">${escape(value ?: " ")}</text>")
                     }
                     append("</transliteration></transliterations>")
@@ -93,11 +139,11 @@ internal object DesktopLyricsTtmlConverter {
                 append("</iTunesMetadata></metadata></head>")
             }
             append("<body><div>")
-            lines.forEachIndexed { index, line ->
+            displayedLines.forEachIndexed { index, line ->
                 val lineBegin = (line.start - offsetMs).coerceAtLeast(0L)
                 val lineEnd = (line.end - offsetMs).coerceAtLeast(lineBegin + 1L)
                 append("<p begin=\"${stamp(lineBegin)}\" end=\"${stamp(lineEnd)}\" itunes:key=\"L${index + 1}\">")
-                if (words.isEmpty()) {
+                if (!displayedWordTimed) {
                     append(escape(line.words.joinToString("") { it.text }))
                 } else line.words.forEach { word ->
                     val wordBegin = (word.start - offsetMs).coerceAtLeast(lineBegin)
@@ -109,6 +155,45 @@ internal object DesktopLyricsTtmlConverter {
             append("</div></body></tt>")
         }
         return ttml.takeIf(TtmlInputPolicy::isAcceptable)
+    }
+
+    private fun normalizedReading(text: String) = text.filter(Char::isLetterOrDigit).lowercase(Locale.ROOT)
+
+    private fun alignPronunciation(line: Line, pronunciation: String, suppliedUnits: List<JapanesePronunciationSupplement.ReadingUnit>? = null): List<Word>? {
+        val original = line.words.joinToString("") { it.text }
+        val korean = KoreanPronunciationAlignment.units(original, pronunciation)?.map {
+            JapanesePronunciationSupplement.ReadingUnit(it.start, it.end, it.text)
+        }
+        if (suppliedUnits == null && korean == null && !Regex("[ぁ-ゖァ-ヺ\\p{IsHan}]").containsMatchIn(original)) return null
+        val units = suppliedUnits ?: korean ?: JapanesePronunciationSupplement.alignedUnits(original, pronunciation) ?: return null
+        if (normalizedReading(units.joinToString(" ") { it.text }) != normalizedReading(pronunciation)) return null
+        var cursor = 0
+        val ranges = line.words.map { word ->
+            val start = cursor
+            cursor += word.text.length
+            start until cursor
+        }
+        val parents = IntArray(units.size) { it }
+        fun root(value: Int): Int {
+            var index = value
+            while (parents[index] != index) { parents[index] = parents[parents[index]]; index = parents[index] }
+            return index
+        }
+        fun overlaps(unit: JapanesePronunciationSupplement.ReadingUnit, range: IntRange) =
+            unit.start <= range.last && unit.end > range.first
+        // If one original timestamp covers several reading tokens, those tokens
+        // share a group. If a reading spans several words, their real times merge.
+        ranges.forEach { range ->
+            val matches = units.indices.filter { overlaps(units[it], range) }
+            matches.drop(1).forEach { parents[root(it)] = root(matches.first()) }
+        }
+        val groups = units.indices.groupBy(::root).values.sortedBy { it.first() }
+        return groups.map { group ->
+            val touched = line.words.indices.filter { index -> group.any { overlaps(units[it], ranges[index]) } }
+            if (touched.isEmpty()) return null
+            Word(touched.minOf { line.words[it].start }, touched.maxOf { line.words[it].end },
+                group.joinToString(" ") { units[it].text } + if (group.last() != units.lastIndex) " " else "")
+        }
     }
 
     fun hasWordTiming(result: DirectLyricsRepository.Result): Boolean = parseWords(result.wordLyrics).isNotEmpty()

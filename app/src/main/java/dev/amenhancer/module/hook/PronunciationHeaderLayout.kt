@@ -9,6 +9,7 @@ import java.util.WeakHashMap
 internal object PronunciationHeaderLayout {
     private data class Edge(val view: WeakReference<View>, val first: Int, val second: Int, val margin: Int)
     private val headers = WeakHashMap<ViewGroup, Edge>()
+    private val middles = WeakHashMap<ViewGroup, Edge>()
     private val footers = WeakHashMap<ViewGroup, Edge>()
 
     internal fun field(type: Class<*>, name: String) = type.getField(
@@ -36,6 +37,41 @@ internal object PronunciationHeaderLayout {
 
     fun moveAbove(container: ViewGroup, view: View) = move(container, view, above = true)
     fun moveBelow(container: ViewGroup, view: View) = move(container, view, above = false)
+
+    /** Insert the original subtitle between the emphasized phonetics and translation. */
+    fun moveBetween(container: ViewGroup, view: View) {
+        clearEdge(container, above = false, middle = true)
+        val footer = footers[container]?.view?.get() ?: return moveBelow(container, view)
+        check(view.parent === container && supports(container))
+        val parent = container.parent as ViewGroup
+        val parameters = container.layoutParams
+        val type = parameters.javaClass
+        val top = field(type, "topToTop")
+        val topBottom = field(type, "topToBottom")
+        val bottomTop = field(type, "bottomToTop")
+        val bottom = field(type, "bottomToBottom")
+        val saved = Edge(WeakReference(view), bottomTop.getInt(parameters), bottom.getInt(parameters), 0)
+        val params = type.getConstructor(ViewGroup.LayoutParams::class.java)
+            .newInstance(ViewGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT)) as ViewGroup.MarginLayoutParams
+        top.setInt(params, -1)
+        topBottom.setInt(params, container.id)
+        bottomTop.setInt(params, footer.id)
+        bottom.setInt(params, -1)
+        field(type, "startToStart").setInt(params, container.id)
+        field(type, "endToEnd").setInt(params, container.id)
+        params.marginStart = container.paddingStart
+        params.marginEnd = container.paddingEnd
+        params.topMargin = (view.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin ?: 0
+        view.id = View.generateViewId()
+        container.removeView(view)
+        parent.addView(view, params)
+        bottomTop.setInt(parameters, view.id)
+        bottom.setInt(parameters, -1)
+        topBottom.setInt(footer.layoutParams, view.id)
+        footer.layoutParams = footer.layoutParams
+        container.layoutParams = parameters
+        middles[container] = saved
+    }
 
     private fun move(container: ViewGroup, view: View, above: Boolean) {
         check(view.parent === container && supports(container))
@@ -90,8 +126,8 @@ internal object PronunciationHeaderLayout {
         }
     }
 
-    private fun clearEdge(container: ViewGroup, above: Boolean) {
-        val edge = (if (above) headers else footers).remove(container) ?: return
+    private fun clearEdge(container: ViewGroup, above: Boolean, middle: Boolean = false) {
+        val edge = (if (middle) middles else if (above) headers else footers).remove(container) ?: return
         val view = edge.view.get()
         val parameters = container.layoutParams
         val type = parameters.javaClass
@@ -120,6 +156,7 @@ internal object PronunciationHeaderLayout {
     }
 
     fun clear(container: ViewGroup) {
+        clearEdge(container, above = false, middle = true)
         clearEdge(container, above = false)
         clearEdge(container, above = true)
     }

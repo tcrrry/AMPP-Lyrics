@@ -1,6 +1,7 @@
 package dev.amenhancer.module.hook
 
 import android.app.Application
+import android.content.Context
 import dev.amenhancer.module.config.EmbeddedConfigurationSession
 import dev.amenhancer.module.config.EmbeddedContentManager
 import dev.amenhancer.module.config.HostPrivateEmbeddedStorage
@@ -31,7 +32,7 @@ import java.util.concurrent.FutureTask
 import org.json.JSONArray
 
 
-private const val AUTO_CACHE_DIRECTORY = "ampp-auto-lyrics-desktop-v11"
+private const val AUTO_CACHE_DIRECTORY = "ampp-auto-lyrics-desktop-v14-japanese-r1"
 
 internal fun createAutoLyricsRuntime(
     application: Application,
@@ -70,6 +71,13 @@ internal fun createAutoLyricsRuntime(
             if (selected != null && CurrentLyricsSourceStatus.candidateSource(application, appleMusicId) !=
                 "${CustomLyricsSources.DESKTOP_LYRICS}:$selected") return null
             return diskCache.read(appleMusicId)?.let { cached ->
+                val translationMode = application.getSharedPreferences("supplement_translation", Context.MODE_PRIVATE).getString("mode", "off")
+                if (!TranslationOutcomeCache.canReuse(cached, translationMode in setOf("api", "offline"))) return null
+                val pronunciationEnabled = application.getSharedPreferences("japanese_pronunciation", Context.MODE_PRIVATE)
+                    .getBoolean("enabled", true)
+                if (!dev.amenhancer.module.lyrics.JapanesePronunciationSupplement.cacheMatches(cached, pronunciationEnabled, application.getSharedPreferences("japanese_pronunciation", Context.MODE_PRIVATE).getBoolean("primary", false))) return null
+                if (cached.take(1024).contains("<!--tcrrry-lyrics-v1 ") &&
+                    !cached.take(1024).contains(dev.amenhancer.module.lyrics.LanguagePronunciationSupplement.marker(application, appleMusicId))) return null
                 TtmlSubtitleTrack.cleanChineseSubtitles(cached).also { cleaned ->
                     if (cleaned != cached) diskCache.write(appleMusicId, cleaned)
                 }
@@ -83,7 +91,7 @@ internal fun createAutoLyricsRuntime(
         TimeUnit.MILLISECONDS,
         // Song changes must not wait for the previous song's fallback network requests.
         ArrayBlockingQueue(4),
-        { runnable -> Thread(runnable, "ampp-auto-lyrics-desktop-v11").apply { isDaemon = true } },
+        { runnable -> Thread(runnable, "ampp-auto-lyrics-desktop-v14-japanese-r1").apply { isDaemon = true } },
         // Rejection is handled by ensureRequested, which clears its pending marker.
         ThreadPoolExecutor.AbortPolicy(),
     )

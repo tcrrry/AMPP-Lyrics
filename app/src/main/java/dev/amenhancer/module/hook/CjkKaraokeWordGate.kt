@@ -34,3 +34,18 @@ fun isSingleUnmergedCjkWord(timing: CjkKaraokeWordTiming): Boolean {
     return timing.cumulativeDurationMs == timing.nativeDurationMs &&
         timing.cumulativeTextLength == 1
 }
+
+/** Conservative whole-word emphasis from real timing, not acoustic stress detection. */
+fun isSingleUnmergedLongLatinWord(timing: CjkKaraokeWordTiming): Boolean {
+    if (!isSingleUnmergedLatinWordShape(timing)) return false
+    return timing.nativeDurationMs >= maxOf(1500, timing.text.toString().trim().length * 120)
+}
+
+internal fun isSingleUnmergedLatinWordShape(timing: CjkKaraokeWordTiming, minChars: Int = 8): Boolean {
+    if (timing.isBackground || timing.splitBindingCount !in 0..1) return false
+    val text = timing.text.toString().trim()
+    if (text.length !in minChars..32 || !Regex("[A-Za-z]+(?:['’-][A-Za-z]+)*").matches(text)) return false
+    if (timing.cumulativeDurationMs != timing.nativeDurationMs ||
+        timing.cumulativeTextLength != timing.text.length) return false
+    return true
+}

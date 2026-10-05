@@ -39,7 +39,12 @@ internal class LyricBlurRenderer {
         targets.forEach { (view, target) ->
             val state = transitions[view]
             val current = state?.radiusAt(now) ?: 0f
-            if (state != null && state.targetRadius == target) return@forEach
+            if (state != null && state.targetRadius == target) {
+                // Native bind/focus code may replace our effect on the same View.
+                // Reassert the current radius without restarting its transition.
+                applyRadius(view, BidirectionalBlurPolicy.quantize(current))
+                return@forEach
+            }
             transitions[view] = Transition(
                 startRadius = current,
                 targetRadius = target,

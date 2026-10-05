@@ -168,20 +168,34 @@ internal class FragmentSettingsRuntime(
                 } else original
             })
             hooks.install(compose, scope, before = { receiver, _ ->
+                // Cold composition must release the old capture before its first draw,
+                // even if the lazily created preference model cannot be bound yet.
+                notifyFragment(receiver) { fragmentObject, host ->
+                    if (android.os.Build.VERSION.SDK_INT >= 33) FragmentGlassRuntime.settingsEntered(fragmentObject, host)
+                }
                 if (receiver != null) bind(receiver)
             })
             hooks.install(onViewCreated, scope, after = { receiver, args, original ->
                 notifyFragment(receiver) { fragmentObject, host ->
+                    if (android.os.Build.VERSION.SDK_INT >= 33) FragmentGlassRuntime.settingsEntered(fragmentObject, host)
                     observer.onSettingsFragmentViewCreated(fragmentObject, host, args.getOrNull(0) as? View)
+                    (getView?.invoke(fragmentObject) as? View)?.let(NativeSettingsFrameRecovery::schedule)
                 }
                 original
             })
             hooks.install(onResume, scope, after = { receiver, _, original ->
-                notifyFragment(receiver, observer::onSettingsFragmentResumed)
+                notifyFragment(receiver) { fragmentObject, host ->
+                    if (android.os.Build.VERSION.SDK_INT >= 33) FragmentGlassRuntime.settingsEntered(fragmentObject, host)
+                    observer.onSettingsFragmentResumed(fragmentObject, host)
+                    (getView?.invoke(fragmentObject) as? View)?.let(NativeSettingsFrameRecovery::schedule)
+                }
                 original
             })
             hooks.install(onDestroyView, scope, before = { receiver, _ ->
-                if (scope.isActive && receiver != null && fragment.isInstance(receiver)) sessions?.unbind(receiver)
+                if (scope.isActive && receiver != null && fragment.isInstance(receiver)) {
+                    sessions?.unbind(receiver)
+                    if (android.os.Build.VERSION.SDK_INT >= 33) FragmentGlassRuntime.settingsExited(receiver)
+                }
             })
             hooks.install(activityResult, scope, after = { receiver, args, original ->
                 if (scope.isActive && main.isInstance(receiver) && receiver is Activity &&
@@ -216,9 +230,11 @@ internal class FragmentSettingsRuntime(
     }
 
     private fun notifyFragment(receiver: Any?, notify: (Any, Activity) -> Unit) {
-        if (receiver == null || !bind(receiver)) return
+        if (!scope.isActive || receiver == null || fragmentClass?.isInstance(receiver) != true) return
         val activity = runCatching { getActivity?.invoke(receiver) as? Activity }.getOrNull() ?: return
         if (mainClass?.isInstance(activity) != true || activity.packageName != ModuleConstants.TARGET_PACKAGE) return
+        val bound = bind(receiver)
+        LyricsPlaybackDiagnostics.record("settings-handoff", "bound=$bound")
         runCatching { notify(receiver, activity) }
     }
 

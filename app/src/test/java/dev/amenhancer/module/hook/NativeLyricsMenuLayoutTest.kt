@@ -39,7 +39,7 @@ class NativeLyricsMenuLayoutTest {
         }
     }
     private fun appendSource(menu: LinearLayout, source: String) {
-        val row = NativeLyricsMenuRowLayout(context, source)
+        val row = NativeLyricsMenuRowLayout(context, source, labelSizePx = (menu.getChildAt(0) as TextView).textSize)
         menu.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
@@ -73,6 +73,31 @@ class NativeLyricsMenuLayoutTest {
             assertTrue(text.width - text.compoundPaddingLeft - text.compoundPaddingRight >=
                 text.paint.measureText(text.text.toString()))
         }
+    }
+
+    @Test fun emphasisLabelKeepsReadableSizeAcrossIntrinsicAndFinalPasses() {
+        for (caption in listOf("突出：歌词", "突出：发音")) {
+            val menu = nativeMenu()
+            val row = NativeLyricsMenuRowLayout(context, caption, autoSizeLabel = false, labelSizePx = (menu.getChildAt(0) as TextView).textSize)
+            menu.addView(row, LinearLayout.LayoutParams(-1, -2))
+            repeat(3) { measure(menu, dp(360)) }
+            val label = row.getChildAt(0) as TextView
+            assertEquals(16f * context.resources.displayMetrics.scaledDensity, label.textSize, 0.1f)
+            assertTrue(label.width >= label.paint.measureText(caption))
+        }
+    }
+
+    @Test fun sourceDetailScrollsEntireTextWithoutShrinkingTheTitle() {
+        val detail = "逐字 · 自带译文 · 机翻译文 · 自带发音 · 机翻发音 · 发音逐段高亮"
+        val row = NativeLyricsMenuRowLayout(context, "QQ音乐", detail)
+        val text = row.getChildAt(1) as TextView
+        assertEquals(detail, text.text.toString())
+        assertEquals(android.text.TextUtils.TruncateAt.MARQUEE, text.ellipsize)
+        assertEquals(1, text.maxLines)
+        assertEquals(-1, text.marqueeRepeatLimit)
+        assertTrue(text.isSelected)
+        assertTrue(text.isHorizontalFadingEdgeEnabled)
+        assertEquals(dp(16), text.horizontalFadingEdgeLength)
     }
 
     @Test fun legacyPlainDividerReproducesExpandedPopup() {

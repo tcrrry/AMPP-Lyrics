@@ -36,7 +36,7 @@ class DesktopLyricsPresentationTest {
         assertTrue(actual.platformTranslation)
         assertFalse(actual.apiTranslation)
         assertFalse(actual.offlineTranslation)
-        assertEquals("逐行 · 含平台译文", actual.detail())
+        assertEquals("逐行 · 自带译文", actual.detail())
     }
 
     @Test fun mixedPlatformAndGeneratedLinesKeepBothOrigins() {

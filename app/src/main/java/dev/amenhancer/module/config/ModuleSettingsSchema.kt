@@ -35,6 +35,8 @@ object ModuleSettingsSchema {
             KEY_CJK_KARAOKE_ANIMATION_ENABLED,
             default = true,
         ),
+        lyricGlowSensitivity = (values.number("lyric_glow_sensitivity") ?: 100).coerceIn(50, 200),
+        lyricGlowPosition = dev.amenhancer.module.model.LyricGlowPosition.fromStorage(values["lyric_glow_position"] as? String),
         navigationCompensationEnabled = values.boolean(
             KEY_NAVIGATION_COMPENSATION,
             default = false,
@@ -90,6 +92,8 @@ object ModuleSettingsSchema {
                 ),
             KEY_FUTURE_BLUR to settings.futureBlurEnabled,
             KEY_CJK_KARAOKE_ANIMATION_ENABLED to settings.cjkKaraokeAnimationEnabled,
+            "lyric_glow_sensitivity" to settings.lyricGlowSensitivity.coerceIn(50, 200),
+            "lyric_glow_position" to settings.lyricGlowPosition.storageValue,
             KEY_NAVIGATION_COMPENSATION to settings.navigationCompensationEnabled,
             KEY_FORCE_CELLULAR_DATA_ENTRY to settings.forceCellularDataEntryEnabled,
             KEY_LYRIC_BLUR_RADIUS_OFFSET to settings.lyricBlurRadiusOffsetPx.coerceIn(

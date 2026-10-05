@@ -84,6 +84,10 @@ internal class LyricHighlightSession {
     }
 
     @Synchronized
+    fun current(document: Any): Set<Int>? = if (token !== document) null
+        else if (gap) emptySet() else highlightedLineIds.toSet()
+
+    @Synchronized
     fun snapshot(): Set<Int> = snapshotLocked()
 
     @Synchronized

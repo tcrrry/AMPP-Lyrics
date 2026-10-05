@@ -10,7 +10,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /** Native rows choose the popup width; this MATCH_PARENT row fits it in the final pass. */
-internal class NativeLyricsMenuRowLayout(context: Context, label: String) : LinearLayout(context) {
+internal class NativeLyricsMenuRowLayout(context: Context, label: String, detail: String = "", autoSizeLabel: Boolean = true, labelSizePx: Float? = null) : LinearLayout(context) {
     private val separator = Paint().apply {
         color = 0x33FFFFFF
         strokeWidth = context.resources.displayMetrics.density
@@ -28,7 +28,23 @@ internal class NativeLyricsMenuRowLayout(context: Context, label: String) : Line
             setTextColor(Color.WHITE)
             setSingleLine(true)
             setHorizontallyScrolling(false)
-            setAutoSizeTextTypeUniformWithConfiguration(8, 14, 1, TypedValue.COMPLEX_UNIT_SP)
+            textSize = 14f
+            labelSizePx?.let { setTextSize(TypedValue.COMPLEX_UNIT_PX, it) }
+            if (autoSizeLabel) setAutoSizeTextTypeUniformWithConfiguration(
+                (8 * resources.displayMetrics.scaledDensity).toInt(), textSize.toInt().coerceAtLeast(9),
+                1, TypedValue.COMPLEX_UNIT_PX)
+        }, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        if (detail.isNotBlank()) addView(TextView(context).apply {
+            text = detail
+            setTextColor(0xB3FFFFFF.toInt())
+            textSize = 10f
+            setSingleLine(true)
+            setHorizontallyScrolling(true)
+            ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(dp(16))
+            isSelected = true
         }, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 

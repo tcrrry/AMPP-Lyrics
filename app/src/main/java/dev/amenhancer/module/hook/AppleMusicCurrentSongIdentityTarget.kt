@@ -60,7 +60,7 @@ internal class AppleMusicCurrentSongIdentityTarget(
                 override fun afterHookedMethod(param: MethodHookParam) {
                     runCatching {
                         val item = converterMethod.invoke(null, param.args.getOrNull(0))
-                        cache.publish(item, seam.detailsOfItem(item))
+                        cache.publish(item, seam.detailsOfItem(item), param.args.getOrNull(0))
                     }.onFailure { error ->
                         ModernXposedRuntime.log("current song identity publish failed: $error")
                     }
@@ -72,6 +72,24 @@ internal class AppleMusicCurrentSongIdentityTarget(
                 "Player metadata publish method could not be hooked; ${metadataPublishResolution.summary}",
             )
         }
+        // A cold-start restored track need not publish metadata again. Read only the
+        // verified current-item field of the actual lyrics page, never saved preferences.
+        val fragmentClass = installMethod.declaringClass
+        val recoverPage: (Any) -> Unit = { fragment ->
+            if (registration.isActive && fragmentClass.isInstance(fragment)) runCatching {
+                if (recoverCurrentSongFromLyricsPage(fragment, seam, cache))
+                    LyricsPlaybackDiagnostics.record("identity-restored", "id=${cache.current()?.details?.appleMusicId}")
+            }.onFailure { ModernXposedRuntime.log("Restored song identity failed open", it) }
+        }
+        val pageSubscription = CurrentLyricsSourceStatus.installIdentityPageHandler(recoverPage)
+        registration.onClose(pageSubscription::close)
+        runCatching {
+            hook(fragmentClass.getMethod("onResume"), object : ModernMethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    param.thisObject?.let(recoverPage)
+                }
+            })
+        }.onFailure { ModernXposedRuntime.log("Startup song lifecycle fallback unavailable", it) }
         return TargetCapabilityInstall.Active(
             "Current song identity cache installed for embedded settings; " +
                 listOfNotNull(
@@ -83,4 +101,9 @@ internal class AppleMusicCurrentSongIdentityTarget(
                 ).joinToString("; "),
         )
     }
+}
+
+internal fun recoverCurrentSongFromLyricsPage(fragment: Any, seam: CurrentItemIdentitySeam, cache: CurrentSongIdentityCache): Boolean {
+    val item = seam.currentItemOf(fragment) ?: return false
+    return cache.bootstrap(item, seam.detailsOfItem(item))
 }

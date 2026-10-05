@@ -11,6 +11,95 @@ import javax.xml.parsers.DocumentBuilderFactory
 import org.xml.sax.InputSource
 
 class DesktopLyricsTtmlConverterTest {
+    @Test fun celebrityCreditsCannotBorrowNextSungLinesPronunciationAndDisableWholeSongTiming() {
+        val repository = DirectLyricsRepository()
+        // Actual QQ recording 321160072: the 1130 ms credits are followed by
+        // singing at 1510 ms. A nearest-only match borrowed the following row.
+        val roma = "[1510,2340]se sang ui  (1510,1220)mo seo ri (2730,1120)"
+        val response = "<contentroma><![CDATA[$roma]]></contentroma>"
+        val source = DirectLyricsRepository.Result(source = "QQ音乐",
+            lyrics = "[00:01.130]编曲：Jeppe London Bilsby\n[00:01.510]세상의 모서리",
+            wordLyrics = "[1130,370](1130,100)编曲：(1230,270)Jeppe London Bilsby\n[1510,2340](1510,1220)세상의 (2730,1120)모서리",
+            romanizedLyrics = repository.qqRomanizedLyrics(response),
+            romanizedWordLyrics = repository.qqRomanizedWordLyrics(response))
+        val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
+        assertTrue(ttml.contains("itunes:timing=\"Word\""))
+        assertTrue(ttml.contains("<span begin=\"0:01.510\" end=\"0:02.730\">se sang ui  </span>"))
+        assertTrue(ttml.contains("<span begin=\"0:02.730\" end=\"0:03.850\">mo seo ri</span>"))
+        assertTrue(ttml.contains("编曲："))
+        assertTrue(ttml.contains("<text for=\"L1\"> </text>"))
+    }
+    @Test fun emphasizedReadingMergesKanjiWithoutInventingSubWordTimes() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01.000]今日の音", wordLyrics = "[1000,2000](1000,400)今(1400,400)日(1800,400)の(2200,800)音", translatedLyrics = "[00:01.000]今天的声音", source = "QQ音乐")
+        val filled = JapanesePronunciationSupplement.fill(source)
+        val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(filled, offsetMs = 100, primaryPronunciation = true))
+        assertTrue(ttml.contains("itunes:timing=\"Word\""))
+        assertTrue(ttml.contains("<span begin=\"0:00.900\" end=\"0:01.700\">kyou </span>"))
+        assertTrue(ttml.contains("<span begin=\"0:01.700\" end=\"0:02.100\">no </span>"))
+        assertTrue(ttml.contains("<text for=\"L1\">今日の音</text>"))
+        assertTrue(ttml.contains("今天的声音"))
+        assertTrue(requireNotNull(DesktopLyricsPresentation.fromTtml(ttml)).primaryPronunciation)
+        assertEquals(source.wordLyrics, filled.wordLyrics)
+    }
+    @Test fun springThiefQQSampleKeepsProviderSyllableTimesAndHandlesOneMillisecondDrift() {
+        val roma = "[15784,3906]ko (15784,168)u (15953,168)ka (16121,199)kyo (16320,133)u (16587,133)wo (16721,113)nu (16834,256)ke (17090,280)ta (17371,447)ra (17819,312)"
+        val response = "<contentroma><![CDATA[$roma]]></contentroma>"
+        val repository = DirectLyricsRepository()
+        val source = DirectLyricsRepository.Result(lyrics = "[00:15.785]高架橋を抜けたら",
+            wordLyrics = "[15785,3906](15785,336)高(16121,200)架(16321,400)橋(16721,114)を(16835,256)抜(17091,280)け(17371,448)た(17819,312)ら",
+            romanizedLyrics = repository.qqRomanizedLyrics(response),
+            romanizedWordLyrics = repository.qqRomanizedWordLyrics(response), source = "QQ音乐")
+        val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
+        assertTrue(ttml.contains("itunes:timing=\"Word\""))
+        assertTrue(ttml.contains("<span begin=\"0:15.785\" end=\"0:15.952\">ko </span>"))
+        assertTrue(ttml.contains("<span begin=\"0:15.953\" end=\"0:16.121\">u </span>"))
+        assertEquals(10, Regex("<span ").findAll(ttml).count())
+        assertTrue(requireNotNull(DesktopLyricsPresentation.fromTtml(ttml)).wordTimed)
+    }
+
+    @Test fun nativePhoneticTimingWorksEvenWithADifferentDictionaryReading() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01]今日の音",
+            wordLyrics = "[1000,2000](1000,800)今日(1800,400)の(2200,800)音",
+            romanizedLyrics = "[00:01]kon nichi no oto",
+            romanizedWordLyrics = "[1000,2000](1000,400)kon (1400,400)nichi (1800,400)no (2200,800)oto")
+        val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
+        assertTrue(ttml.contains("itunes:timing=\"Word\""))
+        assertTrue(ttml.contains("<span begin=\"0:01.000\" end=\"0:01.400\">kon </span>"))
+        assertTrue(ttml.contains("<span begin=\"0:01.400\" end=\"0:01.800\">nichi </span>"))
+        assertTrue(ttml.contains("<text for=\"L1\">今日の音</text>"))
+    }
+
+    @Test fun mismatchedNativePronunciationTrackDoesNotBorrowAnotherLinesTimes() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01]今日の音",
+            wordLyrics = "[1000,2000](1000,800)今日(1800,400)の(2200,800)音",
+            romanizedLyrics = "[00:01]special reading",
+            romanizedWordLyrics = "[1000,2000](1000,800)different (1800,1200)reading")
+        assertTrue(requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
+            .contains("itunes:timing=\"Line\""))
+    }
+
+    @Test fun nativeReadingMustAgreeWithDictionaryBeforeReusingWordTimes() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01.000]今日の音", wordLyrics = "[1000,2000](1000,800)今日(1800,400)の(2200,800)音", romanizedLyrics = "[00:01.000]special platform reading")
+        val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
+        assertTrue(ttml.contains("itunes:timing=\"Line\""))
+        assertTrue(ttml.contains(">special platform reading</p>"))
+        assertFalse(ttml.contains("<span"))
+        assertTrue(ttml.contains("<text for=\"L1\">今日の音</text>"))
+    }
+    @Test fun emphasizeDoesNotGenerateWordTimesForLineLyricsOrAlterSourceResult() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01.000]好きだよ", romanizedLyrics = "[00:01.000]suki da yo")
+        val emphasized = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
+        assertTrue(emphasized.contains(">suki da yo</p>"))
+        assertTrue(emphasized.contains("<text for=\"L1\">好きだよ</text>"))
+        assertFalse(emphasized.contains("<span"))
+        val original = requireNotNull(DesktopLyricsTtmlConverter.convert(source))
+        assertTrue(original.contains(">好きだよ</p>"))
+        assertTrue(original.contains("<text for=\"L1\">suki da yo</text>"))
+    }
+    @Test fun missingPronunciationKeepsOriginalEvenWhenEmphasisSelected() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01.000]Hello", wordLyrics = "[1000,1000](1000,1000)Hello")
+        assertEquals(DesktopLyricsTtmlConverter.convert(source), DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
+    }
     @Test fun positiveOffsetAdvancesLineTimesWithoutSynthesizingWordTimes() {
         val result = DirectLyricsRepository.Result(lyrics = "[00:01.000]one")
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(result, 3_000L, 100))

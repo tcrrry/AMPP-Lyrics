@@ -148,6 +148,56 @@ class CurrentSongIdentityTargetTest {
 
 
 
+    @Test fun `restored first song bootstraps settings and listeners without switching songs`() {
+        val seam = CurrentItemIdentitySeam(resolver(SongFragment::class.java))
+        assertNull(seam.resolve(SongFragment.installMethod()))
+        val cache = CurrentSongIdentityCache()
+        val events = mutableListOf<TargetCurrentSong?>()
+        cache.addListener { events += it }
+        val item = SongItem("12345", "Restored track", "Artist")
+        val page = SongFragment(item)
+        assertTrue(recoverCurrentSongFromLyricsPage(page, seam, cache))
+        assertEquals(CurrentSongDetails(12345L, "Restored track", "Artist"), cache.current()?.details)
+        assertTrue(cache.current()?.item === item)
+        assertEquals(1, events.size)
+        assertTrue(!recoverCurrentSongFromLyricsPage(page, seam, cache))
+        assertEquals(1, events.size)
+        assertTrue(cache.canRebind(12345L, 12345L))
+    }
+
+    @Test fun `restored page cannot overwrite a newer player song or clear it with invalid data`() {
+        val seam = CurrentItemIdentitySeam(resolver(SongFragment::class.java))
+        assertNull(seam.resolve(SongFragment.installMethod()))
+        val cache = CurrentSongIdentityCache()
+        cache.publish(SongItem("67890"), CurrentSongDetails(67890L))
+        assertTrue(!recoverCurrentSongFromLyricsPage(SongFragment(SongItem("12345")), seam, cache))
+        assertTrue(!recoverCurrentSongFromLyricsPage(SongFragment(null), seam, cache))
+        assertEquals(67890L, cache.current()?.details?.appleMusicId)
+        cache.publish(null, null)
+        assertTrue(!recoverCurrentSongFromLyricsPage(SongFragment(SongItem("0")), seam, cache))
+        assertTrue(!recoverCurrentSongFromLyricsPage(SongFragment(SongItem("bad-id")), seam, cache))
+        assertNull(cache.current())
+    }
+
+    @Test fun `opening the source menu restores identity before its lyric session receives the page`() {
+        val seam = CurrentItemIdentitySeam(resolver(SongFragment::class.java))
+        assertNull(seam.resolve(SongFragment.installMethod()))
+        val cache = CurrentSongIdentityCache()
+        val page = SongFragment(SongItem("12345"))
+        val subscription = CurrentLyricsSourceStatus.installIdentityPageHandler { recoverCurrentSongFromLyricsPage(it, seam, cache) }
+        var requestedId: Long? = null
+        CurrentLyricsSourceStatus.installPageHandler { requestedId = cache.current()?.details?.appleMusicId }
+        try {
+            CurrentLyricsSourceStatus.rememberVisiblePage(page)
+            assertEquals(12345L, requestedId)
+            assertEquals(12345L, cache.current()?.details?.appleMusicId)
+            subscription.close()
+            cache.publish(null, null)
+            CurrentLyricsSourceStatus.rememberVisiblePage(page)
+            assertNull(cache.current())
+        } finally { subscription.close(); CurrentLyricsSourceStatus.installPageHandler { } }
+    }
+
     private fun resolver(
         owner: Class<*>,
         installMethod: Method = owner.getDeclaredMethod("I2", Any::class.java),

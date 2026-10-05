@@ -1,0 +1,89 @@
+name: 私有 v1.4 多语言注音单 APK 测试
+
+on:
+  push:
+    branches: [test/v1.4-japanese-pronunciation]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  single-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      APK: AMPP-Lyrics-v1.4-test-r17-AppleMusic-7.0.0-beta-arm64.apk
+      TAG: v1.4-test-r17
+    steps:
+      - name: 禁止在公开仓库生成测试包
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/$GH_REPO --jq .private)" = true
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: build-tools;37.0.0 platforms;android-37.0
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 校验映射、测试并构建普通模块
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-profile-data.py
+          python3 scripts/verify-glass-reference.py
+          bash gradlew test :app:lintDebug :glass:lintDebug :glass-lab:lintDebug :app:assembleDebug :glass-lab:assembleDebug :glass-lab:assembleDebugAndroidTest --no-daemon
+      - name: 核验内置日文词典与许可
+        run: |
+          set -euo pipefail
+          curl --fail --location https://repo.maven.apache.org/maven2/com/atilika/kuromoji/kuromoji-ipadic/0.9.0/kuromoji-ipadic-0.9.0.jar --output /tmp/kuromoji-ipadic.jar
+          python3 scripts/verify-japanese-pronunciation.py app/build/outputs/apk/debug/app-debug.apk /tmp/kuromoji-ipadic.jar
+          python3 scripts/verify-bundled-pronunciation.py app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: 下载固定原包与工具
+        run: |
+          set -euo pipefail
+          mkdir -p inputs dist
+          gh release download embedded-2026.08.10-r1 --repo Zennmn/AM-plus-plus --pattern '103-version-com.apple.android.music-npatched.apks' --dir inputs
+          gh release download V1.4.9 --repo REAndroid/APKEditor --pattern 'APKEditor-1.4.9.jar' --dir inputs
+          gh release download v1.0.7 --repo 7723mod/NPatch --pattern 'jar-v1.0.7-741-release.jar' --dir inputs
+      - name: 生成单 APK 并核验原包、接口、资源、DEX、原生库及签名
+        run: |
+          set -euo pipefail
+          python3 scripts/package-700-single-apk.py \
+            inputs/103-version-com.apple.android.music-npatched.apks \
+            app/build/outputs/apk/debug/app-debug.apk "dist/$APK" \
+            --editor inputs/APKEditor-1.4.9.jar \
+            --npatch inputs/jar-v1.0.7-741-release.jar \
+            --apksigner "$ANDROID_HOME/build-tools/37.0.0/apksigner" \
+            --aapt2 "$ANDROID_HOME/build-tools/37.0.0/aapt2"
+      - name: 记录实际测试结果
+        run: python3 scripts/report-private-v1.4-tests.py
+      - name: 发布独立预发布测试下载
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --json isPrerelease --jq .isPrerelease > existing-release.txt 2>/dev/null; then
+            test "$(cat existing-release.txt)" = true
+            gh api "repos/$GH_REPO/releases/tags/$TAG" --jq .assets > existing-assets.json
+            for file in dist/*; do
+              name=$(basename "$file")
+              digest="sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
+              if jq -e --arg name "$name" 'any(.[]; .name == $name)' existing-assets.json >/dev/null; then
+                test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' existing-assets.json)" = "$digest"
+              else
+                gh release upload "$TAG" "$file"
+              fi
+            done
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title 'v1.4 私有测试 r17 · 首次设置绘制与辉光控制 · 普通单 APK' \
+              --notes-file docs/release-v1.4-private-test.md
+          fi

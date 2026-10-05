@@ -15,6 +15,8 @@ data class ModuleSettings(
     val futureBlurEnabled: Boolean = true,
     /** Enables the native rush-gradient adaptation for CJK karaoke lyrics. */
     val cjkKaraokeAnimationEnabled: Boolean = true,
+    val lyricGlowSensitivity: Int = 100,
+    val lyricGlowPosition: LyricGlowPosition = LyricGlowPosition.ALL,
     val navigationCompensationEnabled: Boolean = false,
     /** Restores native Data settings and the app's cellular availability predicate. */
     val forceCellularDataEntryEnabled: Boolean = false,
@@ -35,6 +37,8 @@ data class ModuleSettings(
         const val DEFAULT_CUSTOM_LYRICS_ENABLED = true
         const val MIN_LYRIC_BLUR_RADIUS_OFFSET_PX = -10
         const val MAX_LYRIC_BLUR_RADIUS_OFFSET_PX = 10
+        const val MIN_LYRIC_GLOW_SENSITIVITY = 50
+        const val MAX_LYRIC_GLOW_SENSITIVITY = 200
         const val FOLLOW_SYSTEM_APPLE_MUSIC_DPI = 0
         const val MIN_APPLE_MUSIC_DPI = 160
         const val MAX_APPLE_MUSIC_DPI = 640

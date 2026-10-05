@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicReference
 data class TargetCurrentSong(
     val item: Any,
     val details: CurrentSongDetails,
+    val nativeMetadata: Any? = null,
 )
 
 /** Shared target-process state from Apple's player-level metadata funnel. */
@@ -17,13 +18,26 @@ class CurrentSongIdentityCache {
     private val recentIds = ArrayDeque<Long>()
     private val recentIdsLock = Any()
 
-    fun publish(item: Any?, details: CurrentSongDetails?) {
+    @Synchronized fun publish(item: Any?, details: CurrentSongDetails?, nativeMetadata: Any? = null) {
         val published = if (item != null && details != null && details.appleMusicId > 0L) {
-            TargetCurrentSong(item, details)
+            TargetCurrentSong(item, details, nativeMetadata)
         } else {
             null
         }
         current.set(published)
+        notifyPublished(published)
+    }
+
+    /** A restored page can fill a missed startup event, but never replace player metadata. */
+    @Synchronized internal fun bootstrap(item: Any?, details: CurrentSongDetails?): Boolean {
+        if (item == null || details == null || details.appleMusicId <= 0L || current.get() != null) return false
+        val restored = TargetCurrentSong(item, details)
+        current.set(restored)
+        notifyPublished(restored)
+        return true
+    }
+
+    private fun notifyPublished(published: TargetCurrentSong?) {
         synchronized(recentIdsLock) {
             if (published == null) {
                 recentIds.clear()
@@ -59,4 +73,3 @@ class CurrentSongIdentityCache {
         const val MAX_RECENT_IDS = 8
     }
 }
-

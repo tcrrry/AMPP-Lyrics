@@ -11,7 +11,7 @@ import java.util.Locale
 
 /** Adds machine translation only where the selected provider has no translation. */
 internal class DesktopLyricsSupplement(private val context: Context) {
-    data class Outcome(val result: DirectLyricsRepository.Result, val status: String)
+    data class Outcome(val result: DirectLyricsRepository.Result, val status: String, val retryable: Boolean = false)
     private data class TimedLine(val at: Long, val text: String)
     private val stamp = Regex("\\[(\\d{1,3}):(\\d{2})(?:[.:](\\d{1,3}))?]")
 
@@ -59,7 +59,7 @@ internal class DesktopLyricsSupplement(private val context: Context) {
             attempt.isFailure -> attempt.exceptionOrNull()?.message?.take(150).orEmpty().ifBlank { "翻译暂不可用" }
             else -> "当前歌曲无需补译或源语言为中文"
         }
-        if (generated.isEmpty()) return Outcome(result, status)
+        if (generated.isEmpty()) return Outcome(result, status, retryable = true)
         val generatedStarts = mutableSetOf<Long>()
         val all = original.mapIndexedNotNull { index, line ->
             val officialLine = official.minByOrNull { kotlin.math.abs(it.at - line.at) }
@@ -73,7 +73,7 @@ internal class DesktopLyricsSupplement(private val context: Context) {
             val second = line.at / 1_000L % 60L
             val millis = line.at % 1_000L
             String.format(Locale.US, "[%02d:%02d.%03d]%s", minute, second, millis, line.text)
-        }, supplementalTranslationKind = mode, supplementalTranslationStarts = generatedStarts), status)
+        }, supplementalTranslationKind = mode, supplementalTranslationStarts = generatedStarts), status, retryable = generated.size < missing.size)
     }
 
     private fun lines(raw: String): List<TimedLine> = raw.lineSequence().flatMap { line ->

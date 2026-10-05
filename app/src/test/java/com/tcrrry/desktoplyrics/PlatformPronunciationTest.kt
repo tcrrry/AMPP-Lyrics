@@ -46,9 +46,37 @@ class PlatformPronunciationTest {
         assertEquals("[00:01.000]kimi", repository.netEaseRomanizedLyrics(response))
     }
 
+    @Test fun netEaseUsesPronunciationSynchronizedWithTheSelectedOriginalTimeline() {
+        val response = JSONObject().put("lrc", JSONObject().put("lyric", "[00:00.590]니가"))
+            .put("romalrc", JSONObject().put("lyric", "[00:00.590]ni ga"))
+            .put("yromalrc", JSONObject().put("lyric", "[00:01.100]ni ga"))
+        assertEquals("[00:00.590]ni ga", repository.netEaseRomanizedLyrics(response))
+        response.put("yrc", JSONObject().put("lyric", "[1100,1000](1100,500,0)니(1600,500,0)가"))
+        assertEquals("[00:01.100]ni ga", repository.netEaseRomanizedLyrics(response))
+        assertEquals("", repository.netEaseRomanizedWordLyrics(response))
+        response.getJSONObject("yromalrc").put("lyric", "")
+        assertEquals("[00:00.590]ni ga", repository.netEaseRomanizedLyrics(response))
+    }
+
     @Test fun qqReadsItsSeparateRomanizationTrackAndRemovesQRCTimestamps() {
         val response = "<contentroma><![CDATA[[1000,1000]ki(1000,500)mi(1500,500)]]></contentroma>"
         assertEquals("[00:01.000]kimi", repository.qqRomanizedLyrics(response))
+    }
+
+    @Test fun qqPreservesNativePhoneticTimingInsteadOfOnlyFlatteningIt() {
+        val response = "<contentroma><![CDATA[[15784,3906]ko (15784,168)u (15953,168)ka (16121,199)]]></contentroma>"
+        assertEquals("[15784,3906](15784,168)ko (15953,168)u (16121,199)ka ", repository.qqRomanizedWordLyrics(response))
+        assertEquals("", repository.qqRomanizedWordLyrics("<contentroma><![CDATA[[00:01]kimi]]></contentroma>"))
+        val result = DirectLyricsRepository.Result(romanizedWordLyrics = "[1000,1000](1000,500)ki(1500,500)mi")
+        assertEquals(result.romanizedWordLyrics, result.toJson().getString("romanizedWordLyrics"))
+    }
+
+    @Test fun netEasePreservesCanonicalWordPronunciationWhenLineTrackAlsoExists() {
+        val track = "[1000,1000](1000,500,0)ki(1500,500,0)mi"
+        val root = JSONObject().put("romalrc", JSONObject().put("lyric", "[00:01]kimi"))
+            .put("yromalrc", JSONObject().put("lyric", track))
+        assertEquals(track, repository.netEaseRomanizedWordLyrics(root))
+        assertEquals("", repository.netEaseRomanizedWordLyrics(JSONObject()))
     }
 
     @Test fun absentOrCorruptOptionalQQTrackDoesNotInventPronunciation() {

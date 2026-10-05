@@ -25,7 +25,7 @@ class LyricBlurRadiusOffsetStructuralRegressionTest {
         assertTrue(target.contains("TargetConfigClient.currentSettings().lyricBlurRadiusOffsetPx"))
         assertTrue(runtime.contains("BidirectionalBlurPolicy.applyRadiusOffset("))
         assertTrue(runtime.contains("TabletLyricVisualPolicy.mergeBlurRadius("))
-        assertTrue(runtime.contains("isHighlighted = includeFocus && adapterPos in effectiveIds"))
+        assertTrue(runtime.contains("isHighlighted = focusEnabled && adapterPos in effectiveIds"))
         assertTrue(runtime.contains("applyBlur(includeFocus = false, immediate = true)"))
     }
 }

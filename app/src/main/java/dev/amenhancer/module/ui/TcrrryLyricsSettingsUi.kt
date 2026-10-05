@@ -41,7 +41,8 @@ internal object TcrrryLyricsSettingsUi {
     private val SOURCES = listOf<String?>(null, "QQ音乐", "网易云音乐", "LRCLIB")
 
     fun render(activity: Activity, parent: LinearLayout, song: CurrentSongDetails?, refreshPage: () -> Unit,
-        refreshAppearance: () -> Unit, settings: ModuleSettings, openMatchingSettings: () -> Unit) {
+        refreshAppearance: () -> Unit, settings: ModuleSettings, onSettingsChanged: (ModuleSettings) -> Unit,
+        openMatchingSettings: () -> Unit) {
         val id = song?.appleMusicId ?: 0L
         val selected = CurrentLyricsSourceStatus.selectedSource(activity, id)
         val applied = CurrentLyricsSourceStatus.appliedSource(activity, id)
@@ -62,14 +63,7 @@ internal object TcrrryLyricsSettingsUi {
             }
             addView(sourceStatusLabel(activity) { CurrentLyricsSourceStatus.description(activity, id) },
                 fullMargin(activity, 12))
-            addView(action(activity, "查看匹配输入") {
-                SettingsUiTheme.dialogBuilder(activity).setTitle("传入歌词匹配器的信息")
-                    .setMessage("Apple Music ID：${id.takeIf { it > 0L } ?: "未取得"}\n" +
-                        "自定义歌词替换：${if (settings.customLyricsEnabled) "开启" else "关闭"}\n" +
-                        "自动实时补全：${if (settings.automaticLyricsEnabled) "开启" else "关闭"}\n\n" +
-                        CurrentLyricsSourceStatus.matchInput(activity, id))
-                    .setPositiveButton("知道了", null).show()
-            }, fullMargin(activity, 10))
+
         })
 
         parent.addView(card(activity).apply {
@@ -116,7 +110,43 @@ internal object TcrrryLyricsSettingsUi {
             addView(action(activity, "匹配历史与预览") { showHistory(activity, id, song, refreshPage) }, fullMargin(activity, 8))
         }, fullMargin(activity, 12))
 
+        parent.addView(glowSettingsCard(activity, settings, onSettingsChanged, refreshPage), fullMargin(activity, 12))
         renderTranslationSettings(activity, parent, id, refreshPage)
+        val pronunciationPrefs = activity.getSharedPreferences("japanese_pronunciation", Context.MODE_PRIVATE)
+        val pronunciationEnabled = pronunciationPrefs.getBoolean("enabled", true)
+        parent.addView(card(activity).apply {
+            addView(title(activity, "离线日文注音", 18f))
+            addView(label(activity, "自带发音优先，只补缺失的日文行。词典随安装包内置，无需额外下载或代理。专名和歌词特殊读法可能不准确。", 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 5))
+            addView(chip(activity, if (pronunciationEnabled) "已开启 · 点击关闭" else "已关闭 · 点击开启", selected = pronunciationEnabled).apply {
+                setOnClickListener {
+                    pronunciationPrefs.edit().putBoolean("enabled", !pronunciationEnabled).apply()
+                    CurrentLyricsSourceStatus.refreshSilently(id)
+                    refreshPage()
+                }
+            }, fullMargin(activity, 10))
+        }, fullMargin(activity, 12))
+
+        parent.addView(card(activity).apply {
+            addView(title(activity, "韩语／粤语注音", 18f))
+            addView(label(activity, "小型组件已内置，离线使用，无需下载或代理。自带发音优先；韩语自动补缺失行，粤语仅对手动指定的当前歌曲补粤拼，避免误注普通话。专名、多音字和特殊唱法可能不准确。", 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 5))
+            val korean = pronunciationPrefs.getBoolean("korean_enabled", true)
+            addView(chip(activity, if (korean) "韩语已开启 · 点击关闭" else "韩语已关闭 · 点击开启", selected = korean).apply {
+                setOnClickListener {
+                    pronunciationPrefs.edit().putBoolean("korean_enabled", !korean).apply()
+                    CurrentLyricsSourceStatus.refreshSilently(id); refreshPage()
+                }
+            }, fullMargin(activity, 10))
+            val cantonese = pronunciationPrefs.getBoolean("cantonese_$id", false)
+            addView(chip(activity, if (cantonese) "当前歌曲粤语注音：开" else "当前歌曲粤语注音：关", selected = cantonese).apply {
+                isEnabled = id > 0L
+                setOnClickListener {
+                    if (id <= 0L) return@setOnClickListener
+                    pronunciationPrefs.edit().putBoolean("cantonese_$id", !cantonese).apply()
+                    CurrentLyricsSourceStatus.refreshSilently(id); refreshPage()
+                }
+            }, fullMargin(activity, 10))
+            addView(label(activity, "韩语：Unicode CLDR（Unicode-3.0）；粤语：Rime / CanCLID 粤拼字词典（CC-BY-4.0）。许可和来源随包保留。", 11f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 7))
+        }, fullMargin(activity, 12))
 
         parent.addView(card(activity).apply {
             addView(LinearLayout(activity).apply {
@@ -169,6 +199,61 @@ internal object TcrrryLyricsSettingsUi {
                 else parent.postDelayed(this, 1_000L)
             }
         }, 1_000L)
+    }
+
+    /** Our glow controls live here, separate from the upstream AM++ page. */
+    internal fun glowSettingsCard(activity: Activity, settings: ModuleSettings,
+        onSettingsChanged: (ModuleSettings) -> Unit, refreshPage: () -> Unit): LinearLayout {
+        var current = settings
+        fun save(next: ModuleSettings) { current = next; onSettingsChanged(next) }
+        return card(activity).apply {
+            addView(title(activity, "歌词辉光增强", 18f))
+            addView(label(activity, "增强中日韩单字和长英文词的辉光。总开关需重开 Apple Music；灵敏度与位置保存后生效。",
+                12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 5))
+            addView(action(activity, if (current.cjkKaraokeAnimationEnabled) "已开启 · 点击关闭" else "已关闭 · 点击开启") {
+                save(current.copy(cjkKaraokeAnimationEnabled = !current.cjkKaraokeAnimationEnabled))
+                refreshPage()
+            }, fullMargin(activity, 10))
+            if (current.cjkKaraokeAnimationEnabled) {
+                val value = label(activity, "辉光灵敏度：${current.lyricGlowSensitivity}%", 14f, SettingsUiTheme.colors(activity).text)
+                addView(value, fullMargin(activity, 12))
+                addView(SeekBar(activity).apply {
+                    max = 150
+                    progress = current.lyricGlowSensitivity.coerceIn(50, 200) - 50
+                    contentDescription = "辉光灵敏度"
+                    progressTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).primary)
+                    progressBackgroundTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).outline)
+                    thumbTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).text)
+                    splitTrack = false
+                    setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                            value.text = "辉光灵敏度：${progress + 50}%"
+                            if (fromUser) save(current.copy(lyricGlowSensitivity = progress + 50))
+                        }
+                        override fun onStartTrackingTouch(bar: SeekBar?) = Unit
+                        override fun onStopTrackingTouch(bar: SeekBar?) = Unit
+                    })
+                }, fullMargin(activity, 4))
+                addView(label(activity, "50%～200%，越高越容易触发；100% 保留默认门槛。", 12f,
+                    SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 4))
+                addView(action(activity, "恢复默认灵敏度") {
+                    save(current.copy(lyricGlowSensitivity = 100)); refreshPage()
+                }, fullMargin(activity, 8))
+                val position = action(activity, "辉光触发位置：${current.lyricGlowPosition.displayName}") {}
+                position.setOnClickListener {
+                    val choices = dev.amenhancer.module.model.LyricGlowPosition.entries
+                    SettingsUiTheme.dialogBuilder(activity).setTitle("辉光触发位置")
+                        .setSingleChoiceItems(choices.map { it.displayName }.toTypedArray(), choices.indexOf(current.lyricGlowPosition)) { picker, which ->
+                            save(current.copy(lyricGlowPosition = choices[which]))
+                            position.text = "辉光触发位置：${current.lyricGlowPosition.displayName}"
+                            picker.dismiss()
+                        }.setNegativeButton("取消", null).show()
+                }
+                addView(position, fullMargin(activity, 8))
+                addView(label(activity, "句尾优先会减少句中触发；仅句尾按歌词位置判断，不识别人声。", 12f,
+                    SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 7))
+            }
+        }
     }
 
     /** Persist user input before asynchronous status updates can rebuild the page. */
@@ -393,7 +478,7 @@ internal object TcrrryLyricsSettingsUi {
         runCatching { EmbeddedMlKit.initialize(activity) }
             .onFailure { card.addView(label(activity, "离线模型初始化失败：${it.message.orEmpty().take(100)}", 12f, SettingsUiTheme.colors(activity).secondary)) }
         card.addView(label(activity,
-            "按文字判断日语、韩语等语言；其他语言可手动指定。请下载源语言和中文模型。", 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 12))
+            "按文字判断日语、韩语等语言；其他语言可手动指定。首次使用需联网下载源语言和中文模型（Google ML Kit），部分网络环境可能需要代理。模型下载完成后可离线使用。", 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 12))
         val translationPrefs = activity.getSharedPreferences("supplement_translation", Context.MODE_PRIVATE)
         val selected = translationPrefs.getString("offline_source_language", "auto").orEmpty()
         val selectedName = if (selected == "auto") "自动判断" else
@@ -485,7 +570,7 @@ internal object TcrrryLyricsSettingsUi {
 
     private fun showModelDownload(activity: Activity, id: Long, codes: List<String>, done: () -> Unit) {
         SettingsUiTheme.dialogBuilder(activity).setTitle("下载离线语言包")
-            .setMessage("将下载 ${codes.joinToString("、") { Locale.forLanguageTag(it).getDisplayLanguage(Locale.SIMPLIFIED_CHINESE) }} 模型。")
+            .setMessage("将下载 ${codes.joinToString("、") { Locale.forLanguageTag(it).getDisplayLanguage(Locale.SIMPLIFIED_CHINESE) }} 模型。首次下载需连接 Google 服务，部分网络可能需要代理；下载完成后可离线使用。")
             .setPositiveButton("允许当前网络") { _, _ -> downloadModels(activity, id, codes, false, done) }
             .setNeutralButton("仅 Wi-Fi") { _, _ -> downloadModels(activity, id, codes, true, done) }
             .setNegativeButton("取消", null).show()

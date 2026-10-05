@@ -24,7 +24,7 @@ internal object NativeLineLyricsPresentation {
         }
     }
 
-    internal fun apply(root: View, original: TextView, pronunciation: TextView, translation: TextView) {
+    internal fun apply(root: View, original: TextView, pronunciation: TextView, translation: TextView, primaryPronunciation: Boolean = false) {
         check(original.parent === pronunciation.parent && original.parent === translation.parent)
         if (!rows.containsKey(root)) {
             rows[root] = listOf(original, pronunciation, translation).map { view ->
@@ -38,6 +38,8 @@ internal object NativeLineLyricsPresentation {
         }
         val oldTop = rows.getValue(root).first().anchors
         val oldBottom = rows.getValue(root).last().anchors
+        // The auxiliary binding contains the original in phonetic emphasis mode.
+        // Keep it above the primary binding in either mode, then translation below.
         anchors(pronunciation, listOf(oldTop[0], oldTop[1], original.id, -1))
         anchors(original, listOf(-1, pronunciation.id, translation.id, -1))
         anchors(translation, listOf(-1, original.id, oldBottom[2], oldBottom[3]))
@@ -69,7 +71,8 @@ internal object NativeLineLyricsPresentation {
                 if (!owns(param.thisObject) || type.invoke(param.thisObject, param.args[1]) != 0) { clear(root); return }
                 val views = binding.get(item) ?: return
                 if (!nativeBinding.isInstance(views)) { clear(root); return }
-                apply(root, original.get(views) as TextView, pronunciation.get(views) as TextView, translation.get(views) as TextView)
+                apply(root, original.get(views) as TextView, pronunciation.get(views) as TextView, translation.get(views) as TextView,
+                    NativeLyricsPronunciationSubtitle.isPronunciationPrimary(pointer.invoke(param.thisObject)))
             }
             ModernXposedRuntime.hookMethod(base.getDeclaredMethod("B"), object : ModernMethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {

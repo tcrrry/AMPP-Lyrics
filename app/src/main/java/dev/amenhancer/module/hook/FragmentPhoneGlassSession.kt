@@ -87,11 +87,14 @@ internal class FragmentPhoneGlassSession(
         hideSeam(native.find(ChromeResource.NAVIGATION_TABS_DIVIDER))
         native.syncMiniPresentation(miniRoot)
     }
+    private val frameDrawGate = GlassFrameDrawGate()
     override fun onPreDraw(): Boolean {
         val draw = super.onPreDraw()
         reconcileNativeMaterials()
         if (activated && !reported) { reported = true; ready() }
-        return draw
+        return frameDrawGate.allowDraw(!draw).also { allowed ->
+            if (!allowed) root.postInvalidateOnAnimation()
+        }
     }
     override fun observeMiniTouch(event: MotionEvent) = observeTouch(event)
     private fun reconcileNativeMaterials() {

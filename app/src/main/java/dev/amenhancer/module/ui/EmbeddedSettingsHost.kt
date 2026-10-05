@@ -2066,14 +2066,14 @@ internal class EmbeddedSettingsHost private constructor(
                 Toast.makeText(activity, "已保存；需要重启的设置请重开 Apple Music。", Toast.LENGTH_LONG).show()
                 if (close) dialog.dismiss()
             } else {
-                Toast.makeText(activity, "保存 AM++ 设置失败", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, "保存设置失败", Toast.LENGTH_SHORT).show()
             }
         }
 
         fun updateDraft(next: ModuleSettings) {
             draft = next
             if (!controller.saveOrdinarySettings(next)) {
-                Toast.makeText(activity, "保存 AM++ 设置失败", Toast.LENGTH_SHORT).show()
+                Toast.makeText(activity, "保存设置失败", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -2146,7 +2146,7 @@ internal class EmbeddedSettingsHost private constructor(
             if (page == EmbeddedSettingsPage.TCRRRY_LYRICS) {
                 TcrrryLyricsSettingsUi.render(activity, content, controller.currentSongDetails(),
                     refreshPage = { pageRefresh?.invoke() }, refreshAppearance = { refreshAppearance() },
-                    settings = draft, openMatchingSettings = {
+                    settings = draft, onSettingsChanged = ::updateDraft, openMatchingSettings = {
                         page = EmbeddedSettingsPage.CUSTOM_LYRICS
                         renderPage()
                     })
@@ -2183,6 +2183,7 @@ internal class EmbeddedSettingsHost private constructor(
             }
             syncBottomCloseButton()
             syncDialogLayout()
+            dialog.window?.decorView?.let(dev.amenhancer.module.hook.NativeSettingsFrameRecovery::schedule)
         }
 
         refreshAppearance = {
@@ -2308,7 +2309,7 @@ internal class EmbeddedSettingsHost private constructor(
             addView(embeddedSettingRow(
                 activity,
                 "双向歌词模糊",
-                "手动滚动停止 1 秒后恢复",
+                "手动浏览期间清晰，停止 3.5 秒后平滑回位并恢复模糊",
                 settings.futureBlurEnabled,
                 iconTint = EmbeddedSettingsPalette.primary,
                 iconDrawable = EmbeddedGlyphDrawable(
@@ -2316,18 +2317,6 @@ internal class EmbeddedSettingsHost private constructor(
                     EmbeddedSettingsPalette.primary,
                 ),
             ) { onSettingsChanged(settings.copy(futureBlurEnabled = it)) })
-            addView(embeddedDivider(activity))
-            addView(embeddedSettingRow(
-                activity,
-                "CJK 长尾歌词动画",
-                "CJK 歌词启用原生 rush-gradient 动画 · 重开 Apple Music 后生效",
-                settings.cjkKaraokeAnimationEnabled,
-                iconTint = EmbeddedSettingsPalette.accent,
-                iconDrawable = EmbeddedGlyphDrawable(
-                    EmbeddedGlyphKind.Music,
-                    EmbeddedSettingsPalette.accent,
-                ),
-            ) { onSettingsChanged(settings.copy(cjkKaraokeAnimationEnabled = it)) })
             addView(embeddedDivider(activity))
             addView(embeddedSettingRow(
                 activity,

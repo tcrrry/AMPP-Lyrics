@@ -29,6 +29,7 @@ class DirectLyricsRepository {
             Transliterator.getInstance("Any-Latin; NFD; [:Nonspacing Mark:] Remove; NFC")
         } else null
     }
+    data class PronunciationUnit(val start: Int, val end: Int, val text: String)
     data class Result(
         val lyrics: String = "",
         val translatedLyrics: String = "",
@@ -42,14 +43,19 @@ class DirectLyricsRepository {
         val score: Int = 0,
         val alternatives: List<Result> = emptyList(),
         val romanizedLyrics: String = "",
+        val romanizedWordLyrics: String = "",
         val supplementalTranslationKind: String = "",
         val supplementalTranslationStarts: Set<Long> = emptySet(),
+        val supplementalPronunciationStarts: Set<Long> = emptySet(),
+        val supplementalPronunciationLanguages: Map<Long, String> = emptyMap(),
+        val supplementalPronunciationUnits: Map<Long, List<PronunciationUnit>> = emptyMap(),
     ) {
         private fun candidateJson(): JSONObject = JSONObject()
             .put("lyrics", lyrics)
             .put("translatedLyrics", translatedLyrics)
             .put("wordLyrics", wordLyrics)
             .put("romanizedLyrics", romanizedLyrics)
+            .put("romanizedWordLyrics", romanizedWordLyrics)
             .put("duration", durationMs)
             .put("cover", cover)
             .put("source", source)
@@ -75,6 +81,7 @@ class DirectLyricsRepository {
         val translatedLyrics: String,
         val wordLyrics: String,
         val romanizedLyrics: String,
+        val romanizedWordLyrics: String,
     )
     private val identityCache = ConcurrentHashMap<String, ResolvedIdentity>()
     private val artistAliasCache = ConcurrentHashMap<String, Set<String>>()
@@ -438,6 +445,7 @@ class DirectLyricsRepository {
                         translatedLyrics = richLyrics.translatedLyrics,
                         wordLyrics = richLyrics.wordLyrics,
                         romanizedLyrics = richLyrics.romanizedLyrics,
+                        romanizedWordLyrics = richLyrics.romanizedWordLyrics,
                         durationMs = song.optLong("interval", 0L) * 1000L,
                         cover = cover,
                         source = "QQ音乐",
@@ -522,11 +530,18 @@ class DirectLyricsRepository {
             translatedLyrics = translated,
             wordLyrics = if (hasWordTiming) qrcToCanonicalWordLyrics(original) else "",
             romanizedLyrics = romanized,
+            romanizedWordLyrics = qqRomanizedWordLyrics(response),
         )
     }
 
     internal fun qqRomanizedLyrics(response: String): String = runCatching {
         decodeQqRomanizedTrack(extractQqTrack(response, "contentroma"))
+    }.getOrDefault("")
+
+    internal fun qqRomanizedWordLyrics(response: String): String = runCatching {
+        extractQqTrack(response, "contentroma").takeIf(String::isNotBlank)
+            ?.let(::decodeQqTrack)?.let(::extractQqLyricContent)
+            ?.let(::qrcToCanonicalWordLyrics).orEmpty()
     }.getOrDefault("")
 
     internal fun decodeQqRomanizedTrack(payload: String): String =
@@ -707,6 +722,7 @@ class DirectLyricsRepository {
                     lyrics = lyrics,
                     translatedLyrics = lyricRoot.optJSONObject("tlyric")?.optString("lyric").orEmpty(),
                     romanizedLyrics = netEaseRomanizedLyrics(lyricRoot),
+                    romanizedWordLyrics = netEaseRomanizedWordLyrics(lyricRoot),
                     wordLyrics = lyricRoot.optJSONObject("yrc")?.optString("lyric")
                         .orEmpty()
                         .ifBlank { lyricRoot.optJSONObject("klyric")?.optString("lyric").orEmpty() },
@@ -764,9 +780,16 @@ class DirectLyricsRepository {
     }
 
     internal fun netEaseRomanizedLyrics(root: JSONObject): String =
-        sequenceOf("romalrc", "yromalrc", "rromalrc")
+        (if (root.optJSONObject("yrc")?.optString("lyric").orEmpty().isNotBlank())
+            sequenceOf("yromalrc", "romalrc", "rromalrc") else sequenceOf("romalrc", "yromalrc", "rromalrc"))
             .map { root.optJSONObject(it)?.optString("lyric").orEmpty() }
             .firstOrNull(String::isNotBlank)?.let(::qrcToLineLrc).orEmpty()
+
+    internal fun netEaseRomanizedWordLyrics(root: JSONObject): String =
+        sequenceOf("yromalrc", "rromalrc", "romalrc")
+            .map { root.optJSONObject(it)?.optString("lyric").orEmpty() }
+            .firstOrNull { Regex("^\\[\\d+,\\d+](?:\\(\\d+,\\d+(?:,\\d+)?\\))", RegexOption.MULTILINE).containsMatchIn(it) }
+            .orEmpty()
 
     private fun firstJsonMatch(
         array: JSONArray,

@@ -250,6 +250,7 @@ internal class AppleMusicCustomLyricsTarget(
         // before applying, rather than relying solely on an earlier I2 miss.
         val installedPointer = installMethod.declaringClass.declaredFields
             .filter { it.type == ptrClass }.singleOrNull()?.apply { isAccessible = true }
+        val immediateAnchor = NativeLyricsImmediateAnchor.resolve(installMethod.declaringClass, installMethod.name)
         pageHasReplacement = { id ->
             val fragment = activeFragment?.get()
             val replacement = readyReplacementFor(id)
@@ -277,11 +278,25 @@ internal class AppleMusicCustomLyricsTarget(
             // already installed. Reconcile the verified page even if I2 needn't run again.
             syncAppliedStatus(id)
         }
+        val metadataRefresh = NativeLyricsMetadataRefresh.resolveReplay(installMethod.declaringClass)?.let { replay ->
+            NativeLyricsMetadataRefresh(currentSong, seam::currentItemAdamIdOf, fragmentUsable,
+                dispatch = { action -> mainHandler.post {
+                    if (registration.isActive) runCatching(action)
+                        .onFailure { ModernXposedRuntime.log("Lyrics metadata recovery failed open", it) }
+                } }, replay = replay, recovered = { fragment, id ->
+                    LyricsPlaybackDiagnostics.record("page-metadata-recovered", "id=$id")
+                    session.ensureRequested(id)
+                    autoSession?.ensureRequested(id)
+                    publishToPage(id)
+                    immediateAnchor?.schedule(fragment)
+                })
+        }
         // The native menu knows which exact lyrics page the user is acting on.
         // Capture it before changing source; retain the proven r18 I2/reapply path.
         CurrentLyricsSourceStatus.installPageHandler { fragment ->
             if (installMethod.declaringClass.isInstance(fragment)) {
                 activeFragment = WeakReference(fragment)
+                metadataRefresh?.schedule(fragment)
                 seam.currentItemAdamIdOf(fragment)?.let { id ->
                     if (currentSong.current()?.details?.appleMusicId == id) {
                         session.ensureRequested(id)
@@ -296,6 +311,9 @@ internal class AppleMusicCustomLyricsTarget(
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val fragment = param.thisObject?.takeIf(installMethod.declaringClass::isInstance) ?: return
                     activeFragment = WeakReference(fragment)
+                    metadataRefresh?.schedule(fragment)
+                    runCatching { immediateAnchor?.watch(fragment); immediateAnchor?.schedule(fragment) }
+                        .onFailure { ModernXposedRuntime.log("Lyrics focus recovery registration failed open", it) }
                     seam.currentItemAdamIdOf(fragment)?.let { id ->
                         session.ensureRequested(id)
                         autoSession?.ensureRequested(id)
@@ -332,6 +350,7 @@ internal class AppleMusicCustomLyricsTarget(
             hook(installMethod, object : ModernMethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     itemUpdateContext.markAppleInvokedI2()
+                    param.extras["anchor-previous-pointer"] = runCatching { installedPointer?.get(param.thisObject) }.getOrNull()
                     runCatching {
                         if (!acceptsLyricsInstallArguments(param.args, ptrClass)) return@runCatching
                         val original = param.args[0]
@@ -406,6 +425,10 @@ internal class AppleMusicCustomLyricsTarget(
                     if (param.throwable != null || param.thisObject !== activeFragment?.get()) return
                     runCatching {
                         param.thisObject?.let(seam::currentItemAdamIdOf)?.let(::syncAppliedStatus)
+                        val fragment = param.thisObject
+                        if (fragment != null && installedPointer?.get(fragment) !== param.extras["anchor-previous-pointer"]) {
+                            immediateAnchor?.schedule(fragment)
+                        }
                     }.onFailure { ModernXposedRuntime.log("applied lyrics status reconciliation failed", it) }
                 }
             })
@@ -418,6 +441,8 @@ internal class AppleMusicCustomLyricsTarget(
         val itemUpdateResolution = symbols.resolve(AppleMusicSymbols.LyricsItemUpdateMethod)
         val itemUpdateMethod = itemUpdateResolution.valueOrNull()
         if (itemUpdateMethod != null) {
+            val headerRefresh = NativeLyricsHeaderRefresh.resolve(installMethod.declaringClass, seam)
+            val headerFlags = runCatching { ItemUpdateFlags(itemUpdateMethod.parameterTypes[2]) }.getOrNull()
             val coordinator = runCatching {
                 LyricsItemUpdateCoordinator(
                     installMethod = installMethod,
@@ -442,6 +467,10 @@ internal class AppleMusicCustomLyricsTarget(
                                 val fragment = param.thisObject
                                 val appleInvokedI2 = itemUpdateContext.appleInvokedI2DuringO2()
                                 val flagsHolder = param.args.getOrNull(2)
+                                if (fragment != null && param.throwable == null && headerRefresh?.refresh(
+                                        fragment, param.args.getOrNull(1), headerFlags?.isItemChanged(flagsHolder) == true) == true) {
+                                    LyricsPlaybackDiagnostics.record("header-refresh", "id=${seam.currentItemAdamIdOf(fragment)}")
+                                }
                                 itemUpdateContext.reentering {
                                     runCatching {
                                         fragment?.let { currentFragment ->
@@ -522,6 +551,7 @@ internal class AppleMusicCustomLyricsTarget(
             } else false
         }
         val identitySubscription = currentSong.addListener { current ->
+            activeFragment?.get()?.let { metadataRefresh?.schedule(it) }
             val appleMusicId = current?.details?.appleMusicId
             ModernXposedRuntime.log(
                 "Desktop Lyrics song id=${appleMusicId ?: 0L} " +
