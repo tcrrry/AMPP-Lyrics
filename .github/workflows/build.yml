@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches-ignore: [test/v1.4-japanese-pronunciation]
+    branches-ignore: [test/v1.4-japanese-pronunciation, test/v1.5-lyrics-plugin]
   pull_request:
   workflow_dispatch:
     inputs:

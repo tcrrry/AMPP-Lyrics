@@ -9,15 +9,20 @@ import java.util.WeakHashMap
 /** Line lyrics have three bound views. Preserve binding identities and change only anchors. */
 internal object NativeLineLyricsPresentation {
     private val names = listOf("topToTop", "topToBottom", "bottomToTop", "bottomToBottom")
-    private data class Saved(val view: WeakReference<TextView>, val anchors: List<Int>, val colors: ColorStateList, val alpha: Float)
+    private data class Style(val colors: ColorStateList, val alpha: Float)
+    private data class Saved(val view: WeakReference<TextView>, val anchors: List<Int>, val style: Style?)
     private val rows = WeakHashMap<View, List<Saved>>()
 
     internal fun clear(root: View) {
         for (saved in rows.remove(root).orEmpty()) {
             val view = saved.view.get() ?: continue
-            NativeLyricsPronunciationSubtitle.releaseAuxiliary(view)
-            view.setTextColor(saved.colors)
-            view.alpha = saved.alpha
+            // Primary and translation styles belong to native binding/animation.
+            // Restoring their pre-bind alpha (often 1) makes translation turn white.
+            saved.style?.let { style ->
+                NativeLyricsPronunciationSubtitle.releaseAuxiliary(view)
+                view.setTextColor(style.colors)
+                view.alpha = style.alpha
+            }
             val params = view.layoutParams
             names.zip(saved.anchors).forEach { (name, value) -> PronunciationHeaderLayout.field(params.javaClass, name).setInt(params, value) }
             view.layoutParams = params
@@ -28,7 +33,8 @@ internal object NativeLineLyricsPresentation {
         check(original.parent === pronunciation.parent && original.parent === translation.parent)
         if (!rows.containsKey(root)) {
             rows[root] = listOf(original, pronunciation, translation).map { view ->
-                Saved(WeakReference(view), names.map { PronunciationHeaderLayout.field(view.layoutParams.javaClass, it).getInt(view.layoutParams) }, view.textColors, view.alpha)
+                Saved(WeakReference(view), names.map { PronunciationHeaderLayout.field(view.layoutParams.javaClass, it).getInt(view.layoutParams) },
+                    if (view === pronunciation) Style(view.textColors, view.alpha) else null)
             }
         }
         fun anchors(view: TextView, values: List<Int>) {
@@ -43,8 +49,7 @@ internal object NativeLineLyricsPresentation {
         anchors(pronunciation, listOf(oldTop[0], oldTop[1], original.id, -1))
         anchors(original, listOf(-1, pronunciation.id, translation.id, -1))
         anchors(translation, listOf(-1, original.id, oldBottom[2], oldBottom[3]))
-        NativeLyricsPronunciationSubtitle.styleAuxiliary(pronunciation)
-        NativeLyricsPronunciationSubtitle.styleAuxiliary(translation)
+        NativeLyricsPronunciationSubtitle.stylePronunciation(pronunciation)
     }
 
     fun install(loader: ClassLoader) {

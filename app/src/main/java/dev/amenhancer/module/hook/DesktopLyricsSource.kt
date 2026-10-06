@@ -26,6 +26,7 @@ internal class DesktopLyricsSource(
     private val context: Context,
     private val repository: DirectLyricsRepository = DirectLyricsRepository(),
 ) {
+    private val wordRepository by lazy { DirectLyricsRepository(wordFirst = true) }
     private val supplement = DesktopLyricsSupplement(context)
     private val completedTranslations = TranslationOutcomeCache()
     private val translationRevisions = ConcurrentHashMap<Long, Int>()
@@ -70,10 +71,11 @@ internal class DesktopLyricsSource(
         if (track.title.isBlank() || track.artist.isBlank()) return null
         val selected = CurrentLyricsSourceStatus.selectedSource(context, track.appleMusicId)
         val excluded = selected?.let { CurrentLyricsSourceStatus.excludedRecords(context, track.appleMusicId, it) }.orEmpty()
-        val key = listOf(track.appleMusicId, track.title, track.artist, track.album, track.durationMs, selected, excluded.sorted()).joinToString("|")
+        val key = listOf(track.appleMusicId, track.title, track.artist, track.album, track.durationMs, selected, excluded.sorted(), dev.amenhancer.module.lyrics.LyricsPreference.qualityFirst(context)).joinToString("|")
         val result = if (selected == null) findAuto(track, key) else {
             TcrrryLyricsHistory.selected(context, track.appleMusicId, selected)
-                ?: TcrrryLyricsHistory.latest(context, track.appleMusicId, selected, excluded)
+                ?: TcrrryLyricsHistory.best(context, track.appleMusicId, selected, excluded,
+                    wordFirst = !dev.amenhancer.module.lyrics.LyricsPreference.qualityFirst(context))
                 ?: repository.rematch(selected, track.title, track.artist, track.album,
                     track.durationMs, excluded)?.also {
                     TcrrryLyricsHistory.remember(context, track.appleMusicId, it)
@@ -87,6 +89,7 @@ internal class DesktopLyricsSource(
         CurrentLyricsSourceStatus.rememberRecord(
             context, track.appleMusicId, result.source, result.recordId,
         )
+        CurrentLyricsSourceStatus.rememberMatchResult(context, track.appleMusicId, result)
         val offset = CurrentLyricsSourceStatus.offsetMs(context, track.appleMusicId, result.source)
         val translationPrefs = context.getSharedPreferences("supplement_translation", Context.MODE_PRIVATE)
         val mode = translationPrefs.getString("mode", "off").orEmpty()
@@ -138,7 +141,8 @@ internal class DesktopLyricsSource(
             ModernXposedRuntime.log("Language pronunciation unavailable: ${it.javaClass.simpleName}")
             withJapanesePronunciation
         }
-        val ttml = DesktopLyricsTtmlConverter.convert(withPronunciation, track.durationMs, offset, primaryPronunciation) ?: run {
+        val ttml = DesktopLyricsTtmlConverter.convert(withPronunciation, track.durationMs, offset, primaryPronunciation,
+            dev.amenhancer.module.lyrics.LyricsPreference.smoothShortUnits(context)) ?: run {
             CurrentLyricsSourceStatus.rememberMatchStatus(context, track.appleMusicId, "已找到 ${result.source}，歌词格式转换失败")
             return null
         }
@@ -157,6 +161,8 @@ internal class DesktopLyricsSource(
             if (shouldRetryEmptyLyricsSearch(old.final, old.finishedAtMs, System.currentTimeMillis()))
                 searches.remove(key, old)
         }
+        val wordFirst = !dev.amenhancer.module.lyrics.LyricsPreference.qualityFirst(context)
+        val autoRepository = if (wordFirst) wordRepository else repository
         val fresh = SearchState()
         val previous = searches.putIfAbsent(key, fresh)
         val state = previous ?: fresh.also {
@@ -164,7 +170,7 @@ internal class DesktopLyricsSource(
                     "三源并行搜索中 · 时长 ${track.durationMs / 1000} 秒")
                 val job = FutureTask<Unit> {
                     val found = runCatching {
-                        repository.resolveLyrics(track.title, track.artist, track.album, track.durationMs) { partial ->
+                        autoRepository.resolveLyrics(track.title, track.artist, track.album, track.durationMs) { partial ->
                             if (partial.lyrics.isNotBlank()) {
                                 TcrrryLyricsHistory.remember(context, track.appleMusicId, partial)
                                 val refresh = synchronized(fresh) {
@@ -180,7 +186,7 @@ internal class DesktopLyricsSource(
                         .forEach { TcrrryLyricsHistory.remember(context, track.appleMusicId, it) }
                     val refresh = synchronized(fresh) {
                         val previous = fresh.delivered ?: fresh.first.getNow(null)
-                        fresh.final = DesktopLyricsUpdatePolicy.choose(previous, found, track.durationMs)
+                        fresh.final = DesktopLyricsUpdatePolicy.choose(previous, found, track.durationMs, wordFirst)
                         fresh.finishedAtMs = System.currentTimeMillis()
                         fresh.deliveredBeforeFinal &&
                             DesktopLyricsUpdatePolicy.changed(fresh.delivered, fresh.final!!, track.durationMs)

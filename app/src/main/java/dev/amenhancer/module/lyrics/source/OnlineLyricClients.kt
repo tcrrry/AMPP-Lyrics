@@ -38,21 +38,44 @@ class AutoLyricsSourceResolver(
     private val sources: List<AutoLyricsSource>,
     private val desktopLyrics: ((DesktopLyricsTrack) -> AutoLyricsCandidate?)? = null,
     private val fallbackTranslation: ((Long, AutoLyricsCandidate) -> AutoLyricsCandidate)? = null,
+    private val qualityFirst: () -> Boolean = { false },
 ) {
-    fun fetch(appleMusicId: Long, track: DesktopLyricsTrack? = null): AutoLyricsCandidate? {
+    fun fetch(appleMusicId: Long, track: DesktopLyricsTrack? = null, selectedRepository: String? = null): AutoLyricsCandidate? {
         if (appleMusicId <= 0L || Thread.currentThread().isInterrupted) return null
-        if (track != null) {
+        if (selectedRepository != null) {
+            val source = sources.firstOrNull { it.name == selectedRepository } ?: return null
+            val ttml = runCatching { source.fetch(appleMusicId) }.getOrNull()
+                ?.takeIf(TtmlInputPolicy::isAcceptable) ?: return null
+            val candidate = AutoLyricsCandidate(source.name, ttml)
+            return fallbackTranslation?.invoke(appleMusicId, candidate) ?: candidate
+        }
+        val quality = qualityFirst() && track?.explicitSource != true
+        // Native Word lyrics are handled at the install seam. Check the author's
+        // adapted Word document before spending time on third-party matching.
+        val author = sources.firstOrNull { it.name == CustomLyricsSources.AM_LYRICS }
+        val probeAuthor = !quality && track?.explicitSource != true && author != null
+        val authorTtml = if (probeAuthor) runCatching { author.fetch(appleMusicId) }.onFailure {
+            if (it is InterruptedException) Thread.currentThread().interrupt()
+        }.getOrNull()
+            ?.takeIf(TtmlInputPolicy::isAcceptable) else null
+        if (Thread.currentThread().isInterrupted) return null
+        if (authorTtml != null && dev.amenhancer.module.hook.TtmlTimingPolicy.hasTimedWords(authorTtml)) {
+            val candidate = AutoLyricsCandidate(author!!.name, authorTtml)
+            return fallbackTranslation?.invoke(appleMusicId, candidate) ?: candidate
+        }
+        if (track != null && !quality) {
             val preferred = runCatching { desktopLyrics?.invoke(track) }.getOrNull()
             if (preferred != null && TtmlInputPolicy.isAcceptable(preferred.ttml)) return preferred
             if (track.explicitSource) return null
         }
-        sources.forEach { source ->
+        val ordered = if (quality) sources.sortedBy { if (it.name == CustomLyricsSources.AM_LYRICS) 0 else 1 } else sources
+        ordered.forEach { source ->
             if (Thread.currentThread().isInterrupted) return null
-            val ttml = runCatching { source.fetch(appleMusicId) }.onFailure {
+            val ttml = if (probeAuthor && source === author) authorTtml else runCatching { source.fetch(appleMusicId) }.onFailure {
                 if (it is InterruptedException) Thread.currentThread().interrupt()
             }.getOrNull()
             if (Thread.currentThread().isInterrupted) return null
-            if (track != null) {
+            if (track != null && !quality) {
                 val preferred = runCatching { desktopLyrics?.invoke(track) }.getOrNull()
                 if (preferred != null && TtmlInputPolicy.isAcceptable(preferred.ttml)) return preferred
             }
@@ -60,7 +83,8 @@ class AutoLyricsSourceResolver(
             val candidate = AutoLyricsCandidate(source.name, ttml)
             return fallbackTranslation?.invoke(appleMusicId, candidate) ?: candidate
         }
-        return null
+        return if (quality && track != null) runCatching { desktopLyrics?.invoke(track) }.getOrNull()
+            ?.takeIf { TtmlInputPolicy.isAcceptable(it.ttml) } else null
     }
 
     companion object {
@@ -71,6 +95,7 @@ class AutoLyricsSourceResolver(
             lunabeat: LunabeatClient,
             desktopLyrics: ((DesktopLyricsTrack) -> AutoLyricsCandidate?)? = null,
             fallbackTranslation: ((Long, AutoLyricsCandidate) -> AutoLyricsCandidate)? = null,
+            qualityFirst: () -> Boolean = { false },
         ): AutoLyricsSourceResolver = AutoLyricsSourceResolver(
             listOf(
                 AutoLyricsSource(CustomLyricsSources.AMLL) { raw ->
@@ -81,6 +106,7 @@ class AutoLyricsSourceResolver(
             ),
             desktopLyrics,
             fallbackTranslation,
+            qualityFirst,
         )
     }
 }

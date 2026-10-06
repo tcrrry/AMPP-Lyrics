@@ -35,4 +35,19 @@ class LyricsQualityRankTest {
         assertTrue(DirectLyricsRepository.qualityRank(base.copy(wordLyrics = full)) > pronunciation)
         assertTrue(DirectLyricsRepository.qualityRank(base.copy(translatedLyrics = full)) > pronunciation)
     }
+    @Test fun wordPreferenceBeatsFullTranslationAndReadingWithinSameConfidenceBand() {
+        val timed = base.copy(source = "QQ音乐", score = 95,
+            wordLyrics = "[1000,500](1000,500)君")
+        val richLine = base.copy(translatedLyrics = full, romanizedLyrics = full)
+        assertTrue(DirectLyricsRepository.qualityRank(timed, true) > DirectLyricsRepository.qualityRank(richLine, true))
+        assertTrue(DirectLyricsRepository.qualityRank(timed) < DirectLyricsRepository.qualityRank(richLine))
+    }
+    @Test fun wordPreferenceCannotOverrideConfidenceOrRewardMalformedTiming() {
+        val timed = base.copy(score = 94, wordLyrics = "[1000,500](1000,500)君")
+        assertTrue(DirectLyricsRepository.qualityRank(base.copy(score = 95), true) > DirectLyricsRepository.qualityRank(timed, true))
+        val richLine = base.copy(translatedLyrics = full, romanizedLyrics = full)
+        assertTrue(DirectLyricsRepository.qualityRank(richLine, true) >
+            DirectLyricsRepository.qualityRank(base.copy(wordLyrics = full), true))
+    }
+
 }

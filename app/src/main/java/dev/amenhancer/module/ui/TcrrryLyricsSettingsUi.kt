@@ -21,6 +21,7 @@ import android.widget.TextView
 import android.widget.Toast
 import dev.amenhancer.module.CurrentSongDetails
 import dev.amenhancer.module.model.ModuleSettings
+import dev.amenhancer.module.hook.LyricsSourceMenuPolicy
 import dev.amenhancer.module.hook.CurrentLyricsSourceStatus
 import dev.amenhancer.module.hook.EmbeddedMlKit
 import dev.amenhancer.module.hook.TcrrryLyricsHistory
@@ -38,7 +39,7 @@ import java.util.Locale
 
 /** Independent lyrics controls with the shared host-aware day/night palette. */
 internal object TcrrryLyricsSettingsUi {
-    private val SOURCES = listOf<String?>(null, "QQ音乐", "网易云音乐", "LRCLIB")
+    private val SOURCES = listOf<String?>(null) + dev.amenhancer.module.hook.LyricsSourceMenuPolicy.sources
 
     fun render(activity: Activity, parent: LinearLayout, song: CurrentSongDetails?, refreshPage: () -> Unit,
         refreshAppearance: () -> Unit, settings: ModuleSettings, onSettingsChanged: (ModuleSettings) -> Unit,
@@ -46,7 +47,7 @@ internal object TcrrryLyricsSettingsUi {
         val id = song?.appleMusicId ?: 0L
         val selected = CurrentLyricsSourceStatus.selectedSource(activity, id)
         val applied = CurrentLyricsSourceStatus.appliedSource(activity, id)
-        val provider = applied?.takeIf { it.startsWith("desktop-lyrics:") }?.substringAfter(':') ?: selected
+        val provider = dev.amenhancer.module.hook.LyricsSourceMenuPolicy.provider(applied) ?: selected
         var offsetDragging = false
         parent.setBackgroundColor(SettingsUiTheme.colors(activity).background)
         parent.setPadding(dp(activity, 18), dp(activity, 16), dp(activity, 18), dp(activity, 28))
@@ -63,74 +64,89 @@ internal object TcrrryLyricsSettingsUi {
             }
             addView(sourceStatusLabel(activity) { CurrentLyricsSourceStatus.description(activity, id) },
                 fullMargin(activity, 12))
+            addView(action(activity, "查看当前匹配信息") {
+                showMatchingInformation(activity, id)
+            }, fullMargin(activity, 10))
 
-        })
-
-        parent.addView(card(activity).apply {
-            addView(title(activity, "歌词源", 18f))
+            addView(label(activity, "播放页歌词源按钮：单击切换来源（无结果会继续尝试）；双击不执行操作；长按打开本页。", 12f,
+                SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 8))
+            addView(title(activity, "歌词偏好", 18f), fullMargin(activity, 18))
+            val policy = dev.amenhancer.module.lyrics.LyricsPreference
+            addView(label(activity, "质量优先：Apple Music 原生 → AM++ 适配歌词 → 第三方。逐字优先：优先原生 / AM++ 的真实逐字；否则匹配第三方，逐字权重高于译文、发音。手动选源优先于本设置。", 12f, SettingsUiTheme.colors(activity).secondary))
+            addView(action(activity, if (policy.qualityFirst(activity)) "当前：质量优先" else "当前：逐字优先") {
+                policy.update(activity, quality = !policy.qualityFirst(activity))
+                if (id > 0L) CurrentLyricsSourceStatus.refreshSilently(id)
+                toast(activity, "已更新；重新打开歌词页可恢复原生歌词")
+                refreshPage()
+            }, fullMargin(activity, 10))
+            addView(title(activity, "歌词源", 18f), fullMargin(activity, 18))
             addView(label(activity, "默认自动匹配；这里的选择只对当前歌曲记忆。已有匹配可直接切换。", 12f, SettingsUiTheme.colors(activity).secondary))
             addView(LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, dp(activity, 12), 0, 0)
                 addView(chip(activity, selected ?: "自动匹配${provider?.let { " · $it" }.orEmpty()}", selected = true).apply {
                     setOnClickListener {
                         if (id <= 0L) return@setOnClickListener
-                        val sourceNames = SOURCES.filterNotNull()
-                        val next = sourceNames[(sourceNames.indexOf(selected ?: provider) + 1) % sourceNames.size]
-                        CurrentLyricsSourceStatus.selectSource(activity, id, next)
+                        val next = CurrentLyricsSourceStatus.beginSourceCycle(activity, id) ?: return@setOnClickListener
                         val started = CurrentLyricsSourceStatus.refresh(id)
-                        toast(activity, if (started) "已切换到$next" else "请重新打开歌词页后生效")
+                        if (!started) CurrentLyricsSourceStatus.cancelSourceCycle(id)
+                        toast(activity, if (started) "正在尝试$next" else "请重新打开歌词页后生效")
                         refreshPage()
                     }
-                }, LinearLayout.LayoutParams(0, dp(activity, 46), 1f))
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(chip(activity, "切换来源  ›").apply {
                     setOnClickListener { if (id > 0L) showSourcePicker(activity, id, selected, refreshPage) }
-                }, LinearLayout.LayoutParams(dp(activity, 116), dp(activity, 46)).apply {
+                }, LinearLayout.LayoutParams(dp(activity, 116), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     marginStart = dp(activity, 8)
                 })
             })
-            addView(action(activity, "重新匹配当前来源", emphasized = true) {
-                if (!CurrentLyricsSourceStatus.excludeCurrentRecord(activity, id)) {
-                    if (id > 0L && CurrentLyricsSourceStatus.refresh(id)) toast(activity, "正在重新搜索当前歌曲")
-                    else toast(activity, "请重新打开歌词页后生效")
-                    refreshPage()
-                } else {
+            val fixedSource = selected ?: provider
+            if (fixedSource != null) addView(action(activity, "当前源选择最佳结果", emphasized = true) {
+                CurrentLyricsSourceStatus.retryCurrentSource(activity, id)
+                if (id > 0L && CurrentLyricsSourceStatus.refresh(id)) toast(activity, "正在选用当前来源最佳记录")
+                else toast(activity, "请重新打开歌词页后生效")
+                refreshPage()
+            }, fullMargin(activity, 12))
+            addView(action(activity, "换一个匹配版本") {
+                if (CurrentLyricsSourceStatus.excludeCurrentRecord(activity, id)) {
                     if (CurrentLyricsSourceStatus.refresh(id)) toast(activity, "正在寻找下一个匹配版本")
                     else toast(activity, "请重新打开歌词页后生效")
-                    refreshPage()
-                }
-            }, fullMargin(activity, 12))
-            addView(action(activity, "恢复自动匹配") {
+                } else toast(activity, "请先装入选中的第三方歌词，再换匹配版本")
+                refreshPage()
+            }, fullMargin(activity, 8))
+            addView(label(activity, "固定来源：只在该平台选最佳已知记录，没有记录时搜索；换版本：只跳过当前匹配。", 12f,
+                SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 8))
+            addView(action(activity, "恢复自动选源") {
                 if (id > 0L) {
                     CurrentLyricsSourceStatus.resetMatching(activity, id)
                     CurrentLyricsSourceStatus.refresh(id)
                     refreshPage()
                 }
             }, fullMargin(activity, 8))
+            addView(label(activity, "自动选源：解除本曲固定来源和跳过记录，按歌词偏好在所有来源中选择。", 12f,
+                SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 8))
             addView(action(activity, "匹配历史与预览") { showHistory(activity, id, song, refreshPage) }, fullMargin(activity, 8))
         }, fullMargin(activity, 12))
 
-        parent.addView(glowSettingsCard(activity, settings, onSettingsChanged, refreshPage), fullMargin(activity, 12))
+        parent.addView(glowSettingsCard(activity, settings, onSettingsChanged, refreshPage, id), fullMargin(activity, 12))
         renderTranslationSettings(activity, parent, id, refreshPage)
         val pronunciationPrefs = activity.getSharedPreferences("japanese_pronunciation", Context.MODE_PRIVATE)
         val pronunciationEnabled = pronunciationPrefs.getBoolean("enabled", true)
         parent.addView(card(activity).apply {
-            addView(title(activity, "离线日文注音", 18f))
-            addView(label(activity, "自带发音优先，只补缺失的日文行。词典随安装包内置，无需额外下载或代理。专名和歌词特殊读法可能不准确。", 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 5))
-            addView(chip(activity, if (pronunciationEnabled) "已开启 · 点击关闭" else "已关闭 · 点击开启", selected = pronunciationEnabled).apply {
+            addView(title(activity, "离线发音与注音", 18f))
+            addView(label(activity, "自带发音优先，只补缺失行。日语、韩语与粤语组件均内置，离线使用，无需下载或代理。", 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 5))
+            addView(chip(activity, if (pronunciationEnabled) "日语注音：开启" else "日语注音：关闭", selected = pronunciationEnabled).apply {
                 setOnClickListener {
                     pronunciationPrefs.edit().putBoolean("enabled", !pronunciationEnabled).apply()
                     CurrentLyricsSourceStatus.refreshSilently(id)
                     refreshPage()
                 }
             }, fullMargin(activity, 10))
-        }, fullMargin(activity, 12))
 
-        parent.addView(card(activity).apply {
-            addView(title(activity, "韩语／粤语注音", 18f))
-            addView(label(activity, "小型组件已内置，离线使用，无需下载或代理。自带发音优先；韩语自动补缺失行，粤语仅对手动指定的当前歌曲补粤拼，避免误注普通话。专名、多音字和特殊唱法可能不准确。", 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 5))
+            addView(label(activity, "日语、韩语自动补缺失行；粤语只对手动指定的当前歌曲补粤拼，避免误注普通话。专名、多音字和特殊唱法可能不准确。", 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 5))
             val korean = pronunciationPrefs.getBoolean("korean_enabled", true)
-            addView(chip(activity, if (korean) "韩语已开启 · 点击关闭" else "韩语已关闭 · 点击开启", selected = korean).apply {
+            addView(chip(activity, if (korean) "韩语注音：开启" else "韩语注音：关闭", selected = korean).apply {
                 setOnClickListener {
                     pronunciationPrefs.edit().putBoolean("korean_enabled", !korean).apply()
                     CurrentLyricsSourceStatus.refreshSilently(id); refreshPage()
@@ -192,7 +208,8 @@ internal object TcrrryLyricsSettingsUi {
         parent.postDelayed(object : Runnable {
             override fun run() {
                 if (!parent.isAttachedToWindow) return
-                if (CurrentLyricsSourceStatus.description(activity, id) != initial ||
+                if (CurrentLyricsSourceStatus.selectedSource(activity, id) != selected ||
+                    CurrentLyricsSourceStatus.description(activity, id) != initial ||
                     CurrentLyricsSourceStatus.translationStatus(activity, id) != initialTranslation) {
                     if (offsetDragging) parent.postDelayed(this, 1_000L) else refreshPage()
                 }
@@ -203,56 +220,67 @@ internal object TcrrryLyricsSettingsUi {
 
     /** Our glow controls live here, separate from the upstream AM++ page. */
     internal fun glowSettingsCard(activity: Activity, settings: ModuleSettings,
-        onSettingsChanged: (ModuleSettings) -> Unit, refreshPage: () -> Unit): LinearLayout {
+        onSettingsChanged: (ModuleSettings) -> Unit, refreshPage: () -> Unit, songId: Long = 0L): LinearLayout {
         var current = settings
         fun save(next: ModuleSettings) { current = next; onSettingsChanged(next) }
         return card(activity).apply {
             addView(title(activity, "歌词辉光增强", 18f))
-            addView(label(activity, "增强中日韩单字和长英文词的辉光。总开关需重开 Apple Music；灵敏度与位置保存后生效。",
+            addView(label(activity, "辉光增强默认启用。灵敏度越高越容易触发；位置与灵敏度保存后生效，不改变逐字时间。",
                 12f, SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 5))
-            addView(action(activity, if (current.cjkKaraokeAnimationEnabled) "已开启 · 点击关闭" else "已关闭 · 点击开启") {
-                save(current.copy(cjkKaraokeAnimationEnabled = !current.cjkKaraokeAnimationEnabled))
-                refreshPage()
-            }, fullMargin(activity, 10))
-            if (current.cjkKaraokeAnimationEnabled) {
-                val value = label(activity, "辉光灵敏度：${current.lyricGlowSensitivity}%", 14f, SettingsUiTheme.colors(activity).text)
-                addView(value, fullMargin(activity, 12))
-                addView(SeekBar(activity).apply {
-                    max = 150
-                    progress = current.lyricGlowSensitivity.coerceIn(50, 200) - 50
-                    contentDescription = "辉光灵敏度"
-                    progressTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).primary)
-                    progressBackgroundTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).outline)
-                    thumbTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).text)
-                    splitTrack = false
-                    setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                        override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
-                            value.text = "辉光灵敏度：${progress + 50}%"
-                            if (fromUser) save(current.copy(lyricGlowSensitivity = progress + 50))
-                        }
-                        override fun onStartTrackingTouch(bar: SeekBar?) = Unit
-                        override fun onStopTrackingTouch(bar: SeekBar?) = Unit
-                    })
-                }, fullMargin(activity, 4))
-                addView(label(activity, "50%～200%，越高越容易触发；100% 保留默认门槛。", 12f,
-                    SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 4))
-                addView(action(activity, "恢复默认灵敏度") {
-                    save(current.copy(lyricGlowSensitivity = 100)); refreshPage()
-                }, fullMargin(activity, 8))
-                val position = action(activity, "辉光触发位置：${current.lyricGlowPosition.displayName}") {}
-                position.setOnClickListener {
-                    val choices = dev.amenhancer.module.model.LyricGlowPosition.entries
-                    SettingsUiTheme.dialogBuilder(activity).setTitle("辉光触发位置")
-                        .setSingleChoiceItems(choices.map { it.displayName }.toTypedArray(), choices.indexOf(current.lyricGlowPosition)) { picker, which ->
-                            save(current.copy(lyricGlowPosition = choices[which]))
-                            position.text = "辉光触发位置：${current.lyricGlowPosition.displayName}"
-                            picker.dismiss()
-                        }.setNegativeButton("取消", null).show()
+            val value = label(activity, "辉光灵敏度：${current.lyricGlowSensitivity}%", 14f, SettingsUiTheme.colors(activity).text)
+            addView(value, fullMargin(activity, 12))
+            addView(SeekBar(activity).apply {
+                max = ModuleSettings.MAX_LYRIC_GLOW_SENSITIVITY - ModuleSettings.MIN_LYRIC_GLOW_SENSITIVITY
+                progress = current.lyricGlowSensitivity.coerceIn(ModuleSettings.MIN_LYRIC_GLOW_SENSITIVITY, ModuleSettings.MAX_LYRIC_GLOW_SENSITIVITY) - ModuleSettings.MIN_LYRIC_GLOW_SENSITIVITY
+                contentDescription = "辉光灵敏度"
+                progressTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).primary)
+                progressBackgroundTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).outline)
+                thumbTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).text)
+                splitTrack = false
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        value.text = "辉光灵敏度：${progress + ModuleSettings.MIN_LYRIC_GLOW_SENSITIVITY}%"
+                        if (fromUser) save(current.copy(lyricGlowSensitivity = progress + ModuleSettings.MIN_LYRIC_GLOW_SENSITIVITY))
+                    }
+                    override fun onStartTrackingTouch(bar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(bar: SeekBar?) = Unit
+                })
+            }, fullMargin(activity, 4))
+            addView(label(activity, "50%～500%，越高越容易触发；100% 保留默认门槛。", 12f,
+                SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 4))
+            addView(action(activity, "恢复默认灵敏度") {
+                save(current.copy(lyricGlowSensitivity = 100)); refreshPage()
+            }, fullMargin(activity, 8))
+            val position = action(activity, "辉光触发位置：${current.lyricGlowPosition.displayName}") {}
+            position.setOnClickListener {
+                val choices = dev.amenhancer.module.model.LyricGlowPosition.entries
+                val body = card(activity).apply { addView(title(activity, "辉光触发位置", 20f)) }
+                val picker = bubbleDialog(activity, body)
+                choices.forEach { choice ->
+                    body.addView(action(activity, choice.displayName, emphasized = choice == current.lyricGlowPosition) {
+                        save(current.copy(lyricGlowPosition = choice))
+                        position.text = "辉光触发位置：${choice.displayName}"
+                        picker.dismiss()
+                    }, fullMargin(activity, 9))
                 }
-                addView(position, fullMargin(activity, 8))
-                addView(label(activity, "句尾优先会减少句中触发；仅句尾按歌词位置判断，不识别人声。", 12f,
-                    SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 7))
+                picker.show()
             }
+            addView(position, fullMargin(activity, 8))
+            addView(label(activity, "句尾优先会减少句中触发；仅句尾按歌词位置判断，不识别人声。", 12f,
+                SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 7))
+            val policy = dev.amenhancer.module.lyrics.LyricsPreference
+            val smooth = policy.smoothShortUnits(activity)
+            addView(chip(activity, "短单元平滑：" + if (smooth) "开启" else "关闭", selected = smooth).apply {
+                minimumHeight = dp(activity, 48)
+                isClickable = true; isFocusable = true
+                setOnClickListener {
+                    policy.update(activity, smooth = !smooth)
+                    if (songId > 0L) CurrentLyricsSourceStatus.refreshSilently(songId)
+                    refreshPage()
+                }
+            }, fullMargin(activity, 14))
+            addView(label(activity, "默认开启。合并同句内相邻、少于 100ms 的单元，保留完整时间范围。原文不跨英文单词空格；突出发音时，相邻短读音可共用一次高亮。", 12f,
+                SettingsUiTheme.colors(activity).secondary), fullMargin(activity, 7))
         }
     }
 
@@ -271,7 +299,7 @@ internal object TcrrryLyricsSettingsUi {
             progressTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).primary)
             progressBackgroundTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).outline)
             thumbTintList = ColorStateList.valueOf(SettingsUiTheme.colors(activity).text)
-            isEnabled = id > 0L && source in SOURCES && source != null
+            isEnabled = id > 0L && source in LyricsSourceMenuPolicy.thirdPartySources
             splitTrack = false
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -297,6 +325,9 @@ internal object TcrrryLyricsSettingsUi {
     /** Status is informational; it updates itself without a click action. */
     internal fun sourceStatusLabel(activity: Activity, description: () -> String): TextView =
         chip(activity, description(), selected = true).apply {
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            contentDescription = description()
             isClickable = false
             isLongClickable = false
             isFocusable = false
@@ -307,7 +338,7 @@ internal object TcrrryLyricsSettingsUi {
                 override fun run() {
                     if (!label.isAttachedToWindow) return
                     val next = description()
-                    if (label.text.toString() != next) label.text = next
+                    if (label.text.toString() != next) { label.text = next; label.contentDescription = next }
                     label.postDelayed(this, 500L)
                 }
             }
@@ -424,7 +455,7 @@ internal object TcrrryLyricsSettingsUi {
         val profile = TranslationApiProfiles.find(activity, profileId)
         val body = card(activity)
         body.addView(title(activity, profile.label, 19f))
-        val dialog = SettingsUiTheme.dialogBuilder(activity).setView(body).create()
+        val dialog = bubbleDialog(activity, body)
         body.addView(action(activity, "重命名") {
             dialog.dismiss()
             val input = field(activity, "服务名称", profile.label)
@@ -451,7 +482,7 @@ internal object TcrrryLyricsSettingsUi {
         val body = card(activity)
         body.addView(title(activity, "选择翻译 API", 19f))
         val prefs = activity.getSharedPreferences("supplement_translation", Context.MODE_PRIVATE)
-        val dialog = SettingsUiTheme.dialogBuilder(activity).setView(body).create()
+        val dialog = bubbleDialog(activity, body)
         TranslationApiProfiles.all(activity).forEach { profile ->
             body.addView(action(activity, profile.label,
                 emphasized = prefs.getString("active_api_profile", null) == profile.id) {
@@ -487,12 +518,11 @@ internal object TcrrryLyricsSettingsUi {
             val codes = listOf("auto") + TranslateLanguage.getAllLanguages().sorted()
             val names = codes.map { code -> if (code == "auto") "自动判断" else
                 "${Locale.forLanguageTag(code).getDisplayLanguage(Locale.SIMPLIFIED_CHINESE)} · $code" }
-            SettingsUiTheme.dialogBuilder(activity).setTitle("选择歌词原语言")
-                .setItems(names.toTypedArray()) { _, which ->
+            showChoiceBubble(activity, "选择歌词原语言", names, codes.indexOf(selected)) { which ->
                     translationPrefs.edit().putString("offline_source_language", codes[which]).apply()
                     CurrentLyricsSourceStatus.refresh(id)
                     renderOfflineControls(activity, card.apply { removeAllViews() }, id)
-                }.show()
+                }
         }, fullMargin(activity, 8))
         val progress = ProgressBar(activity).apply {
             visibility = View.GONE
@@ -659,11 +689,48 @@ internal object TcrrryLyricsSettingsUi {
         background = shape(activity, SettingsUiTheme.colors(activity).raised, 12, SettingsUiTheme.colors(activity).outline)
     }
 
+    internal fun bubbleDialog(activity: Activity, body: LinearLayout): android.app.AlertDialog {
+        val scroll = object : android.widget.ScrollView(activity) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val cap = (resources.displayMetrics.heightPixels * 0.82f).toInt()
+                val available = if (View.MeasureSpec.getMode(heightMeasureSpec) == View.MeasureSpec.UNSPECIFIED) cap
+                    else minOf(cap, View.MeasureSpec.getSize(heightMeasureSpec))
+                super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.AT_MOST))
+            }
+        }.apply { addView(body) }
+        return SettingsUiTheme.dialogBuilder(activity).setView(scroll).create().apply {
+            window?.setBackgroundDrawableResource(android.R.color.transparent)
+        }
+    }
+
+    private fun showChoiceBubble(activity: Activity, heading: String, choices: List<String>, selected: Int,
+        choose: (Int) -> Unit) {
+        val body = card(activity).apply { addView(title(activity, heading, 20f)) }
+        val dialog = bubbleDialog(activity, body)
+        choices.forEachIndexed { index, name ->
+            body.addView(action(activity, name, emphasized = index == selected) {
+                dialog.dismiss(); choose(index)
+            }, fullMargin(activity, 9))
+        }
+        dialog.show()
+    }
+
+    internal fun showMatchingInformation(activity: Activity, id: Long) {
+        val body = card(activity).apply {
+            addView(title(activity, "当前匹配信息", 20f))
+            addView(label(activity, CurrentLyricsSourceStatus.matchingInformation(activity, id), 14f,
+                SettingsUiTheme.colors(activity).text).apply { setTextIsSelectable(true) }, fullMargin(activity, 12))
+        }
+        val dialog = bubbleDialog(activity, body)
+        body.addView(action(activity, "关闭") { dialog.dismiss() }, fullMargin(activity, 12))
+        dialog.show()
+    }
+
     private fun showSourcePicker(activity: Activity, id: Long, selected: String?, refreshPage: () -> Unit) {
         val body = card(activity)
         body.addView(title(activity, "选择歌词源", 20f))
         body.addView(label(activity, "只记住当前歌曲的选择；自动匹配仍是其他歌曲的默认方式", 12f, SettingsUiTheme.colors(activity).secondary))
-        val dialog = SettingsUiTheme.dialogBuilder(activity).setView(body).create()
+        val dialog = bubbleDialog(activity, body)
         SOURCES.forEach { source ->
             val name = source ?: "自动匹配"
             body.addView(action(activity, name, emphasized = source == selected) {
@@ -686,8 +753,7 @@ internal object TcrrryLyricsSettingsUi {
             addView(title(activity, "匹配历史", 20f))
             addView(label(activity, "${song?.title.orEmpty()} · 选择版本可查看歌词预览", 12f, SettingsUiTheme.colors(activity).secondary))
         }
-        val scroll = android.widget.ScrollView(activity).apply { addView(body) }
-        val dialog = SettingsUiTheme.dialogBuilder(activity).setView(scroll).create()
+        val dialog = bubbleDialog(activity, body)
         history.forEach { result ->
             body.addView(action(activity, "${result.source} · ${result.title.ifBlank { song?.title.orEmpty() }}") {
                 dialog.dismiss()
@@ -701,7 +767,7 @@ internal object TcrrryLyricsSettingsUi {
                             (if (result.romanizedLyrics.isNotBlank()) " · 含发音" else ""), 12f, SettingsUiTheme.colors(activity).secondary))
                     addView(label(activity, preview, 13f, SettingsUiTheme.colors(activity).text), fullMargin(activity, 12))
                 }
-                val detailDialog = SettingsUiTheme.dialogBuilder(activity).setView(android.widget.ScrollView(activity).apply { addView(detail) }).create()
+                val detailDialog = bubbleDialog(activity, detail)
                 detail.addView(action(activity, "选用此版本", emphasized = true) {
                     TcrrryLyricsHistory.select(activity, id, result)
                     CurrentLyricsSourceStatus.refresh(id)
@@ -740,6 +806,7 @@ internal object TcrrryLyricsSettingsUi {
         setTextColor(if (selected) SettingsUiTheme.colors(activity).primary else SettingsUiTheme.colors(activity).text)
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         setPadding(dp(activity, 12), dp(activity, 8), dp(activity, 12), dp(activity, 8))
+        minimumHeight = dp(activity, 46)
         background = shape(activity, if (selected) SettingsUiTheme.colors(activity).selected else SettingsUiTheme.colors(activity).raised, 12, if (selected) SettingsUiTheme.colors(activity).primary else SettingsUiTheme.colors(activity).outline)
     }
 

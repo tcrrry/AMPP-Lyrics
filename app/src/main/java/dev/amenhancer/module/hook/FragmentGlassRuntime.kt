@@ -27,6 +27,9 @@ internal object FragmentGlassRuntime {
 
     /** Release source recording and chrome ownership before the native Compose page draws. */
     fun settingsEntered(fragment: Any, activity: Activity) {
+        // Compose may call this on every recomposition. One entry must not keep
+        // requesting window layout or tearing down an already suspended player.
+        if (settings[fragment]?.get() === activity) return
         settings[fragment] = java.lang.ref.WeakReference(activity)
         surfaces.filterValues { it.activity === activity }.keys.toList().forEach { identity ->
             firstDraws.remove(identity)?.close()
@@ -34,6 +37,7 @@ internal object FragmentGlassRuntime {
         }
         firstDraws.keys.toList().filter { (it as? View)?.let { root -> this.activity(root.context) } === activity }
             .forEach { firstDraws.remove(it)?.close() }
+        NativeSettingsFrameRecovery.schedule(activity.window.decorView)
     }
 
     fun settingsExited(fragment: Any) {

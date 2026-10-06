@@ -16,6 +16,65 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE, sdk = [35])
 class NativeLyricsEmphasisMenuTest {
+    @Test fun nativeMachineTranslationAndPronunciationStayVisibleInSourceDetailsAndEnableEmphasis() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val ttml = """<tt xmlns:itunes="urn" itunes:timing="Line"><head><metadata><transliterations><transliteration xml:lang="ja-Latn"><text for="L1">ki mi</text></transliteration></transliterations><translations><translation xml:lang="zh"><text for="L1">你</text></translation></translations></metadata></head><body><p itunes:key="L1" begin="1s" end="3s">君</p></body></tt>"""
+        val presented = NativeLyricsPhoneticPresentation.render(
+            TtmlAuxiliaryOrigins(setOf("offline"), setOf("dictionary")).attach(ttml), false)
+        CurrentLyricsSourceStatus.rememberCandidate(activity, 999L, "APPLE_NATIVE", presented)
+        CurrentLyricsSourceStatus.recordApplied(activity, 999L, false)
+        assertEquals("APPLE_NATIVE", CurrentLyricsSourceStatus.appliedSource(activity, 999L))
+        assertTrue(CurrentLyricsSourceStatus.canEmphasizePronunciation(activity, 999L))
+        val detail = CurrentLyricsSourceStatus.description(activity, 999L)
+        assertTrue(detail.startsWith("Apple Music 原生"))
+        assertTrue(detail.contains("机翻译文"))
+        assertTrue(detail.contains("离线注音"))
+        assertFalse(detail.contains("原生译文"))
+        CurrentLyricsSourceStatus.rememberCandidate(activity, 999L, "am-lyrics", presented)
+        CurrentLyricsSourceStatus.recordApplied(activity, 999L, false)
+        assertTrue(CurrentLyricsSourceStatus.description(activity, 999L).startsWith("AM++ 作者整理库"))
+        CurrentLyricsSourceStatus.recordNativeApplied(activity, 999L, ttml)
+        assertTrue(CurrentLyricsSourceStatus.canEmphasizePronunciation(activity, 999L))
+        assertFalse(CurrentLyricsSourceStatus.description(activity, 999L).contains("机翻译文"))
+    }
+    @Test fun nativeFallbackIsRecordedUnderWordPreferenceOnlyWhenActuallyDisplayed() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        dev.amenhancer.module.lyrics.LyricsPreference.update(activity, quality = false)
+        val id = 997L
+        val native = Any()
+        val ttml = "<tt><body><p begin=\"1s\" end=\"3s\">君</p></body></tt>"
+        CurrentLyricsSourceStatus.rememberCandidate(activity, id, "desktop-lyrics:QQ音乐", "<tt/>")
+        CurrentLyricsSourceStatus.recordApplied(activity, id, false)
+        assertFalse(CurrentLyricsSourceStatus.recordNativeIfInstalled(activity, id, id - 1, native, native, ttml))
+        assertFalse(CurrentLyricsSourceStatus.recordNativeIfInstalled(activity, id, id, Any(), native, ttml))
+        assertEquals("desktop-lyrics:QQ音乐", CurrentLyricsSourceStatus.appliedSource(activity, id))
+        assertTrue(CurrentLyricsSourceStatus.recordNativeIfInstalled(activity, id, id, native, native, ttml))
+        assertTrue(CurrentLyricsSourceStatus.description(activity, id).startsWith("Apple Music 原生"))
+    }
+    @Test fun thirdPartyPrimaryReadingIsNotSwappedOrRetimedByNativePresentation() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val marker = DesktopLyricsPresentation("QQ音乐", true, false, false, false, true, primaryPronunciation = true).marker()
+        val ttml = marker + """<tt xmlns:itunes="urn" itunes:timing="Word"><head><metadata><transliterations><transliteration xml:lang="ja"><text for="L1">君</text></transliteration></transliterations></metadata></head><body><p itunes:key="L1" begin="1s" end="3s"><span begin="1s" end="3s">ki mi</span></p></body></tt>"""
+        val candidate = AutoLyricsCandidate("desktop-lyrics:QQ音乐", ttml)
+        val transform = FallbackLyricsTranslation::class.java.getDeclaredMethod("present", candidate.javaClass).apply { isAccessible = true }
+        assertSame(candidate, transform.invoke(FallbackLyricsTranslation(activity), candidate))
+    }
+    @Test fun sourceMenuSwitchesFromLrclibToNativeAndPersistsBothNativeAndAuthorChoices() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        CurrentLyricsSourceStatus.rememberCandidate(activity, 998L, "desktop-lyrics:LRCLIB", "<tt/>")
+        CurrentLyricsSourceStatus.recordApplied(activity, 998L, false)
+        val menu = LinearLayout(activity)
+        val popup = PopupWindow(menu)
+        val method = NativeLyricsSourceMenu::class.java.declaredMethods.single { it.name == "appendRow" }.apply { isAccessible = true }
+        CurrentLyricsSourceStatus.installRefreshHandler { _, _ -> true }
+        try {
+            method.invoke(NativeLyricsSourceMenu, menu, popup, { 998L }, { _: Activity -> })
+            menu.getChildAt(0).performClick()
+            assertEquals(LyricsSourceMenuPolicy.NATIVE, CurrentLyricsSourceStatus.selectedSource(activity, 998L))
+            menu.getChildAt(0).performClick()
+            assertEquals(LyricsSourceMenuPolicy.AUTHOR, CurrentLyricsSourceStatus.selectedSource(activity, 998L))
+        } finally { CurrentLyricsSourceStatus.installRefreshHandler { _, _ -> false } }
+    }
     @Test fun compactEmphasisControlFollowsSourceAndTogglesWithoutDuplicateRows() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         val prefs = activity.getSharedPreferences("japanese_pronunciation", Context.MODE_PRIVATE)
@@ -113,4 +172,40 @@ class NativeLyricsEmphasisMenuTest {
         } finally { prefs.edit().clear().commit() }
     }
 
+    @Test fun doubleTapCannotExcludeGoodLyricsAndLongPressOnlyOpensIndependentSettings() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val id = 898L
+        CurrentLyricsSourceStatus.rememberRecord(activity, id, "QQ音乐", "good-word")
+        CurrentLyricsSourceStatus.rememberCandidate(activity, id, "desktop-lyrics:QQ音乐", "<tt/>")
+        CurrentLyricsSourceStatus.recordApplied(activity, id, false)
+        CurrentLyricsSourceStatus.selectSource(activity, id, "QQ音乐")
+        val menu = LinearLayout(activity)
+        val popup = PopupWindow(menu)
+        var settingsOpened = 0
+        var refreshed = 0
+        val method = NativeLyricsSourceMenu::class.java.declaredMethods.single { it.name == "appendRow" }.apply { isAccessible = true }
+        CurrentLyricsSourceStatus.installRefreshHandler { _, _ -> refreshed++; true }
+        try {
+            method.invoke(NativeLyricsSourceMenu, menu, popup, { id }, { _: Activity -> settingsOpened++ })
+            val row = menu.getChildAt(0)
+            val start = android.os.SystemClock.uptimeMillis()
+            fun touch(action: Int, offset: Long) {
+                val event = android.view.MotionEvent.obtain(start, start + offset, action, 10f, 10f, 0)
+                row.dispatchTouchEvent(event)
+                event.recycle()
+            }
+            touch(android.view.MotionEvent.ACTION_DOWN, 0)
+            touch(android.view.MotionEvent.ACTION_UP, 20)
+            touch(android.view.MotionEvent.ACTION_DOWN, 90)
+            touch(android.view.MotionEvent.ACTION_UP, 110)
+            assertEquals(0, refreshed)
+            assertEquals(0, settingsOpened)
+            assertTrue(CurrentLyricsSourceStatus.excludedRecords(activity, id, "QQ音乐").isEmpty())
+            assertTrue(row.performLongClick())
+            assertEquals(1, settingsOpened)
+            assertEquals(0, refreshed)
+            assertEquals("QQ音乐", CurrentLyricsSourceStatus.selectedSource(activity, id))
+            assertTrue(CurrentLyricsSourceStatus.excludedRecords(activity, id, "QQ音乐").isEmpty())
+        } finally { CurrentLyricsSourceStatus.installRefreshHandler { _, _ -> false } }
+    }
 }

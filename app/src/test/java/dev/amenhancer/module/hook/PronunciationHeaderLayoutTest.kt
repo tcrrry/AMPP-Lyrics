@@ -38,7 +38,7 @@ class PronunciationHeaderLayoutTest {
         return root to words
     }
 
-    @Test fun emphasizedPhoneticsHaveOriginalSubtitleBeforeTranslationAndRecycleCleanly() {
+    @Test fun emphasizedPhoneticsKeepBothSubtitlesInsideNativeContainer() {
         val (root, words) = row()
         val translation = TextView(activity).apply { text = "译文" }
         words.addView(translation)
@@ -46,15 +46,13 @@ class PronunciationHeaderLayoutTest {
         val original = TextView(activity).apply { text = "原文" }
         words.addView(original)
         PronunciationHeaderLayout.moveBetween(words, original)
-        assertSame(root, original.parent)
-        assertSame(root, translation.parent)
-        assertEquals(words.id, (original.layoutParams as HostParams).topToBottom)
-        assertEquals(translation.id, (original.layoutParams as HostParams).bottomToTop)
-        assertEquals(original.id, (translation.layoutParams as HostParams).topToBottom)
-        assertEquals(original.id, (words.layoutParams as HostParams).bottomToTop)
+        assertSame(words, original.parent)
+        assertSame(words, translation.parent)
+        assertSame(original, words.getChildAt(0))
+        assertSame(translation, words.getChildAt(1))
+        assertEquals(-1, (words.layoutParams as HostParams).bottomToTop)
         PronunciationHeaderLayout.clearRow(root)
         assertEquals(1, root.childCount)
-        assertEquals(-1, (words.layoutParams as HostParams).bottomToTop)
         assertNull(original.parent)
         assertNull(translation.parent)
     }
@@ -149,8 +147,15 @@ class PronunciationHeaderLayoutTest {
                 assertSame(original, words.getChildAt(0))
                 val header = root.getChildAt(1) as TextView
                 assertEquals("ki mi no ko e", header.text.toString())
+                assertEquals(0x59ffffff, header.currentTextColor)
+                assertEquals(0x59ffffff, NativeLyricsPronunciationSubtitle.protectedColor(header, -1))
+                assertEquals(1f, NativeLyricsPronunciationSubtitle.protectedAlpha(header, 1f), 0f)
+                assertEquals(1f, NativeLyricsPronunciationSubtitle.protectedAlpha(header, 0.35f), 0f)
                 assertEquals(View.VISIBLE, header.visibility)
                 assertEquals(header.id, (words.layoutParams as HostParams).topToBottom)
+                PronunciationHeaderLayout.clearRow(root)
+                assertEquals(-1, NativeLyricsPronunciationSubtitle.protectedColor(header, -1))
+                assertEquals(0.35f, NativeLyricsPronunciationSubtitle.protectedAlpha(header, 0.35f), 0f)
             } finally { PronunciationHeaderLayout.clearRow(root) }
             assertEquals(1, root.childCount)
             assertEquals("君の声", original.text.toString())
@@ -177,38 +182,34 @@ class PronunciationHeaderLayoutTest {
         assertEquals(0, (words.layoutParams as HostParams).topToTop)
     }
 
-    @Test fun pronunciationOriginalAndTranslationHaveOrderedAnchorsAndEqualBrightness() {
+    @Test fun pronunciationStaysAboveButTranslationKeepsNativeParentAndStyle() {
         val (root, words) = row()
-        words.alpha = 0.4f // native word effects must not dim one auxiliary row alone
         val original = TextView(activity).apply { text = "君の声" }
         words.addView(original)
+        words.alpha = 0.4f
         NativeLyricsPronunciationSubtitle.renderHeader(words, "ki mi no ko e", false,
             resolveLayout = { nativeLayouts[it] ?: 0 }) { text, _ ->
             words.addView(TextView(activity).apply { this.text = text })
         }
         val pronunciation = root.getChildAt(1) as TextView
-        val translation = TextView(activity).apply { text = "你的声音"; alpha = 0.7f }
+        val translation = TextView(activity).apply { text = "你的声音"; alpha = 0.7f; setTextColor(0xffaabbcc.toInt()) }
         words.addView(translation)
+        val beforeParams = translation.layoutParams
         NativeLyricsPronunciationSubtitle.renderTranslation(words, translation)
-        try {
-            assertSame(root, pronunciation.parent)
-            assertSame(root, translation.parent)
-            assertSame(original, words.getChildAt(0))
-            assertEquals(1, words.childCount)
-            val main = words.layoutParams as HostParams
-            assertEquals(pronunciation.id, main.topToBottom)
-            assertEquals(translation.id, main.bottomToTop)
-            assertEquals(words.id, (translation.layoutParams as HostParams).topToBottom)
-            assertEquals(words.id, (pronunciation.layoutParams as HostParams).bottomToTop)
-            assertEquals(pronunciation.currentTextColor, translation.currentTextColor)
-            assertEquals(89, android.graphics.Color.alpha(pronunciation.currentTextColor))
-            assertEquals(1f, pronunciation.alpha, 0f)
-            assertEquals(pronunciation.alpha, translation.alpha, 0f)
-            assertEquals(0.4f, words.alpha, 0f)
-        } finally { PronunciationHeaderLayout.clearRow(root) }
-        assertEquals(1, root.childCount)
-        assertEquals(0, (words.layoutParams as HostParams).topToTop)
+        assertSame(root, pronunciation.parent)
+        assertSame(words, translation.parent)
+        assertSame(beforeParams, translation.layoutParams)
+        assertSame(original, words.getChildAt(0))
+        assertEquals(2, words.childCount)
+        assertEquals(pronunciation.id, (words.layoutParams as HostParams).topToBottom)
         assertEquals(-1, (words.layoutParams as HostParams).bottomToTop)
+        assertEquals(0xffaabbcc.toInt(), translation.currentTextColor)
+        assertEquals(0.7f, translation.alpha, 0f)
+        assertEquals(0.4f, words.alpha, 0f)
+        PronunciationHeaderLayout.clearRow(root)
+        assertEquals(1, root.childCount)
+        assertNull(translation.parent)
+        assertSame(original, words.getChildAt(0))
     }
 
     @Test fun clearingMainTrackBeforeBackgroundRestoresEveryCrossTrackAnchor() {
@@ -220,7 +221,7 @@ class PronunciationHeaderLayoutTest {
             container.addView(it); PronunciationHeaderLayout.moveAbove(container, it)
         }
         fun footer(container: ViewGroup): TextView = TextView(activity).also {
-            container.addView(it); NativeLyricsPronunciationSubtitle.renderTranslation(container, it)
+            container.addView(it); PronunciationHeaderLayout.moveBelow(container, it)
         }
         header(words)
         val mainTranslation = footer(words)

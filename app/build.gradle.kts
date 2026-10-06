@@ -38,8 +38,8 @@ android {
         applicationId = "dev.amenhancer.module"
         minSdk = 26
         targetSdk = 37
-        versionCode = 137
-        versionName = "1.7.0"
+        versionCode = 145
+        versionName = "1.6"
         buildConfigField("String", "HOST_PACKAGE", if (coexistenceBuild) {
             "\"com.tcrrry.ampplyrics.coexist\""
         } else {

@@ -30,7 +30,7 @@ class KoreanPronunciationAlignmentTest {
             romanizedLyrics = "[00:01.100]ni ga", source = "网易云音乐")
         val xml = requireNotNull(DesktopLyricsTtmlConverter.convert(result, primaryPronunciation = true))
         assertTrue(requireNotNull(DesktopLyricsPresentation.fromTtml(xml)).wordTimed)
-        assertTrue(xml.contains("begin=\"0:01.100\" end=\"0:01.400\">ni "))
+        assertTrue(xml.contains("begin=\"0:01.100\" end=\"0:01.400\">ni</span> "))
         assertTrue(xml.contains("begin=\"0:01.500\" end=\"0:01.900\">ga"))
         assertFalse(requireNotNull(DesktopLyricsPresentation.fromTtml(requireNotNull(
             DesktopLyricsTtmlConverter.convert(result.copy(romanizedLyrics = "[00:01.100]na ga"), primaryPronunciation = true)))).wordTimed)

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import android.view.LayoutInflater
 import dev.amenhancer.host.applemusic.AppleMusicHostProfiles
 import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.ui.EmbeddedHostActivityRole
@@ -143,6 +144,8 @@ internal class FragmentSettingsRuntime(
                 isAccessible = true
             }
             val onViewCreated = inherited(fragment, "onViewCreated", View::class.java, Bundle::class.java)
+            val onCreateView = inherited(fragment, "onCreateView", LayoutInflater::class.java, ViewGroup::class.java, Bundle::class.java)
+            require(!Modifier.isStatic(onCreateView.modifiers) && View::class.java.isAssignableFrom(onCreateView.returnType))
             val onResume = inherited(fragment, "onResume")
             val onDestroyView = inherited(fragment, "onDestroyView")
             // MainActivity inherits this from BaseActivity in 1606. Hook only the nearest declaration,
@@ -174,6 +177,13 @@ internal class FragmentSettingsRuntime(
                     if (android.os.Build.VERSION.SDK_INT >= 33) FragmentGlassRuntime.settingsEntered(fragmentObject, host)
                 }
                 if (receiver != null) bind(receiver)
+            })
+            hooks.install(onCreateView, scope, before = { receiver, _ ->
+                // Compose can initialize/draw synchronously while this method creates its root.
+                // Release the player's draw/capture ownership before entering host code.
+                notifyFragment(receiver, bindModel = false) { fragmentObject, host ->
+                    if (android.os.Build.VERSION.SDK_INT >= 33) FragmentGlassRuntime.settingsEntered(fragmentObject, host)
+                }
             })
             hooks.install(onViewCreated, scope, after = { receiver, args, original ->
                 notifyFragment(receiver) { fragmentObject, host ->
@@ -229,11 +239,11 @@ internal class FragmentSettingsRuntime(
         }.getOrDefault(false)
     }
 
-    private fun notifyFragment(receiver: Any?, notify: (Any, Activity) -> Unit) {
+    private fun notifyFragment(receiver: Any?, bindModel: Boolean = true, notify: (Any, Activity) -> Unit) {
         if (!scope.isActive || receiver == null || fragmentClass?.isInstance(receiver) != true) return
         val activity = runCatching { getActivity?.invoke(receiver) as? Activity }.getOrNull() ?: return
         if (mainClass?.isInstance(activity) != true || activity.packageName != ModuleConstants.TARGET_PACKAGE) return
-        val bound = bind(receiver)
+        val bound = bindModel && bind(receiver)
         LyricsPlaybackDiagnostics.record("settings-handoff", "bound=$bound")
         runCatching { notify(receiver, activity) }
     }

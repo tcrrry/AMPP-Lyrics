@@ -25,6 +25,7 @@ class TcrrryGlowSettingsAndroidTest {
         activity.setContentView(card)
         val slider = (0 until card.childCount).map(card::getChildAt).filterIsInstance<SeekBar>().single()
         assertEquals(70, slider.progress)
+        assertEquals(450, slider.max)
         assertTrue(slider.performAccessibilityAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id,
             Bundle().apply { putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, 130f) }))
         assertEquals(180, saved.lyricGlowSensitivity)
@@ -32,7 +33,9 @@ class TcrrryGlowSettingsAndroidTest {
             .single { it.text.startsWith("辉光触发位置：") }
         picker.performClick()
         val dialog = ShadowAlertDialog.getLatestAlertDialog()
-        dialog.listView.performItemClick(null, 1, 1)
+        fun texts(view: android.view.View): List<TextView> = if (view is android.view.ViewGroup)
+            (0 until view.childCount).flatMap { texts(view.getChildAt(it)) } else listOfNotNull(view as? TextView)
+        texts(dialog.window!!.decorView).single { it.text == LyricGlowPosition.TAIL_ONLY.displayName }.performClick()
         assertEquals(LyricGlowPosition.TAIL_ONLY, saved.lyricGlowPosition)
         assertEquals(180, saved.lyricGlowSensitivity)
         assertTrue(saved.futureBlurEnabled)
@@ -42,17 +45,30 @@ class TcrrryGlowSettingsAndroidTest {
         assertEquals(LyricGlowPosition.TAIL_ONLY, saved.lyricGlowPosition)
         val rebuilt = TcrrryLyricsSettingsUi.glowSettingsCard(activity, saved, {}, {})
         assertEquals(0, (0 until rebuilt.childCount).map(rebuilt::getChildAt).filterIsInstance<SeekBar>().single().progress)
+        slider.performAccessibilityAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id,
+            Bundle().apply { putFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, 450f) })
+        assertEquals(500, saved.lyricGlowSensitivity)
+        assertEquals(LyricGlowPosition.TAIL_ONLY, saved.lyricGlowPosition)
+        assertTrue(saved.futureBlurEnabled)
+        val maximum = TcrrryLyricsSettingsUi.glowSettingsCard(activity, saved, {}, {})
+        assertEquals(450, (0 until maximum.childCount).map(maximum::getChildAt).filterIsInstance<SeekBar>().single().progress)
     }
 
-    @Test fun disabledEnhancementCanBeEnabledFromOurPage() {
+    @Test fun enhancementControlsStayAvailableWithoutAMasterSwitchAndSmoothDefaultsOn() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().visible().get()
-        var saved = ModuleSettings(cjkKaraokeAnimationEnabled = false)
+        val policy = dev.amenhancer.module.lyrics.LyricsPreference
         var refreshed = false
-        val card = TcrrryLyricsSettingsUi.glowSettingsCard(activity, saved, { saved = it }, { refreshed = true })
-        assertFalse((0 until card.childCount).map(card::getChildAt).any { it is SeekBar })
-        (0 until card.childCount).map(card::getChildAt).filterIsInstance<TextView>()
-            .single { it.text == "已关闭 · 点击开启" }.performClick()
-        assertTrue(saved.cjkKaraokeAnimationEnabled)
+        val card = TcrrryLyricsSettingsUi.glowSettingsCard(activity,
+            ModuleSettings(cjkKaraokeAnimationEnabled = false), {}, { refreshed = true })
+        val children = (0 until card.childCount).map(card::getChildAt)
+        assertTrue(children.any { it is SeekBar })
+        assertFalse(children.filterIsInstance<TextView>().any { it.text.contains("点击开启") || it.text.contains("点击关闭") })
+        assertTrue(policy.smoothShortUnits(activity))
+        val smooth = children.filterIsInstance<TextView>().single { it.text == "短单元平滑：开启" }
+        assertEquals(SettingsUiTheme.colors(activity).primary, smooth.currentTextColor)
+        smooth.performClick()
+        assertFalse(policy.smoothShortUnits(activity))
         assertTrue(refreshed)
+        assertFalse(policy.smoothShortUnits(activity)) // Explicit saved off remains off on later renders.
     }
 }

@@ -10,6 +10,7 @@ internal object PronunciationHeaderLayout {
     private data class Edge(val view: WeakReference<View>, val first: Int, val second: Int, val margin: Int)
     private val headers = WeakHashMap<ViewGroup, Edge>()
     private val middles = WeakHashMap<ViewGroup, Edge>()
+    private val nativeAuxiliaries = WeakHashMap<ViewGroup, MutableList<WeakReference<View>>>()
     private val footers = WeakHashMap<ViewGroup, Edge>()
 
     internal fun field(type: Class<*>, name: String) = type.getField(
@@ -35,11 +36,25 @@ internal object PronunciationHeaderLayout {
         parent != container && container.id != View.NO_ID
     }.getOrDefault(false)
 
+    fun keepNativeTranslation(container: ViewGroup, view: View) {
+        check(view.parent === container)
+        // Native subtitle inflation already supplies its full-row flex layout.
+        nativeAuxiliaries.getOrPut(container) { mutableListOf() }.add(WeakReference(view))
+    }
+
     fun moveAbove(container: ViewGroup, view: View) = move(container, view, above = true)
     fun moveBelow(container: ViewGroup, view: View) = move(container, view, above = false)
 
     /** Insert the original subtitle between the emphasized phonetics and translation. */
     fun moveBetween(container: ViewGroup, view: View) {
+        val nativeTranslation = nativeAuxiliaries[container]?.firstOrNull()?.get()
+        if (nativeTranslation?.parent === container && view.parent === container) {
+            // Only appended auxiliary views move; all native word indices stay fixed.
+            container.removeView(view)
+            container.addView(view, container.indexOfChild(nativeTranslation))
+            nativeAuxiliaries.getOrPut(container) { mutableListOf() }.add(WeakReference(view))
+            return
+        }
         clearEdge(container, above = false, middle = true)
         val footer = footers[container]?.view?.get() ?: return moveBelow(container, view)
         check(view.parent === container && supports(container))
@@ -156,6 +171,9 @@ internal object PronunciationHeaderLayout {
     }
 
     fun clear(container: ViewGroup) {
+        nativeAuxiliaries.remove(container)?.forEach { reference ->
+            reference.get()?.takeIf { it.parent === container }?.let(container::removeView)
+        }
         clearEdge(container, above = false, middle = true)
         clearEdge(container, above = false)
         clearEdge(container, above = true)

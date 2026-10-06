@@ -1,0 +1,48 @@
+{
+  "version": "v1.5-test-r1",
+  "publicReleaseUnchanged": "v1.4",
+  "deviceVerified": false,
+  "tests": {
+    "app": {
+      "tests": 1241,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "glass": {
+      "tests": 22,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "lint": {
+    "app": {
+      "errors": 0,
+      "warnings": 196
+    },
+    "glass": {
+      "errors": 0,
+      "warnings": 4
+    },
+    "glass-lab": {
+      "errors": 0,
+      "warnings": 9
+    }
+  },
+  "profileData": "5 exact profiles, 316 targets",
+  "glassReference": "32 files and 2 pinned patches",
+  "pluginRegression": 6,
+  "pluginImport": {
+    "host": "author plugin-system-v1",
+    "tests": 1,
+    "failures": 0,
+    "skipped": 0
+  },
+  "pluginScope": "spacing and optional short-unit smoothing only; not a full third-party lyrics migration",
+  "artifacts": {
+    "AMPP-Lyrics-module-local.apk": "f8c38ae7a8605d210f2f0c0e29738bd34f0f5a104d0e3c6f7df5671899c47fe5",
+    "Tcrrry-Lyrics-Plugin-0.1.0.zip": "83674e8dd8158aba4828060d3ebb5a14f321af5cf7e5db82bdf2d8ee01a41f27"
+  },
+  "buildOrigin": "cloud-local; release attachments have their own CI validation report"
+}

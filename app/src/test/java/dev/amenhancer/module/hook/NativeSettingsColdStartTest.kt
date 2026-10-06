@@ -19,14 +19,18 @@ class NativeSettingsColdStartTest {
         override fun getPackageName() = dev.amenhancer.module.BuildConfig.HOST_PACKAGE
     }
     class VisibleRoot(host: Activity) : View(host) {
+        var invalidations = 0
         override fun isShown() = true
         override fun getWindowVisibility() = VISIBLE
+        override fun postInvalidateOnAnimation() { invalidations++ }
     }
     internal class ColdFragment(private val host: Activity) {
+        var modelReads = 0
         fun getActivity() = host
         fun getView(): View? = null
-        fun z1(): SettingsHostViewModel = error("preference model not ready yet")
+        fun z1(): SettingsHostViewModel { modelReads++; error("preference model not ready yet") }
         fun r1(composer: SettingsHostComposer) = Unit
+        fun onCreateView(inflater: android.view.LayoutInflater, container: android.view.ViewGroup?, state: Bundle?): View? = null
         fun onViewCreated(view: View?, state: Bundle?) = Unit
         fun onResume() = Unit
         fun onDestroyView() = Unit
@@ -38,7 +42,10 @@ class NativeSettingsColdStartTest {
             befores[method.name] = before
         }
     }
-    @Test fun coldCompositionReleasesDrawVetoEvenWhenPreferenceModelCannotBind() {
+    @Test fun coldViewCreationReleasesDrawVetoBeforeCompositionOrPreferenceBinding() = handoff("onCreateView")
+    @Test fun coldCompositionStillReleasesDrawVetoWhenModelCannotBind() = handoff("r1")
+
+    private fun handoff(callback: String) {
         val controller = Robolectric.buildActivity(Main::class.java).setup()
         val host = controller.get()
         val root = VisibleRoot(host)
@@ -64,8 +71,12 @@ class NativeSettingsColdStartTest {
         try {
             assertFalse(first.onPreDraw())
             assertFalse(runtime.bind(fragment))
-            hooks.befores.getValue("r1")(fragment, emptyArray())
+            val reads = fragment.modelReads
+            val invalidations = root.invalidations
+            hooks.befores.getValue(callback)(fragment, emptyArray())
+            if (callback == "onCreateView") assertEquals(reads, fragment.modelReads)
             assertFalse(pending.containsKey(root))
+            assertTrue(root.invalidations > invalidations)
             assertTrue(first.onPreDraw())
         } finally {
             first.close(); pending.remove(root)

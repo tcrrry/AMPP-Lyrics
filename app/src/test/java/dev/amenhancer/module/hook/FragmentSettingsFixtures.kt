@@ -82,6 +82,7 @@ internal class SettingsHostComposer
 internal open class SettingsHostFragmentBase {
     fun getActivity(): Activity? = null
     fun getView(): View? = null
+    fun onCreateView(inflater: android.view.LayoutInflater, container: android.view.ViewGroup?, state: Bundle?): View? = null
     fun onViewCreated(view: View?, state: Bundle?) = Unit
     fun onResume() = Unit
     fun onDestroyView() = Unit

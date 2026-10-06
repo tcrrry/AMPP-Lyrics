@@ -7,7 +7,9 @@ class LyricsSourceMenuPolicyTest {
     @Test fun cyclesFromTheAppliedAutomaticProviderWhenThereIsNoExplicitSelection() {
         assertEquals("网易云音乐", LyricsSourceMenuPolicy.next("desktop-lyrics:QQ音乐", null))
         assertEquals("LRCLIB", LyricsSourceMenuPolicy.next("desktop-lyrics:网易云音乐", null))
-        assertEquals("QQ音乐", LyricsSourceMenuPolicy.next("desktop-lyrics:LRCLIB", null))
+        assertEquals(LyricsSourceMenuPolicy.NATIVE, LyricsSourceMenuPolicy.next("desktop-lyrics:LRCLIB", null))
+        assertEquals(LyricsSourceMenuPolicy.AUTHOR, LyricsSourceMenuPolicy.next("APPLE_NATIVE", null))
+        assertEquals("QQ音乐", LyricsSourceMenuPolicy.next("am-lyrics", null))
     }
     @Test fun aFailedSwitchCanAdvanceAgainWithoutClaimingTheFailedSourceWasApplied() {
         assertEquals("LRCLIB", LyricsSourceMenuPolicy.next("desktop-lyrics:QQ音乐", "网易云音乐"))
@@ -33,5 +35,11 @@ class LyricsSourceMenuPolicyTest {
         assertFalse(LyricsSourceMenuPolicy.canAct(0L, 0L))
         assertFalse(LyricsSourceMenuPolicy.canAct(100L, null))
         assertFalse(LyricsSourceMenuPolicy.canAct(-1L, -1L))
+    }
+    @Test fun nativeAndAuthorSourcesHaveDifferentCaptionsAndNeverClaimAnUnknownSourceIsNative() {
+        assertEquals("Apple Music 原生", LyricsSourceMenuPolicy.caption("APPLE_NATIVE"))
+        assertEquals("AM++ 作者整理库", LyricsSourceMenuPolicy.caption("am-lyrics"))
+        assertEquals("来源尚未确认", LyricsSourceMenuPolicy.caption(null))
+        assertEquals("AMLL TTML 库", LyricsSourceMenuPolicy.caption("amll-ttml-db"))
     }
 }

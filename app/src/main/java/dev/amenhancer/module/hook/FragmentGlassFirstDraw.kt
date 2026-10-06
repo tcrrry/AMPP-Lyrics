@@ -10,6 +10,7 @@ internal class FragmentGlassFirstDraw(private val root: View, private val enable
     ViewTreeObserver.OnPreDrawListener, AutoCloseable {
     private val frame = GlassFirstFrame()
     private val tree = root.viewTreeObserver
+    private var closed = false
     init { tree.addOnPreDrawListener(this) }
     override fun onPreDraw(): Boolean {
         if (!root.isShown || root.windowVisibility != View.VISIBLE) return true
@@ -22,9 +23,13 @@ internal class FragmentGlassFirstDraw(private val root: View, private val enable
         return false
     }
     override fun close() {
+        if (closed) return
+        closed = true
         frame.ready()
         tree.takeIf { it.isAlive }?.removeOnPreDrawListener(this)
         // An unattached observer merges into the window's observer on first attachment.
         root.viewTreeObserver.takeIf { it !== tree && it.isAlive }?.removeOnPreDrawListener(this)
+        // Removing a veto alone does not schedule a replacement for the cancelled traversal.
+        root.postInvalidateOnAnimation()
     }
 }

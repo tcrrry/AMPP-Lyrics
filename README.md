@@ -7,19 +7,19 @@
 
 **单 APK / APKS 整合安装包 · 无需 Root · 无需另装 LSPosed 或模块**
 
-[![普通版 APK｜推荐](docs/images/downloads/ordinary-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.4/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk)
+[![普通版 APK｜推荐](docs/images/downloads/ordinary-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.6/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk)
 
-[![共存版 APK｜保留官方版](docs/images/downloads/coexist-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.4/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk)
+[![共存版 APK｜保留官方版](docs/images/downloads/coexist-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.6/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk)
 
-[![APKS 分包版](docs/images/downloads/split-apks.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.4/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks)
+[![APKS 分包版](docs/images/downloads/split-apks.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.6/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks)
 
-[![独立模块｜非主程序](docs/images/downloads/module-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.4/AMPP-Lyrics-module.apk)
+[![独立模块｜非主程序](docs/images/downloads/module-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.6/AMPP-Lyrics-module.apk)
 
-**v1.4 · Apple Music 7.0.0-beta · Android 11+ · arm64**
+**v1.6 · Apple Music 7.0.0-beta · Android 11+ · arm64**
 
 普通版与共存版选一种即可；想保留官方 Apple Music，选 **共存版 APK**。
 
-**[打开 v1.4 下载页（APK／APKS／模块／共存版）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest)** · [旧版 6.5.3 下载页](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.2) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
+**[打开 v1.6 下载页（APK／APKS／模块／共存版）](https://github.com/tcrrry/AMPP-Lyrics/releases/latest)** · [旧版 6.5.3 下载页](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.2) · [全部版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [视频演示](#视频演示)
 
 </div>
 
@@ -42,7 +42,7 @@
 - 在 Apple Music 中匹配 **QQ 音乐、网易云音乐、LRCLIB** 的歌词，并结合歌曲信息选择结果。
 - 支持来源提供的逐字歌词、逐行歌词和平台译文；没有平台译文时，可选择离线补译或自定义 API。
 - 支持来源提供的日语等发音轨道；发音显示在原文上方，使用暗色小字号文字，不参加原文逐字高亮。
-- 播放页常驻歌词菜单，可查看当前来源；**单击来源切换、双击重新匹配当前来源、长按进入歌词设置**。
+- 播放页常驻歌词菜单，可查看当前来源；**单击来源切换、双击不执行操作、长按进入歌词设置**。
 - 歌词设置与 AM++ 设置分开，支持来源管理、匹配输入查看、匹配历史与预览。
 - 歌词设置支持跟随原软件配色，以及手动选择日间、夜间模式。
 - 保留 AM++ 原有的歌词模糊、字体、自定义歌词、平板双栏和液态玻璃等增强功能；具体条件见[原作者的功能介绍](https://github.com/Zennmn/AM-plus-plus#readme)。
@@ -51,16 +51,16 @@
 
 ## 下载
 
-当前正式版本：**v1.4**，基于 **Apple Music 7.0.0-beta / 1606**，跟进上游 AM++ v1.6.3，并保留本项目歌词增强功能。模块内部版本为 1.7.0 / 137。
+当前正式版本：**v1.6**，基于 **Apple Music 7.0.0-beta / 1606**，跟进上游 AM++ v1.6.3，并保留本项目歌词增强功能。模块内部版本为 1.6 / 145。
 
-主页顶部四个按钮可直接下载对应安装包。如果浏览器下载失败，请[打开 GitHub 发布页面](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.4)，展开下方 **Assets**，按下表选择文件：
+主页顶部四个按钮可直接下载对应安装包。如果浏览器下载失败，请[打开 GitHub 发布页面](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.6)，展开下方 **Assets**，按下表选择文件：
 
 | 安装文件 | 使用方式 |
 | --- | --- |
-| [**普通版 APK（推荐）**](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.4/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk) | 普通整合版，直接打开 APK 安装，无需 Root 或额外模块。 |
-| [**共存版 APK**](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.4/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk) | 共存整合版，独立包名，可保留官方版或普通增强版。 |
-| [APKS 分包版](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.4/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks) | 普通分包版，用 MT 管理器、SAI 等分包安装器完整安装。 |
-| [独立模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.4/AMPP-Lyrics-module.apk) | 供兼容的模块框架或自行嵌入使用，不是 Apple Music 主程序。 |
+| [**普通版 APK（推荐）**](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.6/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk) | 普通整合版，直接打开 APK 安装，无需 Root 或额外模块。 |
+| [**共存版 APK**](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.6/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk) | 共存整合版，独立包名，可保留官方版或普通增强版。 |
+| [APKS 分包版](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.6/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks) | 普通分包版，用 MT 管理器、SAI 等分包安装器完整安装。 |
+| [独立模块 APK](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.6/AMPP-Lyrics-module.apk) | 供兼容的模块框架或自行嵌入使用，不是 Apple Music 主程序。 |
 
 ### 普通版和共存版怎么区分？
 
@@ -74,11 +74,13 @@
 
 下载时认按钮上的 **普通版／共存版**；安装后认应用名称。也可以在系统的「设置 → 应用 → 应用信息」中查看，部分系统或 MT 管理器还能显示包名。独立模块的包名是 `dev.amenhancer.module.debug`，不是上述两个音乐应用。
 
-**v1.4 更新：** 新增多语言离线注音、发音与逐字时间对齐、末字扫光保护及 3.5 秒平滑回位；针对首次设置黑屏改进首帧交接。辉光增强、灵敏度与触发位置在 **Tcrrry 歌词设置**，与原 AM++ 设置分开，保留旧设置值；正式版移除测试诊断入口。四种安装包同步更新，详见 [v1.4 发布说明](docs/release-v1.4.md)。
+**v1.6 更新：** 修复尾奏拖动与单曲循环后的歌词聚焦；新增质量／逐字偏好，逐字优先优先使用 AM 原生和 AM++ 的真实逐字。原生正文可补充 QQ／网易云译文，再用机翻补缺；突出发音支持沿用原文真实时间，无法对齐的句子局部逐行回退。辉光灵敏度上限 500%，短单元平滑默认开启并支持发音；新增当前源最佳结果与自动选源分开的操作，以及完整匹配信息。
+
+**沿用功能：** 新增多语言离线注音、发音与逐字时间对齐、末字扫光保护及 3.5 秒平滑回位；针对首次设置黑屏改进首帧交接。辉光增强、灵敏度与触发位置在 **Tcrrry 歌词设置**，与原 AM++ 设置分开，保留旧设置值；正式版移除测试诊断入口。四种安装包同步更新，详见 [v1.6 发布说明](docs/release-v1.6.md)。
 
 在 7.0 原生设置页同时提供 **AM++** 和 **Tcrrry 歌词设置** 两个入口，修复测试版漏掉歌词入口的问题。普通版和共存版新安装默认开启自定义歌词替换与自动歌词，已保存的关闭选项保留。配色选项仍在设置页末尾，无真实逐字计时的歌词仍逐行显示；多源匹配、翻译、发音和手动换源保持可用。
 
-7.0 单 APK 测试版用户反馈除歌词设置入口缺失外使用正常；v1.4 的构建与打包经过自动验证，新界面与所有打包形式仍欢迎实机反馈。v1、v1.1、v1.2、v1.3 和所有测试版的历史附件均保留，旧版 6.5.3 请从 [v1.2 页面](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.2) 下载。
+7.0 单 APK 测试版用户反馈除歌词设置入口缺失外使用正常；v1.6 的构建与打包经过自动验证，新界面与所有打包形式仍欢迎实机反馈。v1、v1.1、v1.2、v1.3、v1.4 和所有测试版的历史附件均保留，旧版 6.5.3 请从 [v1.2 页面](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.2) 下载。
 
 共存版显示为 **AM++ Lyrics 共存版**，包名为 `com.tcrrry.ampplyrics.coexist`，使用独立应用数据目录。可先尝试覆盖旧共存版升级；请从自己的图标登录，外部音乐链接和第三方音乐 SDK 认证入口暂不支持。保留资料库页面布局类名的修复。[共存实现与验证说明](docs/coexistence-feasibility.md)。
 
@@ -91,7 +93,7 @@
 3. 不要把 `.apks` 改成 `.apk`，也不要只安装从压缩包里取出的某一个分包。
 4. 安装完成后打开 Apple Music，按正常流程登录并播放音乐；需要订阅的功能仍需要 Apple Music 订阅。
 5. 在 Apple Music 设置中打开 **Tcrrry 歌词设置**，或长按播放页歌词菜单中的来源项进入；AM++ 原有功能使用单独的 **AM++ 模块设置**入口。
-6. 歌词匹配不合适时，可以切换来源，或双击来源项重新匹配当前来源。
+6. 歌词匹配不合适时，可以切换来源，或在歌词设置中选择当前源最佳结果／寻找其他匹配版本。
 
 整合包与官方 Apple Music 使用不同签名。如果安装时提示签名冲突，通常需要先卸载官方版；**卸载会删除其本地数据和已下载音乐**。不要为解决冲突直接清除数据，先确认自己需要保留的内容。
 
@@ -103,7 +105,7 @@
 
 - 模块最低要求为 **Android 8.0（API 26）**；歌词模糊等原 AM++ 功能还有各自的系统版本要求。
 - **当前 APKS 是 arm64-v8a / xxhdpi 分包组合**，不是包含所有架构和屏幕资源的通用包；不适用于纯 32 位设备或 x86 设备。
-- 单 APK 由相同的原始分包合并后重新嵌入 v1.4 模块，也只包含 arm64-v8a 与 xxhdpi 资源，不是全架构通用包。
+- 单 APK 由相同的原始分包合并后重新嵌入 v1.6 模块，也只包含 arm64-v8a 与 xxhdpi 资源，不是全架构通用包。
 - 整合包的 Apple Music 主程序要求 **Android 11（API 30）及以上**；模块最低系统要求不代表整合包最低要求。
 - 当前整合包针对 **Apple Music 7.0.0-beta（1606）** 构建；其他版本需要另外适配。
 - 单 APK 已有用户实机安装验证通过；登录、播放和歌词显示，以及跨机型和其他屏幕密度尚未完成全面验证，遇到问题请附上手机型号、Android 版本和安装／显示情况。

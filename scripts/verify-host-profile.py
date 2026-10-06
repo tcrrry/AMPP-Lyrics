@@ -34,7 +34,7 @@ def _uleb(data, offset):
 
 
 def dex_classes(data):
-    """Return {class descriptor: {"super": ..., "methods": set, "fields": dict}}."""
+    """Return class descriptors with superclass, interfaces, methods and fields."""
     if not data.startswith(b"dex\n"):
         raise ValueError("Not a DEX file")
 
@@ -99,6 +99,8 @@ def dex_classes(data):
                     method_access[method_defs[index]] = flags
         classes[class_name] = {
             "super": types[superclass] if superclass != 0xFFFFFFFF else None,
+            "interfaces": [types[u16(u32(base + 12) + 4 + j * 2)]
+                           for j in range(u32(u32(base + 12)))] if u32(base + 12) else [],
             "methods": methods,
             "fields": fields,
             "method_access": method_access,

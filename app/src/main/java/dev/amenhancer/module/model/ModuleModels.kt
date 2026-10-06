@@ -38,7 +38,7 @@ data class ModuleSettings(
         const val MIN_LYRIC_BLUR_RADIUS_OFFSET_PX = -10
         const val MAX_LYRIC_BLUR_RADIUS_OFFSET_PX = 10
         const val MIN_LYRIC_GLOW_SENSITIVITY = 50
-        const val MAX_LYRIC_GLOW_SENSITIVITY = 200
+        const val MAX_LYRIC_GLOW_SENSITIVITY = 500
         const val FOLLOW_SYSTEM_APPLE_MUSIC_DPI = 0
         const val MIN_APPLE_MUSIC_DPI = 160
         const val MAX_APPLE_MUSIC_DPI = 640

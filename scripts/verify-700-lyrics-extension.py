@@ -67,6 +67,32 @@ def main():
     method('com/apple/android/music/player/fragment/L', 'b(II)V')
     method('com/apple/android/music/player/n1', 'N()V')
     method('com/apple/android/music/player/n1', 'P(Z)V')
+    # Independent replay recovery must include inherited public interface methods,
+    # not just declarations on the fragment and its superclass chain.
+    def inherited_public(owner, descriptor):
+        nonlocal checks
+        checks += 1
+        pending, seen = ['L'+owner+';'], set()
+        while pending:
+            current = pending.pop()
+            if current in seen or current not in classes:
+                continue
+            seen.add(current)
+            contract = classes[current]
+            if descriptor in contract['methods'] and contract['method_access'][descriptor] & 1:
+                return current
+            pending.extend(contract['interfaces'])
+            pending.append(contract['super'])
+        raise RuntimeError(f'Missing inherited public method: {owner}.{descriptor}')
+    getter = 'getMediaBrowser()LJ4/w;'
+    if inherited_public(lyrics, getter) != 'Lia/a$c;':
+        raise RuntimeError('Inspect changed native playback interface getter')
+    if classes['Lia/a$c;']['method_access'][getter] & 0x400:
+        raise RuntimeError('Playback interface getter is no longer a default method')
+    for descriptor in ('getCurrentPosition()J', 'isPlaying()Z', 'getPlaybackState()I'):
+        inherited_public('J4/w', descriptor)
+    field('com/apple/android/music/player/fragment/l', 'X', 'Landroid/os/Handler;')
+    method(lyrics, 'y2(I)J')
     method('androidx/recyclerview/widget/RecyclerView$f', 'g()V')
     field(lyrics, 'b1', 'Lcom/apple/android/music/ttml/f;')
     names = ('f', 'g', 'n', 'p', 'r')
@@ -180,7 +206,8 @@ def main():
     resources = subprocess.check_output([str(args.aapt2), 'dump', 'resources', str(args.apk)], text=True)
     for name in ('layout/lyrics_word_karaoke','layout/lyrics_word_karaoke_bg',
                  'layout/lyrics_translation_line_karaoke','layout/lyrics_bg_translation_line_karaoke',
-                 'color/white_alpha_35','id/translations_button','id/translations_popup_menu'):
+                 'color/white_alpha_35','id/translations_button','id/translations_popup_menu',
+                 'id/message_lyrics_process_events'):
         checks += 1
         if not re.search(r'resource 0x[0-9a-f]+ '+name+r'\b', resources):
             raise RuntimeError(f'Missing extension resource: {name}')

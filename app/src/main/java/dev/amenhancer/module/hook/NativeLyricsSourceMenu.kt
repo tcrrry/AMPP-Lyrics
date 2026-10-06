@@ -156,6 +156,7 @@ internal object NativeLyricsSourceMenu {
         }
         fun refresh(source: String) {
             val started = CurrentLyricsSourceStatus.refresh(songId)
+            if (!started) CurrentLyricsSourceStatus.cancelSourceCycle(songId)
             toast(if (started) "正在匹配 · $source" else "请重新打开歌词页后生效")
             popupRef.get()?.dismiss()
         }
@@ -165,15 +166,15 @@ internal object NativeLyricsSourceMenu {
             tag = ROW_TAG
             isClickable = true
             isFocusable = true
-            contentDescription = "歌词源：${LyricsSourceMenuPolicy.caption(applied())}。$detail。单击切换，双击重新匹配，长按设置"
+            contentDescription = "歌词源：${LyricsSourceMenuPolicy.caption(applied())}。$detail。单击切换来源，长按打开详细歌词设置"
         }
         row.setOnClickListener {
             if (!valid()) return@setOnClickListener
-            val next = LyricsSourceMenuPolicy.next(applied(), CurrentLyricsSourceStatus.selectedSource(app, songId))
-            CurrentLyricsSourceStatus.selectSource(app, songId, next)
+            val next = CurrentLyricsSourceStatus.beginSourceCycle(app, songId) ?: return@setOnClickListener
             refresh(next)
         }
         row.setOnLongClickListener {
+            if (!valid()) return@setOnLongClickListener true
             popupRef.get()?.dismiss()
             findActivity(context)?.let(openSettings) ?: toast("暂时无法打开歌词设置")
             true
@@ -186,17 +187,8 @@ internal object NativeLyricsSourceMenu {
                 if (row.isAttachedToWindow && popupRef.get()?.isShowing == true) row.performClick()
                 return true
             }
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                if (!valid()) return true
-                val source = LyricsSourceMenuPolicy.provider(applied())
-                    ?: CurrentLyricsSourceStatus.selectedSource(app, songId)?.takeIf { it in LyricsSourceMenuPolicy.sources }
-                if (source == null) { toast("请先单击选择歌词源"); return true }
-                // Reuse the existing management page's exclude-and-rematch semantics.
-                CurrentLyricsSourceStatus.selectSource(app, songId, source)
-                CurrentLyricsSourceStatus.excludeCurrentRecord(app, songId)
-                refresh(source)
-                return true
-            }
+            // A double tap must not exclude a usable recording or open settings.
+            override fun onDoubleTap(e: MotionEvent): Boolean = true
             override fun onLongPress(e: MotionEvent) { row.performLongClick() }
         })
         row.setOnTouchListener { _, event -> detector.onTouchEvent(event); true }

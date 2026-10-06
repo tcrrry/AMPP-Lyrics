@@ -59,12 +59,25 @@ class NativeLyricsImmediateAnchorTest {
     class Callback
     class Processor(val adapter: Adapter) {
         var calls = 0
+        var explicitCalls = 0
+        var introGap = false
+        fun c(pointer: Any, position: Long, a: Callback, b: Callback, c: Callback, d: Callback, e: Callback): Long {
+            explicitCalls++
+            adapter.ids.clear()
+            if (!introGap) adapter.ids.add(if (position < 1000) 0 else 7)
+            return 500
+        }
         fun d(pointer: Any, a: Callback, b: Callback, c: Callback, d: Callback, e: Callback): Long {
             calls++
             adapter.ids.clear()
             adapter.ids.add(5) // A real processor refresh supplied this current row.
             return 500
         }
+    }
+    class Clock(var position: Long, var playing: Boolean = true) {
+        fun getCurrentPosition() = position
+        fun isPlaying() = playing
+        fun getPlaybackState() = if (playing) 3 else 2
     }
     class Fragment(val root: View, list: ListView) {
         @JvmField val n0 = Binding(list)
@@ -78,6 +91,11 @@ class NativeLyricsImmediateAnchorTest {
         @JvmField val e1 = Callback()
         @JvmField val f1 = Callback()
         @JvmField val g1 = Callback()
+        var clock: Clock? = null
+        var restarts = 0
+        @JvmField val X = android.os.Handler(Looper.getMainLooper())
+        fun getMediaBrowser() = clock
+        fun y2(state: Int): Long { restarts++; return 500 }
         fun getView() = root
         fun isHidden() = false
     }
@@ -249,4 +267,63 @@ class NativeLyricsImmediateAnchorTest {
             controller.pause().stop().destroy()
         }
     }
+    @Test fun firstSeekAfterOutroAndSingleRepeatRecoverWithoutNativeCallbacksOrPageReentry() {
+        val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
+        val activity = controller.get()
+        val root = View(activity)
+        activity.setContentView(root)
+        val fragment = Fragment(root, ListView(activity))
+        fragment.clock = Clock(210000)
+        fragment.p0.ids.add(50)
+        val anchor = anchor()
+        anchor.watch(fragment)
+        try {
+            // No beforeProcess callback: the last lyric has ended and native timers stopped.
+            fragment.clock!!.position = 10000
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(500))
+            root.viewTreeObserver.dispatchOnPreDraw()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(7 to 7, fragment.Z0.ids)
+            assertEquals(1, fragment.b1.explicitCalls)
+            assertEquals(0, fragment.b1.calls)
+            assertEquals(1, fragment.restarts)
+            fragment.clock!!.position = 210000
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(500))
+            fragment.clock!!.position = 0
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(500))
+            root.viewTreeObserver.dispatchOnPreDraw()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(0 to 0, fragment.Z0.ids)
+            assertEquals(0, fragment.b1.calls)
+        } finally { controller.pause().stop().destroy() }
+    }
+
+    @Test fun pausedRewindIntoIntroScrollsToStartWithoutInventingAHighlightAndOldSongCannotRecover() {
+        val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
+        val activity = controller.get()
+        val root = View(activity); activity.setContentView(root)
+        val fragment = Fragment(root, ListView(activity))
+        fragment.clock = Clock(210000, false)
+        fragment.b1.introGap = true
+        val anchor = anchor(); anchor.watch(fragment)
+        NativeLyricsImmediateAnchor.currentPresentationHighlights = { emptySet() }
+        try {
+            fragment.clock!!.position = 0
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(500))
+            root.viewTreeObserver.dispatchOnPreDraw(); shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(0 to 0, fragment.Z0.ids)
+            assertTrue(fragment.p0.ids.isEmpty())
+            assertEquals(0, fragment.restarts)
+            assertFalse(fragment.clock!!.playing)
+            val calls = fragment.b1.explicitCalls
+            anchor.isCurrentSong = { false }
+            fragment.clock!!.position = 10000
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(500))
+            assertEquals(calls, fragment.b1.explicitCalls)
+        } finally {
+            NativeLyricsImmediateAnchor.currentPresentationHighlights = null
+            controller.pause().stop().destroy()
+        }
+    }
+
 }

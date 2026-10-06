@@ -49,6 +49,69 @@ class AutoLyricsSourceResolverTest {
         assertEquals(false, called)
     }
 
+    @Test fun qualityOrderIsAuthorThenThirdPartyAndManualSelectionWins() {
+        val calls = mutableListOf<String>()
+        val resolver = AutoLyricsSourceResolver(
+            listOf(AutoLyricsSource(dev.amenhancer.module.model.CustomLyricsSources.AM_LYRICS) { calls += "author"; LINE_TTML }),
+            desktopLyrics = { calls += "third-party"; AutoLyricsCandidate("desktop", WORD_TTML) },
+            qualityFirst = { true })
+        val track = DesktopLyricsTrack("song", "artist", appleMusicId = 42L)
+        assertEquals(dev.amenhancer.module.model.CustomLyricsSources.AM_LYRICS, resolver.fetch(42L, track)?.source)
+        assertEquals(listOf("author"), calls)
+        calls.clear()
+        assertEquals("desktop", resolver.fetch(42L, track.copy(explicitSource = true))?.source)
+        assertEquals(listOf("third-party"), calls)
+    }
+    @Test fun qualityFallsBackWithoutDiscardingLineTimedThirdParty() {
+        val resolver = AutoLyricsSourceResolver(listOf(AutoLyricsSource("author") { null }),
+            desktopLyrics = { AutoLyricsCandidate("desktop", LINE_TTML) }, qualityFirst = { true })
+        assertEquals("desktop", resolver.fetch(42L, DesktopLyricsTrack("song", "artist"))?.source)
+    }
+    @Test fun explicitlySelectedAuthorDoesNotSearchThirdPartyOrSilentlyFallBackToOtherLibraries() {
+        var thirdParty = 0
+        var other = 0
+        var author = WORD_TTML as String?
+        val resolver = AutoLyricsSourceResolver(listOf(
+            AutoLyricsSource("other") { other++; WORD_TTML },
+            AutoLyricsSource("am-lyrics") { author }),
+            desktopLyrics = { thirdParty++; AutoLyricsCandidate("desktop", WORD_TTML) })
+        val track = DesktopLyricsTrack("song", "artist", appleMusicId = 42L, explicitSource = true)
+        assertEquals("am-lyrics", resolver.fetch(42L, track, "am-lyrics")?.source)
+        author = null
+        assertNull(resolver.fetch(42L, track, "am-lyrics"))
+        assertEquals(0, thirdParty)
+        assertEquals(0, other)
+    }
+
+    @Test fun wordPreferenceUsesAuthorWordLyricsBeforeRichThirdParty() {
+        val calls = mutableListOf<String>()
+        val resolver = AutoLyricsSourceResolver(listOf(AutoLyricsSource("am-lyrics") { calls += "author"; WORD_TTML }),
+            desktopLyrics = { calls += "third-party"; AutoLyricsCandidate("desktop", WORD_TTML) })
+        val track = DesktopLyricsTrack("song", "artist")
+        assertEquals("am-lyrics", resolver.fetch(42L, track)?.source)
+        assertEquals(listOf("author"), calls)
+        calls.clear()
+        assertEquals("desktop", resolver.fetch(42L, track.copy(explicitSource = true))?.source)
+        assertEquals(listOf("third-party"), calls)
+    }
+    @Test fun wordPreferenceSkipsAuthorLineLyricsWithoutFetchingAuthorTwice() {
+        var calls = 0
+        var desktop = AutoLyricsCandidate("desktop", WORD_TTML) as AutoLyricsCandidate?
+        val resolver = AutoLyricsSourceResolver(listOf(AutoLyricsSource("am-lyrics") { calls++; LINE_TTML }),
+            desktopLyrics = { desktop })
+        val track = DesktopLyricsTrack("song", "artist")
+        assertEquals("desktop", resolver.fetch(42L, track)?.source)
+        assertEquals(1, calls)
+        desktop = null
+        assertEquals("am-lyrics", resolver.fetch(42L, track)?.source)
+        assertEquals(2, calls)
+    }
+    @Test fun unavailableAuthorStillAllowsThirdPartyWordLyrics() {
+        val resolver = AutoLyricsSourceResolver(listOf(AutoLyricsSource("am-lyrics") { null }),
+            desktopLyrics = { AutoLyricsCandidate("desktop", WORD_TTML) })
+        assertEquals("desktop", resolver.fetch(42L, DesktopLyricsTrack("song", "artist"))?.source)
+    }
+
     private companion object {
         const val WORD_TTML =
             "<tt xmlns:itunes=\"urn\" itunes:timing=\"Word\"><body>" +

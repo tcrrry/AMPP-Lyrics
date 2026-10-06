@@ -99,6 +99,20 @@ object TtmlTimingPolicy {
 
     fun isWord(ttml: String): Boolean = modeOf(ttml) == TtmlTimingMode.WORD
 
+    /** Word declaration alone is insufficient; auxiliary/head spans are excluded. */
+    fun hasTimedWords(ttml: String): Boolean {
+        if (!isWord(ttml)) return false
+        val body = Regex("(?is)<body\\b[^>]*>(.*?)</body\\s*>").find(ttml)?.groupValues?.get(1) ?: return false
+        return Regex("(?is)<p\\b[^>]*>(.*?)</p\\s*>").findAll(body).any { paragraph ->
+            Regex("(?is)<span\\b([^>]*)>(.*?)</span\\s*>").findAll(paragraph.groupValues[1]).any { span ->
+                val attributes = span.groupValues[1]
+                Regex("(?i)\\bbegin\\s*=").containsMatchIn(attributes) &&
+                    Regex("(?i)\\bend\\s*=").containsMatchIn(attributes) &&
+                    markup.replace(span.groupValues[2], "").any(Char::isLetterOrDigit)
+            }
+        }
+    }
+
     private fun timingModeOf(root: String?): TtmlTimingMode {
         if (root == null) return TtmlTimingMode.NON_WORD
         val value = timingAttribute.find(root)?.let { match ->

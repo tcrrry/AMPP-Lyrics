@@ -1,13 +1,14 @@
 package dev.amenhancer.module.hook
 
 import dev.amenhancer.module.model.LyricGlowPosition
+import dev.amenhancer.module.model.ModuleSettings
 
 /** Changes the trigger threshold only; lyric timing and word sweep duration stay native. */
 internal data class LyricGlowTriggerPolicy(val sensitivity: Int = 100,
     val position: LyricGlowPosition = LyricGlowPosition.ALL) {
     fun threshold(baseMs: Int, terminal: Boolean): Int {
         val scale = if (position == LyricGlowPosition.TAIL_PREFERRED && !terminal) 150 else 100
-        return (baseMs.toLong() * scale / sensitivity.coerceIn(50, 200)).toInt()
+        return (baseMs.toLong() * scale / sensitivity.coerceIn(ModuleSettings.MIN_LYRIC_GLOW_SENSITIVITY, ModuleSettings.MAX_LYRIC_GLOW_SENSITIVITY)).toInt()
     }
     fun allows(durationMs: Int, terminal: Boolean, baseMs: Int = 1000): Boolean =
         (position != LyricGlowPosition.TAIL_ONLY || terminal) && durationMs >= threshold(baseMs, terminal)
