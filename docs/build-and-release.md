@@ -88,3 +88,7 @@ python3 scripts/package-coexist-apk.py input.apks app/build/outputs/apk/debug/ap
 `publish-v1-4.yml` 在 `release/v1.4-700` 分支构建普通及共存模块，经测试、Lint、内置发音资源与宿主契约校验后生成四种安装包。新建 v1.4 发布，不替换旧 release 或 tag。版本内部为 1.7.0 / 137，独立模块延续原有包名及签名配置；正式版不带开发测试版本名或诊断按钮。
 
 我们的新增歌词设置必须位于 `TcrrryLyricsSettingsUi` 页面；不要将辉光或其他本项目新增选项加入原 AM++ 页面。此边界为后续插件化保留；当前仍沿用已有设置存储，以保留用户配置。UI 分离回归测试会核验两页的边界。
+
+## v1.5 正式发布
+
+`publish-v1-5.yml` 在 `release/v1.5` 构建普通及共存模块（1.5 / 145），执行测试、Lint、发音资源与宿主契约校验，通过 `package-700-release-v1.5.py` 生成四种安装包。保留现有模块身份和 NPatch 签名，发布新的 v1.5，并核验旧附件未变；下载后核验成功再同步主页。正式版行为基于用户验收的 v1.5-test-r7。

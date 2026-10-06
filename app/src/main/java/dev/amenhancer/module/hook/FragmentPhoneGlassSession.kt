@@ -89,6 +89,7 @@ internal class FragmentPhoneGlassSession(
     }
     private val frameDrawGate = GlassFrameDrawGate()
     override fun onPreDraw(): Boolean {
+        if (closed) return true
         val draw = super.onPreDraw()
         reconcileNativeMaterials()
         if (activated && !reported) { reported = true; ready() }

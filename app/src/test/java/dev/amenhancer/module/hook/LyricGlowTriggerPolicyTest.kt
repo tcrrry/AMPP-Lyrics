@@ -17,6 +17,11 @@ class LyricGlowTriggerPolicyTest {
         assertFalse(LyricGlowTriggerPolicy(200).allows(499, true))
         assertTrue(LyricGlowTriggerPolicy(200).allows(500, true))
         assertEquals(750, LyricGlowTriggerPolicy(200).threshold(1500, true))
+        assertEquals(200, LyricGlowTriggerPolicy(500).threshold(1000, false))
+        assertEquals(300, LyricGlowTriggerPolicy(500).threshold(1500, true))
+        assertFalse(LyricGlowTriggerPolicy(500).allows(199, true))
+        assertTrue(LyricGlowTriggerPolicy(500).allows(200, true))
+        assertFalse(LyricGlowTriggerPolicy(500, LyricGlowPosition.TAIL_ONLY).allows(9000, false))
     }
     @Test fun tailOnlyRejectsEvenVeryLongSoundsInsideLine() {
         val policy = LyricGlowTriggerPolicy(200, LyricGlowPosition.TAIL_ONLY)

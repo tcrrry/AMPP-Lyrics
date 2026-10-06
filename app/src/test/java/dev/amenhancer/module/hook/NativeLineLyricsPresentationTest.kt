@@ -43,7 +43,8 @@ class NativeLineLyricsPresentationTest {
         assertEquals(0, params(pronunciation).topToTop)
         assertEquals(pronunciation.id, params(original).topToBottom)
         assertEquals(original.id, params(translation).topToBottom)
-        assertEquals(pronunciation.currentTextColor, translation.currentTextColor)
+        assertEquals(0x59ffffff, pronunciation.currentTextColor)
+        assertEquals(Color.WHITE, translation.currentTextColor)
         NativeLineLyricsPresentation.apply(root, original, pronunciation, translation, primaryPronunciation = false)
         assertEquals(pronunciation.id, params(original).topToBottom)
         NativeLineLyricsPresentation.clear(root)
@@ -64,20 +65,55 @@ class NativeLineLyricsPresentationTest {
         assertSame(root, pronunciation.parent)
         assertEquals("フツフツと鳴り出す青春の音", original.text.toString())
         assertEquals(0.7f, original.alpha, 0f)
-        assertEquals(pronunciation.currentTextColor, translation.currentTextColor)
+        assertEquals(0x59ffffff, pronunciation.currentTextColor)
+        assertEquals(Color.WHITE, translation.currentTextColor)
         assertEquals(89, Color.alpha(pronunciation.currentTextColor))
         NativeLineLyricsPresentation.clear(root)
     }
 
-    @Test fun nativeHighlightAndFadeValuesCannotChangeAuxiliaryBrightness() {
+    @Test fun pronunciationStaysDimWhileOriginalAndTranslationKeepNativeHighlightAndFade() {
         apply()
         for (alpha in listOf(0.35f, 0.55f, 1f, 0.8f, 0.35f)) {
             assertEquals(1f, NativeLyricsPronunciationSubtitle.protectedAlpha(pronunciation, alpha), 0f)
-            assertEquals(1f, NativeLyricsPronunciationSubtitle.protectedAlpha(translation, alpha), 0f)
+            assertEquals(alpha, NativeLyricsPronunciationSubtitle.protectedAlpha(translation, alpha), 0f)
             assertEquals(alpha, NativeLyricsPronunciationSubtitle.protectedAlpha(original, alpha), 0f)
             assertEquals(0x59ffffff, NativeLyricsPronunciationSubtitle.protectedColor(pronunciation, Color.WHITE))
         }
         NativeLineLyricsPresentation.clear(root)
+    }
+
+    @Test fun sourceSwitchCleanupKeepsNativePrimaryAndTranslationStylesFromAfterBinding() {
+        // Hooks prepare the row before the host's first binding; inflated alpha is 1.
+        original.alpha = 1f
+        translation.alpha = 1f
+        apply()
+        // Native binding owns these styles and only initializes translation alpha once.
+        original.alpha = 0.94f
+        translation.alpha = 0.18f
+        original.setTextColor(0xffaaccff.toInt())
+        translation.setTextColor(0xffabcdee.toInt())
+        NativeLineLyricsPresentation.clear(root)
+        assertEquals(0.18f, translation.alpha, 0f)
+        assertEquals(0.94f, original.alpha, 0f)
+        assertEquals(0xffabcdee.toInt(), translation.currentTextColor)
+        assertEquals(0xffaaccff.toInt(), original.currentTextColor)
+        assertEquals(pronunciation.id, params(translation).topToBottom)
+        assertEquals(original.id, params(pronunciation).topToBottom)
+        assertEquals(0.35f, NativeLyricsPronunciationSubtitle.protectedAlpha(pronunciation, 0.35f), 0f)
+    }
+
+    @Test fun repeatedManagedAndNativeReuseCannotPromoteTheTranslationToFullBrightness() {
+        translation.alpha = 1f
+        apply()
+        translation.alpha = 0.18f
+        repeat(3) {
+            NativeLineLyricsPresentation.clear(root)
+            assertEquals(0.18f, translation.alpha, 0f)
+            NativeLineLyricsPresentation.apply(root, original, pronunciation, translation, primaryPronunciation = it % 2 == 0)
+            assertEquals(0.18f, translation.alpha, 0f)
+        }
+        NativeLineLyricsPresentation.clear(root)
+        assertEquals(0.18f, translation.alpha, 0f)
     }
 
     @Test fun hiddenPronunciationAndRepeatedBindingKeepSameChain() {

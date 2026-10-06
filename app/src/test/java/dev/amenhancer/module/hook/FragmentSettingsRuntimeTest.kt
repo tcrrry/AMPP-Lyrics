@@ -14,7 +14,7 @@ class FragmentSettingsRuntimeTest {
         val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), hooks)
         val result = runtime.install(NO_UI_OBSERVER)
         assertTrue(result.message, result is TargetCapabilityInstall.Active)
-        assertEquals(listOf("getPreferenceItems", "r1", "onViewCreated", "onResume", "onDestroyView", "onActivityResult"), hooks.methods.map { it.name })
+        assertEquals(listOf("getPreferenceItems", "r1", "onCreateView", "onViewCreated", "onResume", "onDestroyView", "onActivityResult"), hooks.methods.map { it.name })
         assertEquals(SettingsHostActivityBase::class.java, hooks.methods.last().declaringClass)
         val fragment = SettingsHostFragment()
         val original = emptyList<Any>()
@@ -28,7 +28,7 @@ class FragmentSettingsRuntimeTest {
         hooks.before("r1", fragment)
         assertNotSame(first.single(), (hooks.after("getPreferenceItems", fragment.vm, original) as List<*>).single())
         assertSame(result, runtime.install(NO_UI_OBSERVER))
-        assertEquals(6, hooks.methods.size)
+        assertEquals(7, hooks.methods.size)
     }
 
     @Test
@@ -50,7 +50,7 @@ class FragmentSettingsRuntimeTest {
 
     @Test
     fun `every partial registration failure leaves stored callbacks dormant`() {
-        for (failureAt in 1..6) {
+        for (failureAt in 1..7) {
             val hooks = RecordingHooks(failureAt)
             val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), hooks)
             val result = runtime.install(NO_UI_OBSERVER)

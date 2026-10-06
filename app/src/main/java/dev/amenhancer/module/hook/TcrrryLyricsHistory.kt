@@ -38,10 +38,11 @@ internal object TcrrryLyricsHistory {
         return entries(context, id).firstOrNull { it.source == source && it.recordId == record }
     }
 
-    fun latest(context: Context, id: Long, source: String, excluded: Set<String> = emptySet()): DirectLyricsRepository.Result? =
-        entries(context, id).lastOrNull {
+    fun best(context: Context, id: Long, source: String, excluded: Set<String> = emptySet(),
+             wordFirst: Boolean = false): DirectLyricsRepository.Result? =
+        entries(context, id).filter {
             it.source == source && it.lyrics.isNotBlank() && it.recordId !in excluded
-        }
+        }.maxByOrNull { DirectLyricsRepository.qualityRank(it, wordFirst) }
 
     fun select(context: Context, id: Long, result: DirectLyricsRepository.Result) {
         CurrentLyricsSourceStatus.selectSource(context, id, result.source)
@@ -56,5 +57,6 @@ internal object TcrrryLyricsHistory {
         romanizedWordLyrics = value.optString("romanizedWordLyrics"),
         source = value.optString("source"), recordId = value.optString("recordId"),
         title = value.optString("title"), artist = value.optString("artist"), score = value.optInt("matchScore"),
+        album = value.optString("album"),
     )
 }

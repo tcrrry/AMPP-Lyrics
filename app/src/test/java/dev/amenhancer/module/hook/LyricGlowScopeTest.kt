@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 class LyricGlowScopeTest {
     class Entry(@JvmField var c: CharSequence, @JvmField var f: Int, @JvmField var g: Int) {
         @JvmField val k = emptyList<Any>()
-        @JvmField val p = emptyList<Any>()
+        @JvmField val p = mutableListOf<Any>()
     }
     class Holder(entry: Entry) { @JvmField val G = java.util.HashMap<Int, Entry>().apply { put(1, entry) } }
     private fun target(sensitivity: Int): AppleMusicCjkKaraokeAnimationTarget = AppleMusicCjkKaraokeAnimationTarget(
@@ -44,6 +44,25 @@ class LyricGlowScopeTest {
         call(target, "completeA0Scope", param)
         call(target, "leaveA0Scope")
         assertEquals(600, entry.f)
+        assertEquals(1, entry.g)
+    }
+    @Test fun fiveHundredPercentTriggersShortSoundsWhileWordSweepKeepsRealDuration() {
+        val entry = Entry("あ", 200, 1)
+        val target = target(500)
+        val param = param(entry)
+        call(target, "enterA0Scope", param)
+        assertEquals(1000, entry.f)
+        assertEquals(200, param.args[3])
+        // The verified native V method opens the special branch at f >= 1000.
+        val glow = android.animation.ValueAnimator.ofFloat(0f, 1f).apply { duration = 1000L; startDelay = 500L }
+        entry.p.add(glow)
+        call(target, "completeA0Scope", param)
+        assertEquals(200L, glow.duration)
+        assertEquals(100L, glow.startDelay)
+        beforeGradient(target, entry)
+        assertEquals(200, entry.f)
+        call(target, "leaveA0Scope")
+        assertEquals(200, entry.f)
         assertEquals(1, entry.g)
     }
     @Test fun reducedSensitivitySuppressesOnlyTheGlowGateThenRestoresLength() {

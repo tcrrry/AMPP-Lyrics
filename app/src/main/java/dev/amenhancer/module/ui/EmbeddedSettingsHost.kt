@@ -2220,6 +2220,9 @@ internal class EmbeddedSettingsHost private constructor(
         }
         val weakDialog = WeakReference<Dialog>(dialog)
         dialog.setOnDismissListener {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                weakDialog.get()?.let(dev.amenhancer.module.hook.FragmentGlassRuntime::settingsExited)
+            }
             if (dialogReference?.get() === weakDialog.get()) {
                 dialogReference = null
                 pageRefresh = null
@@ -2228,7 +2231,17 @@ internal class EmbeddedSettingsHost private constructor(
         dialogReference = weakDialog
         pageRefresh = { SettingsUiTheme.refreshPreservingScroll(pageContent) { renderPage() } }
         renderPage()
-        dialog.show()
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            dev.amenhancer.module.hook.FragmentGlassRuntime.settingsEntered(dialog, activity)
+        }
+        try {
+            dialog.show()
+        } catch (error: RuntimeException) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) dev.amenhancer.module.hook.FragmentGlassRuntime.settingsExited(dialog)
+            dialogReference = null
+            pageRefresh = null
+            throw error
+        }
     }
 
     private fun renderEmbeddedMainPage(

@@ -24,6 +24,14 @@ class LyricsSettingsRefreshAndroidTest {
         activity = Robolectric.buildActivity(Activity::class.java).setup().visible().get()
         SettingsUiTheme.setMode(activity, SettingsAppearance.LIGHT)
     }
+    @Test fun timingOffsetIsAvailableOnlyForSupportedThirdPartySources() {
+        listOf("QQ音乐", "网易云音乐", "LRCLIB").forEach { source ->
+            assertTrue(TcrrryLyricsSettingsUi.offsetSlider(activity, 100L, source, android.widget.TextView(activity)).isEnabled)
+        }
+        listOf("Apple Music 原生", "AM++ 作者整理库", null).forEach { source ->
+            assertFalse(TcrrryLyricsSettingsUi.offsetSlider(activity, 100L, source, android.widget.TextView(activity)).isEnabled)
+        }
+    }
     @Test fun statusHasNoClickFeedbackButStillUpdatesInPlace() {
         var description = "我的歌词源：QQ音乐"
         val label = TcrrryLyricsSettingsUi.sourceStatusLabel(activity) { description }

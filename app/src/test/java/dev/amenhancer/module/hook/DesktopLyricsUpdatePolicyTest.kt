@@ -48,4 +48,12 @@ class DesktopLyricsUpdatePolicyTest {
         val poorer = japanese.copy(source = "网易云音乐", translatedLyrics = "", romanizedLyrics = "[00:01]kimi")
         assertSame(japanese, DesktopLyricsUpdatePolicy.choose(japanese, poorer, 5000))
     }
+    @Test fun wordPreferenceUpgradesEarlyRichLineAndNeverDowngradesBackForTranslation() {
+        val richLine = first.copy(translatedLyrics = "[00:01]你好", romanizedLyrics = "[00:01]hello")
+        val word = first.copy(source = "网易云音乐", score = 95,
+            wordLyrics = "[1000,900](1000,300)hel(1300,600)lo")
+        assertSame(word, DesktopLyricsUpdatePolicy.choose(richLine, word, 5000, wordFirst = true))
+        assertSame(word, DesktopLyricsUpdatePolicy.choose(word, richLine, 5000, wordFirst = true))
+    }
+
 }

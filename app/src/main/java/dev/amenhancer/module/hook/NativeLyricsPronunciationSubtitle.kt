@@ -31,7 +31,7 @@ internal object NativeLyricsPronunciationSubtitle {
         if (auxiliaryStyles.containsKey(view)) 1f else requested
     internal fun protectedColor(view: Any?, requested: Int): Int = auxiliaryStyles[view] ?: requested
 
-    private fun installAuxiliaryStyleGuard() {
+    private fun installPronunciationStyleGuard() {
         ModernXposedRuntime.hookMethod(View::class.java.getDeclaredMethod("setAlpha", Float::class.javaPrimitiveType), object : ModernMethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
                 param.args[0] = protectedAlpha(param.thisObject, param.args[0] as Float)
@@ -51,16 +51,17 @@ internal object NativeLyricsPronunciationSubtitle {
 
     private val renderingHeader = ThreadLocal<Boolean>()
 
-    internal fun styleAuxiliary(view: TextView) {
-        auxiliaryStyles[view] = auxiliaryTextColor(view)
-        view.setTextColor(auxiliaryTextColor(view))
+    // Register only the small upper subtitle. Translation and primary text stay host-owned.
+    internal fun stylePronunciation(view: TextView) {
+        val color = auxiliaryTextColor(view)
+        auxiliaryStyles[view] = color
+        view.setTextColor(color)
         view.alpha = 1f
     }
 
     internal fun renderTranslation(container: ViewGroup, view: TextView) {
         if (!PronunciationHeaderLayout.supports(container)) return
-        styleAuxiliary(view)
-        PronunciationHeaderLayout.moveBelow(container, view)
+        PronunciationHeaderLayout.keepNativeTranslation(container, view)
     }
 
     /** U/Z only accepts translation subtitle bindings, not word-pronunciation bindings. */
@@ -82,7 +83,7 @@ internal object NativeLyricsPronunciationSubtitle {
             }
             check(container.childCount == count + 1) { "Native subtitle did not append one view" }
             val view = container.getChildAt(count) as? TextView ?: error("Native subtitle is not a TextView")
-            styleAuxiliary(view)
+            stylePronunciation(view)
             PronunciationHeaderLayout.moveAbove(container, view)
         } catch (error: Exception) {
             // Native DataBinding may attach before rejecting a mismatched binding.
@@ -111,9 +112,8 @@ internal object NativeLyricsPronunciationSubtitle {
     internal fun hasManagedPronunciation(pointer: Any?): Boolean = pointer != null && managed[pointer]?.pronunciation == true
 
     fun install(loader: ClassLoader, build: TargetBuild = TargetBuild.UNKNOWN) {
+        installPronunciationStyleGuard()
         val modern = build.versionName == "7.0.0-beta" && build.versionCode == 1606L
-        runCatching { installAuxiliaryStyleGuard() }
-            .onFailure { ModernXposedRuntime.log("auxiliary brightness guard unavailable", it) }
         if (modern) NativeLineLyricsPresentation.install(loader)
         runCatching {
             val adapter = loader.loadClass("com.apple.android.music.player.A")

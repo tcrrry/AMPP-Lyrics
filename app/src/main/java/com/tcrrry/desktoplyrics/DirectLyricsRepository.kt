@@ -23,7 +23,8 @@ import java.util.concurrent.TimeUnit
  * a Lobsta/Tcrrry-owned server. MediaSession artwork remains the preferred cover;
  * QQ Music and NetEase artwork are only used when the player did not publish one.
  */
-class DirectLyricsRepository {
+class DirectLyricsRepository(private val wordFirst: Boolean = false) {
+    private fun rank(result: Result): Int = qualityRank(result, wordFirst)
     private val latinTransliterator by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             Transliterator.getInstance("Any-Latin; NFD; [:Nonspacing Mark:] Remove; NFC")
@@ -49,6 +50,7 @@ class DirectLyricsRepository {
         val supplementalPronunciationStarts: Set<Long> = emptySet(),
         val supplementalPronunciationLanguages: Map<Long, String> = emptyMap(),
         val supplementalPronunciationUnits: Map<Long, List<PronunciationUnit>> = emptyMap(),
+        val album: String = "",
     ) {
         private fun candidateJson(): JSONObject = JSONObject()
             .put("lyrics", lyrics)
@@ -62,6 +64,7 @@ class DirectLyricsRepository {
             .put("recordId", recordId)
             .put("title", title)
             .put("artist", artist)
+            .put("album", album)
             .put("matchScore", score)
 
         fun toJson(): JSONObject = candidateJson().put(
@@ -169,7 +172,7 @@ class DirectLyricsRepository {
             retrySources, onCandidate = onPartial)
         val combined = (current + retried + retried.alternatives)
             .filter { isUsableLyrics(it.lyrics) }
-            .sortedByDescending(::qualityRank).distinctBy { it.source }
+            .sortedByDescending(::rank).distinctBy { it.source }
         val best = combined.firstOrNull() ?: return direct
         return best.copy(alternatives = combined.drop(1).map { it.copy(alternatives = emptyList()) })
     }
@@ -180,7 +183,7 @@ class DirectLyricsRepository {
         val available = ConcurrentHashMap<String, Result>()
         val remember: (Result) -> Unit = { result ->
             available.compute(result.source) { _, previous ->
-                if (previous == null || qualityRank(result) > qualityRank(previous) ||
+                if (previous == null || rank(result) > rank(previous) ||
                     (previous.recordId.isNotBlank() && previous.recordId == result.recordId &&
                         previous.romanizedLyrics.isBlank() && result.romanizedLyrics.isNotBlank())) result else previous
             }
@@ -233,10 +236,10 @@ class DirectLyricsRepository {
             futures.forEach { it.cancel(true) }
         }
         val ranked = (candidates + available.values.toList())
-            .sortedByDescending(::qualityRank)
+            .sortedByDescending(::rank)
             .distinctBy { it.source }
             .distinctBy { "${it.source}\u0000${it.lyrics}" }
-            .sortedByDescending(::qualityRank)
+            .sortedByDescending(::rank)
         val primary = ranked.firstOrNull() ?: return Result()
         return primary.copy(alternatives = ranked.drop(1))
     }
@@ -354,6 +357,7 @@ class DirectLyricsRepository {
                 source = "LRCLIB",
                 recordId = item.optLong("id").toString(),
                 title = item.optString("trackName"),
+                album = item.optString("albumName"),
                 artist = item.optString("artistName"),
                 score = score
             )
@@ -451,10 +455,11 @@ class DirectLyricsRepository {
                         source = "QQ音乐",
                         recordId = songMid,
                         title = song.optString("songname"),
+                        album = song.optString("albumname"),
                         artist = song.optJSONArray("singer").joinNames("name"),
                         score = score + 5
                     ), { queryQqPronunciation(song.optLong("songid"), headers, song) }, onCandidate)
-                if (best == null || qualityRank(result) > qualityRank(best!!)) best = result
+                if (best == null || rank(result) > rank(best!!)) best = result
                 if (firstSong != null || !needsEnrichment(result)) return best
                 firstSong = song
                 rejectedSongMids += songMid
@@ -480,10 +485,11 @@ class DirectLyricsRepository {
                     source = "QQ音乐",
                     recordId = songMid,
                     title = song.optString("songname"),
+                        album = song.optString("albumname"),
                     artist = song.optJSONArray("singer").joinNames("name"),
                     score = score + 5
                 ), { queryQqPronunciation(song.optLong("songid"), headers, song) }, onCandidate)
-                if (best == null || qualityRank(result) > qualityRank(best!!)) best = result
+                if (best == null || rank(result) > rank(best!!)) best = result
                 if (firstSong != null || !needsEnrichment(result)) return best
                 firstSong = song
                 rejectedSongMids += songMid
@@ -731,11 +737,12 @@ class DirectLyricsRepository {
                     source = "网易云音乐",
                     recordId = songId.toString(),
                     title = song.optString("name"),
+                    album = album?.optString("name").orEmpty(),
                     artist = song.optJSONArray("artists").joinNames("name"),
                     score = score + 5
                 )
                 onCandidate(result)
-                if (best == null || qualityRank(result) > qualityRank(best!!)) best = result
+                if (best == null || rank(result) > rank(best!!)) best = result
                 if (firstSong != null || !needsEnrichment(result)) return best
                 firstSong = song
                 rejectedSongIds += songId
@@ -1278,8 +1285,17 @@ class DirectLyricsRepository {
             return (timedLines(extra) * 100 / base).coerceIn(0, 100)
         }
 
-        internal fun qualityRank(result: Result): Int {
+        internal fun qualityRank(result: Result, wordFirst: Boolean = false): Int {
             val confidenceBand = if (result.score >= EXACT_MATCH_SCORE) 2 else 1
+            if (wordFirst) {
+                val timed = dev.amenhancer.module.lyrics.DesktopLyricsTtmlConverter.hasWordTiming(result)
+                return confidenceBand * 1_000_000 + (if (timed) 200_000 else 0) +
+                    (if (timed) coverage(result.lyrics, result.wordLyrics) * 1_000 else 0) +
+                    coverage(result.lyrics, result.translatedLyrics) * 200 +
+                    coverage(result.lyrics, result.romanizedLyrics) * 50 +
+                    result.score * 100 + lyricBodyScore(result.lyrics) +
+                    (if (result.source == "网易云音乐") 4 else if (result.source == "QQ音乐") 2 else 0)
+            }
             return confidenceBand * 100_000 +
             coverage(result.lyrics, result.translatedLyrics) * 200 +
             coverage(result.lyrics, result.wordLyrics) * 100 +

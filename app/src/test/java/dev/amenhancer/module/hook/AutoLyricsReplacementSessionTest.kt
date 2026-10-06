@@ -378,6 +378,61 @@ class AutoLyricsReplacementSessionTest {
         }
     }
 
+    @Test fun refreshCompletionCarriesOnlyItsOwnAttemptTagAndCancelledRequestsCannotAdvanceCycles() {
+        val queued = QueuedExecutor()
+        val pointer = Pointer()
+        var available = true
+        val completed = mutableListOf<Pair<Long?, Boolean>>()
+        val session = AutoLyricsReplacementSession(
+            fetchCandidate = { if (available) AutoLyricsCandidate("desktop-lyrics:test", WORD_TTML) else null },
+            cache = MemoryCache(), parseTtml = { pointer },
+            isAlive = { it is Pointer }, verifyPtr = { it is Pointer },
+            readAdamId = { (it as Pointer).adamId },
+            bindAdamId = { value, id -> (value as Pointer).adamId = id; true },
+            onTaggedRefreshFinished = { _, success, tag -> completed += tag to success },
+            executor = queued, logger = {},
+        )
+        session.onSongChanged(42L)
+        session.refreshCurrent(42L, 11L)
+        session.refreshCurrent(42L, 22L)
+        queued.runAll()
+        assertEquals(listOf(22L to true), completed)
+        available = false
+        session.refreshCurrent(42L, 33L)
+        queued.runAll()
+        assertEquals(listOf(22L to true, 33L to false), completed)
+        assertSame(pointer, session.readyReplacementFor(42L))
+        session.refreshCurrent(42L, 44L)
+        session.onSongChanged(99L)
+        queued.runAll()
+        assertEquals(2, completed.size)
+    }
+
+    @Test fun queueRejectionCompletesTheTaggedAttemptAndRetainsVisibleLyrics() {
+        val pointer = Pointer()
+        var reject = false
+        val finished = mutableListOf<Pair<Long?, Boolean>>()
+        val executor = Executor {
+            if (reject) throw java.util.concurrent.RejectedExecutionException()
+            it.run()
+        }
+        val session = AutoLyricsReplacementSession(
+            fetchCandidate = { AutoLyricsCandidate("desktop-lyrics:test", WORD_TTML) },
+            cache = MemoryCache(), parseTtml = { pointer },
+            isAlive = { it is Pointer }, verifyPtr = { it is Pointer },
+            readAdamId = { (it as Pointer).adamId },
+            bindAdamId = { value, id -> (value as Pointer).adamId = id; true },
+            onTaggedRefreshFinished = { _, success, tag -> finished += tag to success },
+            executor = executor, logger = {},
+        )
+        session.onSongChanged(42L)
+        session.ensureRequested(42L)
+        reject = true
+        session.refreshCurrent(42L, 66L)
+        assertEquals(listOf(66L to false), finished)
+        assertSame(pointer, session.readyReplacementFor(42L))
+    }
+
     private fun session(
         queued: QueuedExecutor,
         cache: AutoLyricsCache = MemoryCache(),

@@ -5,13 +5,12 @@ import dev.amenhancer.module.config.TargetConfigClient
 import dev.amenhancer.module.model.FeatureState
 import java.lang.reflect.Proxy
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CjkKaraokeAnimationFeatureTest {
     @Test
-    fun `disabled setting does not install the target hook`() {
+    fun `legacy disabled setting cannot leave an invisible master switch after its removal`() {
         var installed = false
         val result = CjkKaraokeAnimationFeature().install(
             HookContext(
@@ -23,8 +22,8 @@ class CjkKaraokeAnimationFeatureTest {
             ),
         )
 
-        assertEquals(FeatureState.DISABLED, result.state)
-        assertFalse(installed)
+        assertEquals(FeatureState.ACTIVE, result.state)
+        assertTrue(installed)
     }
 
     @Test

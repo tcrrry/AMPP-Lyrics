@@ -38,7 +38,7 @@ internal fun createAutoLyricsRuntime(
     application: Application,
     suppressedIds: Set<Long> = emptySet(),
 ): AutoLyricsRuntime {
-    val root = File(application.filesDir, AUTO_CACHE_DIRECTORY)
+    val root = File(application.filesDir, AUTO_CACHE_DIRECTORY + "-policy-v15-r7")
     // The previous cache may contain a prematurely selected or rejected candidate.
     runCatching { File(application.filesDir, "ampp-auto-lyrics-desktop-v6").deleteRecursively() }
     val lyricTransport = HttpLyricTransport(
@@ -63,10 +63,14 @@ internal fun createAutoLyricsRuntime(
         lunabeat = lunabeat,
         desktopLyrics = desktopLyrics::fetch,
         fallbackTranslation = FallbackLyricsTranslation(application)::enrich,
+        qualityFirst = { dev.amenhancer.module.lyrics.LyricsPreference.qualityFirst(application) },
     )
     val diskCache = FileAutoLyricsCache(root)
     val cache = object : AutoLyricsCache by diskCache {
         override fun read(appleMusicId: Long): String? {
+            // A preference change must never resurrect a differently ranked disk candidate.
+            if (dev.amenhancer.module.lyrics.LyricsPreference.qualityFirst(application) ||
+                dev.amenhancer.module.lyrics.LyricsPreference.smoothShortUnits(application)) return null
             val selected = CurrentLyricsSourceStatus.selectedSource(application, appleMusicId)
             if (selected != null && CurrentLyricsSourceStatus.candidateSource(application, appleMusicId) !=
                 "${CustomLyricsSources.DESKTOP_LYRICS}:$selected") return null
@@ -299,6 +303,7 @@ class AutoLyricsReplacementSession(
     private val logger: (String) -> Unit,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     private val retryCooldownMs: Long = DEFAULT_RETRY_COOLDOWN_MS,
+    private val onTaggedRefreshFinished: ((Long, Boolean, Long?) -> Unit)? = null,
 ) {
     private val pointers = object : LinkedHashMap<Long, Any>(CACHE_CAPACITY, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Any>?): Boolean =
@@ -314,6 +319,7 @@ class AutoLyricsReplacementSession(
     private val activeTakeovers = mutableSetOf<Long>()
     private var refreshBackup: Pair<Long, Any>? = null
     private var refreshGeneration: Long? = null
+    private var refreshTag: Long? = null
 
     /** Invalidates in-flight results and native pointers only when playback changes. */
     fun onSongChanged(appleMusicId: Long?) {
@@ -331,6 +337,7 @@ class AutoLyricsReplacementSession(
                 activeTakeovers.clear()
                 refreshBackup = null
                 refreshGeneration = null
+                refreshTag = null
             }
             !sameSong
         }
@@ -354,7 +361,7 @@ class AutoLyricsReplacementSession(
         }
     }
 
-    fun refreshCurrent(appleMusicId: Long) {
+    fun refreshCurrent(appleMusicId: Long, completionTag: Long? = null) {
         if (!isCurrentSong(appleMusicId)) return
         val old = readyReplacementFor(appleMusicId) ?: refreshBackup?.takeIf { it.first == appleMusicId }?.second
         runCatching { cache.delete(appleMusicId) }
@@ -363,6 +370,7 @@ class AutoLyricsReplacementSession(
         synchronized(lock) {
             refreshBackup = old?.let { appleMusicId to it }
             refreshGeneration = generation
+            refreshTag = completionTag
         }
         ensureRequested(appleMusicId)
     }
@@ -443,6 +451,14 @@ class AutoLyricsReplacementSession(
                 if (pending[appleMusicId] == requestGeneration) pending.remove(appleMusicId)
                 jobs.remove(appleMusicId)
                 logger("automatic lyrics prepare was rejected for $appleMusicId")
+                if (refreshGeneration == requestGeneration) {
+                    markFailedIfCurrent(appleMusicId, requestGeneration)
+                    val tag = refreshTag
+                    refreshGeneration = null
+                    refreshTag = null
+                    onRefreshFinished?.invoke(appleMusicId, false)
+                    onTaggedRefreshFinished?.invoke(appleMusicId, false, tag)
+                }
             }
         }
     }
@@ -545,12 +561,18 @@ class AutoLyricsReplacementSession(
                 }
             }
         } finally {
-            val completedRefresh = synchronized(lock) {
-                (refreshGeneration == requestGeneration && isCurrentRequestLocked(appleMusicId, requestGeneration)).also {
-                    if (it) refreshGeneration = null
-                }
+            val completion = synchronized(lock) {
+                if (refreshGeneration == requestGeneration && isCurrentRequestLocked(appleMusicId, requestGeneration)) {
+                    val tag = refreshTag
+                    refreshGeneration = null
+                    refreshTag = null
+                    true to tag
+                } else false to null
             }
-            if (completedRefresh) onRefreshFinished?.invoke(appleMusicId, published)
+            if (completion.first) {
+                onRefreshFinished?.invoke(appleMusicId, published)
+                onTaggedRefreshFinished?.invoke(appleMusicId, published, completion.second)
+            }
             synchronized(lock) {
                 if (pending[appleMusicId] == requestGeneration) {
                     pending.remove(appleMusicId)

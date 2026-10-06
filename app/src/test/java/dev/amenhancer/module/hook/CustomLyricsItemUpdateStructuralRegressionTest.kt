@@ -128,6 +128,6 @@ class CustomLyricsItemUpdateStructuralRegressionTest {
         assertTrue(target.contains("autoSession?.onSongChanged(appleMusicId)"))
         assertTrue(target.contains("autoSession?.ensureRequested(id)"))
         assertTrue(target.contains("session.readyReplacementFor(appleMusicId) == null"))
-        assertTrue(target.contains("manualReplacement ?: autoReplacement"))
+        assertTrue(target.contains("manualReplacement ?: native ?: autoReplacement"))
     }
 }

@@ -11,6 +11,35 @@ import javax.xml.parsers.DocumentBuilderFactory
 import org.xml.sax.InputSource
 
 class DesktopLyricsTtmlConverterTest {
+    @Test fun standaloneTimedEnglishSpaceSurvivesOutsideSpans() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01.000]stay forever",
+            wordLyrics = "[1000,2200](1000,1000)stay(2000,50) (2050,1150)forever", source = "QQ音乐")
+        val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(source))
+        assertTrue(ttml.contains("stay</span> <span begin=\"0:02.050\""))
+        assertFalse(ttml.contains("> </span>"))
+    }
+    @Test fun shortSmoothingPreservesEnvelopeAndWordBoundary() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01.000]好喜欢",
+            wordLyrics = "[1000,700](1000,80)好(1080,120)喜(1200,500)欢", source = "QQ音乐")
+        val original = requireNotNull(DesktopLyricsTtmlConverter.convert(source))
+        val smoothed = requireNotNull(DesktopLyricsTtmlConverter.convert(source, smoothShortUnits = true))
+        assertTrue(original.contains(">好</span>"))
+        assertTrue(smoothed.contains("begin=\"0:01.000\" end=\"0:01.200\">好喜</span>"))
+        assertTrue(smoothed.contains("begin=\"0:01.200\" end=\"0:01.700\">欢</span>"))
+        val english = source.copy(wordLyrics = "[1000,700](1000,80)a (1080,620)word")
+        assertTrue(requireNotNull(DesktopLyricsTtmlConverter.convert(english, smoothShortUnits = true)).contains(">a</span> <span"))
+    }
+    @Test fun phoneticShortUnitsCanShareSweepAcrossReadingSpacesWhileOriginalWordsStaySeparate() {
+        val source = DirectLyricsRepository.Result(lyrics = "[00:01.000]君よ",
+            wordLyrics = "[1000,2000](1000,1940)君(2940,60)よ", romanizedLyrics = "[00:01.000]kimi yo", source = "QQ音乐")
+        val plain = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
+        val smooth = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true, smoothShortUnits = true))
+        assertTrue(plain.contains(">kimi</span> <span"))
+        assertTrue(smooth.contains("begin=\"0:01.000\" end=\"0:03.000\">kimi yo</span>"))
+        assertTrue(smooth.contains("itunes:timing=\"Word\""))
+        val gap = source.copy(wordLyrics = "[1000,2000](1000,1500)君(2940,60)よ")
+        assertTrue(requireNotNull(DesktopLyricsTtmlConverter.convert(gap, primaryPronunciation = true, smoothShortUnits = true)).contains(">kimi</span> <span"))
+    }
     @Test fun celebrityCreditsCannotBorrowNextSungLinesPronunciationAndDisableWholeSongTiming() {
         val repository = DirectLyricsRepository()
         // Actual QQ recording 321160072: the 1130 ms credits are followed by
@@ -24,7 +53,7 @@ class DesktopLyricsTtmlConverterTest {
             romanizedWordLyrics = repository.qqRomanizedWordLyrics(response))
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
         assertTrue(ttml.contains("itunes:timing=\"Word\""))
-        assertTrue(ttml.contains("<span begin=\"0:01.510\" end=\"0:02.730\">se sang ui  </span>"))
+        assertTrue(ttml.contains("<span begin=\"0:01.510\" end=\"0:02.730\">se sang ui</span>  "))
         assertTrue(ttml.contains("<span begin=\"0:02.730\" end=\"0:03.850\">mo seo ri</span>"))
         assertTrue(ttml.contains("编曲："))
         assertTrue(ttml.contains("<text for=\"L1\"> </text>"))
@@ -34,8 +63,8 @@ class DesktopLyricsTtmlConverterTest {
         val filled = JapanesePronunciationSupplement.fill(source)
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(filled, offsetMs = 100, primaryPronunciation = true))
         assertTrue(ttml.contains("itunes:timing=\"Word\""))
-        assertTrue(ttml.contains("<span begin=\"0:00.900\" end=\"0:01.700\">kyou </span>"))
-        assertTrue(ttml.contains("<span begin=\"0:01.700\" end=\"0:02.100\">no </span>"))
+        assertTrue(ttml.contains("<span begin=\"0:00.900\" end=\"0:01.700\">kyou</span> "))
+        assertTrue(ttml.contains("<span begin=\"0:01.700\" end=\"0:02.100\">no</span> "))
         assertTrue(ttml.contains("<text for=\"L1\">今日の音</text>"))
         assertTrue(ttml.contains("今天的声音"))
         assertTrue(requireNotNull(DesktopLyricsPresentation.fromTtml(ttml)).primaryPronunciation)
@@ -51,8 +80,8 @@ class DesktopLyricsTtmlConverterTest {
             romanizedWordLyrics = repository.qqRomanizedWordLyrics(response), source = "QQ音乐")
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
         assertTrue(ttml.contains("itunes:timing=\"Word\""))
-        assertTrue(ttml.contains("<span begin=\"0:15.785\" end=\"0:15.952\">ko </span>"))
-        assertTrue(ttml.contains("<span begin=\"0:15.953\" end=\"0:16.121\">u </span>"))
+        assertTrue(ttml.contains("<span begin=\"0:15.785\" end=\"0:15.952\">ko</span> "))
+        assertTrue(ttml.contains("<span begin=\"0:15.953\" end=\"0:16.121\">u</span> "))
         assertEquals(10, Regex("<span ").findAll(ttml).count())
         assertTrue(requireNotNull(DesktopLyricsPresentation.fromTtml(ttml)).wordTimed)
     }
@@ -64,8 +93,8 @@ class DesktopLyricsTtmlConverterTest {
             romanizedWordLyrics = "[1000,2000](1000,400)kon (1400,400)nichi (1800,400)no (2200,800)oto")
         val ttml = requireNotNull(DesktopLyricsTtmlConverter.convert(source, primaryPronunciation = true))
         assertTrue(ttml.contains("itunes:timing=\"Word\""))
-        assertTrue(ttml.contains("<span begin=\"0:01.000\" end=\"0:01.400\">kon </span>"))
-        assertTrue(ttml.contains("<span begin=\"0:01.400\" end=\"0:01.800\">nichi </span>"))
+        assertTrue(ttml.contains("<span begin=\"0:01.000\" end=\"0:01.400\">kon</span> "))
+        assertTrue(ttml.contains("<span begin=\"0:01.400\" end=\"0:01.800\">nichi</span> "))
         assertTrue(ttml.contains("<text for=\"L1\">今日の音</text>"))
     }
 

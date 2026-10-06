@@ -27,6 +27,7 @@ internal object DesktopLyricsTtmlConverter {
         expectedDurationMs: Long = 0L,
         offsetMs: Int = 0,
         primaryPronunciation: Boolean = false,
+        smoothShortUnits: Boolean = false,
     ): String? {
         val timed = parseLrc(result.lyrics)
         val ordinary = if (timed.isNotEmpty()) timed else {
@@ -145,10 +146,19 @@ internal object DesktopLyricsTtmlConverter {
                 append("<p begin=\"${stamp(lineBegin)}\" end=\"${stamp(lineEnd)}\" itunes:key=\"L${index + 1}\">")
                 if (!displayedWordTimed) {
                     append(escape(line.words.joinToString("") { it.text }))
-                } else line.words.forEach { word ->
+                } else (if (smoothShortUnits) smooth(line.words, emphasizePronunciation && !pronunciation[index].isNullOrBlank()) else line.words).forEach { word ->
                     val wordBegin = (word.start - offsetMs).coerceAtLeast(lineBegin)
                     val wordEnd = (word.end - offsetMs).coerceAtLeast(wordBegin + 1L)
-                    append("<span begin=\"${stamp(wordBegin)}\" end=\"${stamp(wordEnd)}\">${escape(word.text)}</span>")
+                    // Spaces are lexical separators, not animated glyphs. Preserve even
+                    // standalone timed spaces outside the native timed spans.
+                    val leading = word.text.takeWhile(Char::isWhitespace)
+                    val trailing = word.text.takeLastWhile(Char::isWhitespace)
+                    val content = word.text.trim()
+                    if (content.isEmpty()) append(escape(word.text)) else {
+                        append(escape(leading))
+                        append("<span begin=\"${stamp(wordBegin)}\" end=\"${stamp(wordEnd)}\">${escape(content)}</span>")
+                        append(escape(trailing))
+                    }
                 }
                 append("</p>")
             }
@@ -157,7 +167,48 @@ internal object DesktopLyricsTtmlConverter {
         return ttml.takeIf(TtmlInputPolicy::isAcceptable)
     }
 
+    /** Original English word boundaries stay intact; highlighted readings may share a short-unit sweep. */
+    private fun smooth(words: List<Word>, pronunciation: Boolean = false): List<Word> {
+        val result = words.toMutableList()
+        var index = 0
+        fun joinable(a: Word, b: Word): Boolean =
+            a.text.isNotBlank() && b.text.isNotBlank() &&
+                (pronunciation || !(a.text + b.text).any { it.isWhitespace() || it in 'a'..'z' || it in 'A'..'Z' }) &&
+                b.start >= a.start && b.start <= a.end + 20L
+        while (index < result.size) {
+            val word = result[index]
+            if (word.end - word.start in 1L..99L) {
+                val previous = result.getOrNull(index - 1)
+                val next = result.getOrNull(index + 1)
+                val target = when {
+                    previous != null && joinable(previous, word) -> index - 1
+                    next != null && joinable(word, next) -> index
+                    else -> -1
+                }
+                if (target >= 0) {
+                    val a = result[target]; val b = result[target + 1]
+                    result[target] = Word(minOf(a.start, b.start), maxOf(a.end, b.end), a.text + b.text)
+                    result.removeAt(target + 1)
+                    index = target
+                    continue
+                }
+            }
+            index++
+        }
+        return result
+    }
+
     private fun normalizedReading(text: String) = text.filter(Char::isLetterOrDigit).lowercase(Locale.ROOT)
+
+    /** Reading groups borrow only actual source token ranges, never fabricated syllable times. */
+    internal fun alignNativePronunciation(words: List<Triple<Long, Long, String>>, pronunciation: String,
+        smoothShortUnits: Boolean = false): List<Triple<Long, Long, String>>? {
+        if (words.isEmpty() || words.any { it.first < 0 || it.second <= it.first }) return null
+        if (words.zipWithNext().any { (a, b) -> b.first < a.first }) return null
+        val line = Line(words.first().first, words.maxOf { it.second }, words.map { Word(it.first, it.second, it.third) })
+        val aligned = alignPronunciation(line, pronunciation) ?: return null
+        return (if (smoothShortUnits) smooth(aligned, pronunciation = true) else aligned).map { Triple(it.start, it.end, it.text) }
+    }
 
     private fun alignPronunciation(line: Line, pronunciation: String, suppliedUnits: List<JapanesePronunciationSupplement.ReadingUnit>? = null): List<Word>? {
         val original = line.words.joinToString("") { it.text }
@@ -209,7 +260,7 @@ internal object DesktopLyricsTtmlConverter {
             val length = marker.groupValues[2].toLongOrNull() ?: return@mapIndexedNotNull null
             val value = body.substring(marker.range.last + 1,
                 markers.getOrNull(index + 1)?.range?.first ?: body.length)
-            if (value.isBlank() || length <= 0L) null else Word(begin, begin + length, value)
+            if (value.isEmpty() || (length <= 0L && !value.isBlank())) null else Word(begin, begin + length.coerceAtLeast(0L), value)
         }
         if (words.isEmpty()) null else Line(start, maxOf(start + duration, words.maxOf(Word::end)), words)
     }.sortedBy(Line::start).take(4096).toList()

@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "id": "com.tcrrry.lyrics.animation",
+  "name": "Tcrrry 歌词兼容优化",
+  "author": "Tcrrry",
+  "versionName": "0.1.0",
+  "versionCode": 1,
+  "entryClass": "com.tcrrry.lyrics.plugin.LyricsPlugin",
+  "apiVersion": 1,
+  "minAndroidApi": 26,
+  "description": "独立的英文空格修复与可选短单元平滑。仅在 AM++ 插件系统 v1 中运行；不含第三方歌词源和离线机翻。"
+}
