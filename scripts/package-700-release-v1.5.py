@@ -135,8 +135,11 @@ def main():
         shutil.copyfile(coex,coexist);checksum(coexist)
     report={'release':'v1.5','host':'7.0.0-beta/1606','staticVerified':True,
             'deviceVerified':False,
-            'previousUserFeedback':'User accepted ordinary v1.5-test-r7; v1.5 keeps its behavior. Other package forms are statically verified'
+            'previousUserFeedback':'v1.5-test-r7 was accepted; this v1.5 update changes automatic line fallback and restores current-source double tap. Device verification pending'
             ,'testedBaseline':'v1.5-test-r7',
+            'matchingUpdate':{'noWordFallback':['Apple Music native','AM++ author','third party'],
+                              'translationPriority':['existing native or AM++','QQ or NetEase','machine'],
+                              'sourceGesture':{'single':'next available source','double':'other match in current source','long':'settings'}},
             'glow':{'settingsPage':'Tcrrry', 'sensitivityRange':[50,500],
                     'positions':['all','tail','tail-preferred'], 'diagnosticsEnabled':False},
             'settings':{'offsetSavedDuringInput':True,'offsetReloadDebounceMs':250,

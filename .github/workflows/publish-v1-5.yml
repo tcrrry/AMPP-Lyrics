@@ -87,16 +87,8 @@ jobs:
           if ! gh release view v1.5 >/dev/null 2>&1; then
             gh release create v1.5 --target "$GITHUB_SHA" --draft --title 'AM++ Lyrics v1.5 · Apple Music 7.0.0-beta' --notes-file docs/release-v1.5.md
           fi
-          test "$(gh release view v1.5 --json isDraft --jq .isDraft)" = true
-          gh release view v1.5 --json assets --jq .assets > /tmp/v15-existing-assets.json
-          for file in dist/*; do
-            name=$(basename "$file")
-            if jq -e --arg name "$name" 'any(.[]; .name == $name)' /tmp/v15-existing-assets.json >/dev/null; then
-              test "$(jq -r --arg name "$name" '.[] | select(.name == $name) | .digest' /tmp/v15-existing-assets.json)" = "sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
-            else
-              gh release upload v1.5 "$file"
-            fi
-          done
+          gh release upload v1.5 dist/* --clobber
+          gh release edit v1.5 --target "$GITHUB_SHA" --notes-file docs/release-v1.5.md
           gh api "repos/$GH_REPO/releases?per_page=100" > /tmp/v15-releases-after.json
           python3 scripts/verify-release-transfer.py dist --snapshot /tmp/v15-releases-after.json --tag v1.5
           python3 scripts/verify-release-transfer.py --historical /tmp/v15-releases-before.json /tmp/v15-releases-after.json --tag v1.5

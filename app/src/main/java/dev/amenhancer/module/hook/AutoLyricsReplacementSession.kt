@@ -38,7 +38,7 @@ internal fun createAutoLyricsRuntime(
     application: Application,
     suppressedIds: Set<Long> = emptySet(),
 ): AutoLyricsRuntime {
-    val root = File(application.filesDir, AUTO_CACHE_DIRECTORY + "-policy-v15-r7")
+    val root = File(application.filesDir, AUTO_CACHE_DIRECTORY + "-policy-v15-r8")
     // The previous cache may contain a prematurely selected or rejected candidate.
     runCatching { File(application.filesDir, "ampp-auto-lyrics-desktop-v6").deleteRecursively() }
     val lyricTransport = HttpLyricTransport(
