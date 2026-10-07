@@ -23,6 +23,17 @@
 
 </div>
 
+## 完整安装包与独立插件怎么选？
+
+| 使用方式 | 项目入口 | 安装内容 |
+| --- | --- | --- |
+| **想直接安装完整 Apple Music 增强版** | 本项目 [AMPP-Lyrics](https://github.com/tcrrry/AMPP-Lyrics) · [v1.5 下载页](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.5) | 选择现有普通 APK、共存 APK、APKS 或独立模块，使用方式见下文 |
+| **已使用支持插件管理器的 AM++，只想导入歌词插件** | [Tcrrry Lyrics Plugin 独立项目](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin) · [插件 1.0.3 正式版下载页](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin/releases/tag/plugin-v1.0.3) | 将 `Tcrrry-Lyrics-Plugin-1.0.3.zip` 导入 AM++ 插件管理器，启用后重启宿主 |
+
+独立插件已由用户在 **AM++ 105 嵌入版**完成实机验收；要求 Android 12及以上和 SDK v1 插件管理器，其他及后续宿主版本需另行验证。**要在独立插件中使用离线机器翻译，还必须下载并单独安装 `Tcrrry-Lyrics-Offline-1.0.3.apk`，首次打开授权并下载语言模型；只导入插件 ZIP 不能运行离线机翻。** 已有旧版伴随 APK 可继续使用；平台已有译文、API 翻译和词典注音不依赖该 APK。
+
+上述额外 APK 要求针对独立插件。本项目完整安装包仍沿用现有安装方式；插件采用独立版本，不会更新或替换 v1.5 四种安装包。没有插件管理器的 v1.5 安装包不能通过导入 ZIP 获得插件系统。
+
 ## 这是什么
 
 本项目基于 **[Zennmn / AM-plus-plus（AM++）](https://github.com/Zennmn/AM-plus-plus)** 制作，在 AM++ 的 Apple Music 增强功能上，融入我的 **[桌面歌词 / Desktop Lyrics](https://github.com/tcrrry/desktop-lyrics)** 项目中的歌词匹配与翻译能力。
