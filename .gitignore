@@ -48,3 +48,7 @@ device-*.xml
 /findings.md
 /progress.md
 /design-qa.md
+
+# Local Python validation caches
+__pycache__/
+*.pyc
