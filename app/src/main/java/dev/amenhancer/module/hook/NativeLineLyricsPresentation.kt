@@ -16,6 +16,7 @@ internal object NativeLineLyricsPresentation {
     internal fun clear(root: View) {
         for (saved in rows.remove(root).orEmpty()) {
             val view = saved.view.get() ?: continue
+            RubyPronunciationRows.clear(view)
             // Primary and translation styles belong to native binding/animation.
             // Restoring their pre-bind alpha (often 1) makes translation turn white.
             saved.style?.let { style ->
@@ -52,6 +53,21 @@ internal object NativeLineLyricsPresentation {
         NativeLyricsPronunciationSubtitle.stylePronunciation(pronunciation)
     }
 
+    internal fun repairText(view: TextView, nativeText: String?, fallback: String?, selected: Boolean, primaryText: String? = null) {
+        val nativeValue = nativeText?.let(LyricsAuxiliaryText::plain)?.takeIf(String::isNotBlank)
+        val value = nativeValue ?: fallback?.let(LyricsAuxiliaryText::plain)?.takeIf(String::isNotBlank)
+        val primaryValue = primaryText?.let { android.text.Html.fromHtml(it, 0).toString().trim() }
+        if (!selected || value == null || value.trim() == primaryValue) {
+            view.visibility = View.GONE
+            return
+        }
+        // Reading text consumes an outstanding native PrecomputedText future before
+        // filling parser loss, so a later layout cannot restore its empty text.
+        if (view.text.toString() != value) view.text = value
+        view.visibility = View.VISIBLE
+        if (nativeValue == null) view.alpha = view.alpha.coerceAtLeast(.35f)
+    }
+
     fun install(loader: ClassLoader) {
         runCatching {
             val adapter = loader.loadClass("com.apple.android.music.player.Y0")
@@ -66,6 +82,16 @@ internal object NativeLineLyricsPresentation {
             val translation = nativeBinding.getField("a0")
             val pointer = adapter.getMethod("y")
             val type = adapter.getMethod("f", Int::class.javaPrimitiveType)
+            val index = adapter.getMethod("E", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+            val processor = adapter.getDeclaredField("m").apply { isAccessible = true }
+            val lineAt = processor.type.getMethod("a", Int::class.javaPrimitiveType)
+            val dereference = lineAt.returnType.getMethod("get")
+            val nativeLine = dereference.returnType
+            val nativeOriginal = nativeLine.getMethod("getHtmlLineText")
+            val nativePronunciation = nativeLine.getMethod("getHtmlPronunciationLineText")
+            val nativeTranslation = nativeLine.getMethod("getHtmlTranslationLineText")
+            val pronounced = base.getDeclaredField("e").apply { isAccessible = true }
+            val translated = base.getDeclaredField("d").apply { isAccessible = true }
             val full = adapter.getDeclaredMethod("k", holder, Int::class.javaPrimitiveType)
             val partial = adapter.getDeclaredMethod("l", holder, Int::class.javaPrimitiveType, List::class.java)
             var enabled = false
@@ -89,8 +115,25 @@ internal object NativeLineLyricsPresentation {
                     runCatching { update(param) }.onFailure { ModernXposedRuntime.log("line auxiliary preparation failed open", it) }
                 }
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    if (param.throwable == null) runCatching { update(param) }
-                        .onFailure { ModernXposedRuntime.log("line auxiliary presentation failed open", it) }
+                    if (param.throwable == null) runCatching {
+                        update(param)
+                        val target = param.thisObject ?: return@runCatching
+                        if (!owns(target) || type.invoke(target, param.args[1]) != 0) return@runCatching
+                        val views = binding.get(param.args[0]) ?: return@runCatching
+                        if (!nativeBinding.isInstance(views)) return@runCatching
+                        val data = processor.get(target) ?: return@runCatching
+                        val value = dereference.invoke(lineAt.invoke(data, index.invoke(target, param.args[1], true))) ?: return@runCatching
+                        val primaryText = nativeOriginal.invoke(value) as? String ?: ""
+                        val fallback = NativeLyricsPronunciationSubtitle.lineSubtitles(pointer.invoke(target), primaryText)
+                        repairText(pronunciation.get(views) as TextView, nativePronunciation.invoke(value) as? String,
+                            fallback?.pronunciation, pronounced.getBoolean(target), primaryText)
+                        repairText(translation.get(views) as TextView, nativeTranslation.invoke(value) as? String,
+                            fallback?.translation, translated.getBoolean(target), primaryText)
+                        val pronunciationView = pronunciation.get(views) as TextView
+                        RubyPronunciationRows.bindLine(original.get(views) as TextView, pronunciationView, primaryText,
+                            pronunciationView.text.toString().takeIf { pronounced.getBoolean(target) && pronunciationView.visibility == View.VISIBLE },
+                            NativeLyricsPronunciationSubtitle.isPronunciationPrimary(pointer.invoke(target)))
+                    }.onFailure { ModernXposedRuntime.log("line auxiliary presentation failed open", it) }
                 }
             }
             ModernXposedRuntime.hookMethod(full, hook)

@@ -22,10 +22,10 @@ internal object NativeLyricsSourceMenu {
     private const val ROW_TAG = "tcrrry_native_lyrics_source_row"
     private const val EMPHASIS_TAG = "tcrrry_lyrics_emphasis_row"
     private const val DIVIDER_TAG = "tcrrry_native_lyrics_source_divider"
-    private val anchors = Collections.synchronizedMap(WeakHashMap<View, Boolean>())
+    private val anchors = Collections.synchronizedMap(WeakHashMap<View, Int>())
 
     internal fun registerAnchor(button: View) {
-        anchors[button] = true
+        if (!anchors.containsKey(button)) anchors[button] = button.visibility
         // GONE means no provider subtitles; INVISIBLE belongs to the native immersive controls.
         if (button.visibility != View.INVISIBLE) button.visibility = View.VISIBLE
     }
@@ -45,6 +45,24 @@ internal object NativeLyricsSourceMenu {
         anchorPages[button]?.get()?.let(CurrentLyricsSourceStatus::rememberVisiblePage)
     }
 
+    private val menus = Collections.synchronizedMap(WeakHashMap<LinearLayout, Boolean>())
+
+    fun cleanupPluginRows() {
+        menus.keys.toList().forEach { menu ->
+            NativeLyricsAuxiliaryControls.restoreMenu(menu)
+            (0 until menu.childCount).map(menu::getChildAt).filter { it.tag in setOf(ROW_TAG,EMPHASIS_TAG,DIVIDER_TAG) }.forEach(menu::removeView)
+        }
+        menus.clear()
+        anchors.toMap().forEach { (button, visibility) -> if (button.visibility == View.VISIBLE && visibility == View.GONE) button.visibility=visibility }
+        anchors.keys.toList().forEach { button ->
+            fun walk(view:View) { if(view is ViewGroup) for(child in (0 until view.childCount).map(view::getChildAt)) {
+                if(child.tag in setOf(ROW_TAG,EMPHASIS_TAG,DIVIDER_TAG)) view.removeView(child) else walk(child)
+            } }
+            walk(button.rootView)
+        }
+        anchors.clear();anchorPages.clear()
+    }
+
     fun install(loader: ClassLoader, currentId: () -> Long?, openSettings: (Activity) -> Unit, build: TargetBuild = TargetBuild.UNKNOWN) {
         NativeLyricsPronunciation.install(loader)
         NativeLyricsPronunciationSubtitle.install(loader, build)
@@ -55,28 +73,21 @@ internal object NativeLyricsSourceMenu {
             object : ModernMethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     val context = application?.get() ?: return
-                    if (NativeLyricsEmphasisVisibility.synchronize(context, param.args[0] == true))
-                        param.extras["refresh-emphasis"] = true
-                }
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (param.extras.remove("refresh-emphasis") == true && param.throwable == null)
-                        currentId()?.let { CurrentLyricsSourceStatus.refreshSilently(it) }
+                    val native = param.args[0] as? Boolean ?: return
+                    param.args[0] = NativeLyricsEmphasisVisibility.effective(context, native)
                 }
             })
         fun bind(root: View?, fragment: Any?) {
             root ?: return
             val context = root.context.applicationContext
             application = WeakReference(context)
-            val visible = runCatching {
+            runCatching {
                 val field = fragment?.javaClass?.declaredFields?.singleOrNull {
                     it.type.name == "com.apple.android.music.player.viewmodel.PlayerLyricsViewModel"
                 }?.apply { isAccessible = true }
                 val model = field?.get(fragment) ?: return@runCatching null
-                val live = model.javaClass.getMethod("getPronunciationSelectedLiveResult").invoke(model)
-                live.javaClass.getMethod("getValue").invoke(live) as? Boolean
-            }.getOrNull()
-            if (visible != null && NativeLyricsEmphasisVisibility.synchronize(context, visible))
-                currentId()?.let { CurrentLyricsSourceStatus.refreshSilently(it) }
+                NativeLyricsAuxiliaryControls.restorePronunciation(context, model)
+            }.onFailure { ModernXposedRuntime.log("saved pronunciation visibility restoration failed", it) }
             val id = root.resources.getIdentifier("translations_button", "id", ModuleConstants.RESOURCE_PACKAGE)
             val button = root.findViewById<View>(id) ?: return
             registerAnchor(button)
@@ -111,27 +122,61 @@ internal object NativeLyricsSourceMenu {
                 root.findViewById<View>(id)?.let(::unregisterAnchor)
             }
         })
-        ModernXposedRuntime.hookMethod(PopupWindow::class.java.getDeclaredMethod("showAsDropDown",
-            View::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType),
-            object : ModernMethodHook() {
+        // 1606 invokes the three-argument overload directly. Cover each public
+        // entry instead of relying on optimized framework delegation to the fourth.
+        installPopupHooks(currentId, openSettings)
+        NativeLyricsAuxiliaryControls.install(loader)
+        runCatching {
+            val click = loader.loadClass("com.apple.android.music.player.fragment.b0")
+            val page = click.getDeclaredField("a").apply { isAccessible = true }
+            ModernXposedRuntime.hookMethod(click.getDeclaredMethod("onClick", View::class.java), object : ModernMethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    val anchor = param.args.firstOrNull() as? View ?: return
-                    if (!anchors.containsKey(anchor)) return
-                    val popup = param.thisObject as? PopupWindow ?: return
-                    val menu = popup.contentView as? LinearLayout ?: return
-                    val id = menu.resources.getIdentifier("translations_popup_menu", "id", ModuleConstants.RESOURCE_PACKAGE)
-                    if (id == 0 || menu.id != id) return
                     runCatching {
-                        publishAnchorPage(anchor)
-                        appendRow(menu, popup, currentId, openSettings)
-                    }
-                        .onFailure { ModernXposedRuntime.log("lyrics source menu extension failed open", it) }
+                        val fragment = page.get(param.thisObject) ?: return@runCatching
+                        val button = param.args[0] as View
+                        bind(button.rootView, fragment)
+                        registerAnchor(button)
+                        registerPage(button, fragment)
+                        publishAnchorPage(button)
+                    }.onFailure { ModernXposedRuntime.log("lyrics menu page binding failed", it) }
                 }
             })
+        }.onFailure { ModernXposedRuntime.log("lyrics menu click seam unavailable", it) }
         ModernXposedRuntime.log("native lyrics source menu installed")
     }
 
+    internal fun installPopupHooks(currentId: () -> Long?, openSettings: (Activity) -> Unit) {
+        ModernXposedRuntime.hookMethod(PopupWindow::class.java.getDeclaredMethod("dismiss"), object : ModernMethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                val popup = param.thisObject as? PopupWindow ?: return
+                if (!popup.isShowing) (popup.contentView as? LinearLayout)?.let(NativeLyricsAuxiliaryControls::restoreMenu)
+            }
+        })
+        for (method in PopupWindow::class.java.declaredMethods.filter { it.name == "showAsDropDown" }) {
+            ModernXposedRuntime.hookMethod(method, object : ModernMethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val anchor = param.args.firstOrNull() as? View ?: return
+                    val popup = param.thisObject as? PopupWindow ?: return
+                    val menu = popup.contentView as? LinearLayout ?: return
+                    val id = menu.resources.getIdentifier("translations_popup_menu", "id", ModuleConstants.RESOURCE_PACKAGE)
+                    val buttonId = anchor.resources.getIdentifier("translations_button", "id", ModuleConstants.RESOURCE_PACKAGE)
+                    if (id == 0 || menu.id != id || (!anchors.containsKey(anchor) && (buttonId == 0 || anchor.id != buttonId))) return
+                    runCatching {
+                        registerAnchor(anchor)
+                        publishAnchorPage(anchor)
+                        anchorPages[anchor]?.get()?.let { NativeLyricsAuxiliaryControls.synchronize(it) }
+                        appendRow(menu, popup, currentId, openSettings)
+                        anchorPages[anchor]?.get()?.let { page ->
+                            NativeLyricsAuxiliaryControls.extendMenu(page, menu, popup, currentId)
+                        }
+                    }.onFailure { ModernXposedRuntime.log("lyrics source menu extension failed open", it) }
+                }
+            })
+        }
+    }
+
     private fun appendRow(menu: LinearLayout, popup: PopupWindow, currentId: () -> Long?, openSettings: (Activity) -> Unit) {
+        menus[menu] = true
         menu.findViewWithTag<View>(EMPHASIS_TAG)?.let { menu.removeView(it) }
         menu.findViewWithTag<View>(ROW_TAG)?.let { menu.removeView(it) }
         menu.findViewWithTag<View>(DIVIDER_TAG)?.let { menu.removeView(it) }
@@ -149,6 +194,7 @@ internal object NativeLyricsSourceMenu {
         fun applied() = CurrentLyricsSourceStatus.appliedSource(app, songId)
         fun toast(message: String) { Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
         fun valid(): Boolean {
+            if (!dev.amenhancer.module.hook.EmbeddedLyricsLifetime.alive) return false
             if (LyricsSourceMenuPolicy.canAct(songId, currentId())) return true
             toast("歌曲已切换或尚未加载，请重新打开菜单")
             popupRef.get()?.dismiss()

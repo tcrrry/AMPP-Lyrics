@@ -4,7 +4,11 @@ import dev.amenhancer.module.lyrics.DesktopLyricsPresentation
 import org.junit.Assert.*
 import org.junit.Test
 
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(manifest = org.robolectric.annotation.Config.NONE, sdk = [35])
 class NativeLyricsPhoneticPresentationTest {
+    @org.junit.Before fun attachPlugin() { dev.amenhancer.module.hook.EmbeddedLyricsTestContext.attach() }
+    @org.junit.After fun closePlugin() { dev.amenhancer.module.hook.EmbeddedLyricsTestContext.current.close() }
     private val word = """<tt xmlns:itunes="urn:itunes" itunes:timing="Word"><head><metadata><transliterations><transliteration xml:lang="ja-Latn"><text for="L1">ki mi</text></transliteration></transliterations><translations><translation xml:lang="zh"><text for="L1">你</text></translation></translations></metadata></head><body><p itunes:key="L1" begin="1s" end="3s"><span begin="1s" end="2s">君</span><span begin="2s" end="3s">よ</span></p></body></tt>"""
     @Test fun normalPresentationKeepsNativeWordTimingAndAllowsPhoneticEmphasis() {
         val rendered = NativeLyricsPhoneticPresentation.render(word, false)

@@ -12,6 +12,8 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE, sdk = [35])
 class NativeLyricsImmediateAnchorTest {
+    @org.junit.Before fun attachLifetime() { EmbeddedLyricsTestContext.attach() }
+    @org.junit.After fun closeLifetime() { EmbeddedLyricsTestContext.close() }
     @Test fun anchorRunsOnceAfterLayoutAndStaleOrDetachedPagesCannotScroll() {
         val controller = Robolectric.buildActivity(Activity::class.java).setup().visible()
         val activity = controller.get()

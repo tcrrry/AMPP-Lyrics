@@ -16,6 +16,8 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE, sdk = [35])
 class NativeLyricsEmphasisMenuTest {
+    @org.junit.Before fun attachLifetime() { EmbeddedLyricsTestContext.attach() }
+    @org.junit.After fun closeLifetime() { EmbeddedLyricsTestContext.close() }
     @Test fun nativeMachineTranslationAndPronunciationStayVisibleInSourceDetailsAndEnableEmphasis() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         val ttml = """<tt xmlns:itunes="urn" itunes:timing="Line"><head><metadata><transliterations><transliteration xml:lang="ja-Latn"><text for="L1">ki mi</text></transliteration></transliterations><translations><translation xml:lang="zh"><text for="L1">你</text></translation></translations></metadata></head><body><p itunes:key="L1" begin="1s" end="3s">君</p></body></tt>"""
@@ -150,10 +152,10 @@ class NativeLyricsEmphasisMenuTest {
         val prefs = activity.getSharedPreferences("japanese_pronunciation", Context.MODE_PRIVATE)
         prefs.edit().clear().putBoolean("primary", true).commit()
         try {
-            assertTrue(NativeLyricsEmphasisVisibility.synchronize(activity, false))
+            assertTrue(NativeLyricsEmphasisVisibility.choose(activity, false) {})
             assertFalse(prefs.getBoolean("primary", true))
             assertFalse(NativeLyricsEmphasisVisibility.visible(activity))
-            assertFalse(NativeLyricsEmphasisVisibility.synchronize(activity, false))
+            assertFalse(NativeLyricsEmphasisVisibility.choose(activity, false) {})
             CurrentLyricsSourceStatus.rememberCandidate(activity, 345L, "desktop-lyrics:QQ音乐",
                 DesktopLyricsPresentation("QQ音乐", true, false, false, false, true).marker())
             CurrentLyricsSourceStatus.recordApplied(activity, 345L, false)
@@ -165,7 +167,7 @@ class NativeLyricsEmphasisMenuTest {
             assertFalse(menu.getChildAt(1).isEnabled)
             menu.getChildAt(1).performClick()
             assertFalse(prefs.getBoolean("primary", true))
-            NativeLyricsEmphasisVisibility.synchronize(activity, true)
+            NativeLyricsEmphasisVisibility.choose(activity, true) {}
             method.invoke(NativeLyricsSourceMenu, menu, popup, { 345L }, settings)
             assertTrue(menu.getChildAt(1).isEnabled)
             assertEquals("突出：歌词", ((menu.getChildAt(1) as LinearLayout).getChildAt(0) as TextView).text.toString())

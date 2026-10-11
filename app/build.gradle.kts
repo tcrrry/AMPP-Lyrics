@@ -38,8 +38,8 @@ android {
         applicationId = "dev.amenhancer.module"
         minSdk = 26
         targetSdk = 37
-        versionCode = 145
-        versionName = "1.5"
+        versionCode = 150
+        versionName = "1.6"
         buildConfigField("String", "HOST_PACKAGE", if (coexistenceBuild) {
             "\"com.tcrrry.ampplyrics.coexist\""
         } else {
@@ -100,6 +100,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
+    testImplementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    testImplementation("com.google.android.flexbox:flexbox:3.0.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     // org.json is part of the Android runtime but not of the local JVM; the

@@ -8,9 +8,9 @@ import dev.amenhancer.module.lyrics.DesktopLyricsPresentation
 import java.util.Collections
 import java.util.WeakHashMap
 
-/** Keep managed auxiliary tracks ordered and outside original-lyrics highlighting. */
+/** Auxiliary tracks belong to the native row, outside its word-gradient children. */
 internal object NativeLyricsPronunciationSubtitle {
-    private data class Managed(val word: Boolean, val pronunciation: Boolean, val primaryPronunciation: Boolean)
+    private data class Managed(val word: Boolean, val pronunciation: Boolean, val primaryPronunciation: Boolean, val subtitles: NativeSubtitleLookup)
     private val managed = Collections.synchronizedMap(WeakHashMap<Any, Managed>())
     internal data class Selection(val owner: Any, val lineId: Int, val pronunciation: Boolean, val translation: Boolean) {
         companion object {
@@ -49,9 +49,7 @@ internal object NativeLyricsPronunciationSubtitle {
         })
     }
 
-    private val renderingHeader = ThreadLocal<Boolean>()
-
-    // Register only the small upper subtitle. Translation and primary text stay host-owned.
+    // Both auxiliary views must remain dim; only the primary word track sweeps.
     internal fun stylePronunciation(view: TextView) {
         val color = auxiliaryTextColor(view)
         auxiliaryStyles[view] = color
@@ -61,7 +59,8 @@ internal object NativeLyricsPronunciationSubtitle {
 
     internal fun renderTranslation(container: ViewGroup, view: TextView) {
         if (!PronunciationHeaderLayout.supports(container)) return
-        PronunciationHeaderLayout.keepNativeTranslation(container, view)
+        stylePronunciation(view)
+        PronunciationHeaderLayout.moveBelow(container, view)
     }
 
     /** U/Z only accepts translation subtitle bindings, not word-pronunciation bindings. */
@@ -76,11 +75,7 @@ internal object NativeLyricsPronunciationSubtitle {
         check(layout != 0) { "Missing native auxiliary subtitle layout" }
         val count = container.childCount
         try {
-            val previous = renderingHeader.get()
-            renderingHeader.set(true)
-            try { inflate(text, layout) } finally {
-                if (previous == null) renderingHeader.remove() else renderingHeader.set(previous)
-            }
+            inflate(text, layout)
             check(container.childCount == count + 1) { "Native subtitle did not append one view" }
             val view = container.getChildAt(count) as? TextView ?: error("Native subtitle is not a TextView")
             stylePronunciation(view)
@@ -92,15 +87,59 @@ internal object NativeLyricsPronunciationSubtitle {
         }
     }
 
+    internal fun reconcileAuxiliaries(
+        container: ViewGroup, pronunciation: String?, translation: String?, background: Boolean,
+        resolveLayout: (String) -> Int = { name -> container.resources.getIdentifier(name, "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) },
+        inflate: (String, Int) -> Unit,
+    ) {
+        fun update(text: String?, above: Boolean) {
+            val current = PronunciationHeaderLayout.auxiliary(container, above) as? TextView
+            if (text.isNullOrBlank()) {
+                PronunciationHeaderLayout.clearAuxiliary(container, above)
+                return
+            }
+            if (current != null && current.text.toString() == text) {
+                stylePronunciation(current)
+                current.visibility = View.VISIBLE
+                return
+            }
+            PronunciationHeaderLayout.clearAuxiliary(container, above)
+            if (above) renderHeader(container, text, background, resolveLayout, inflate)
+            else {
+                val layout = resolveLayout(if (background) "lyrics_bg_translation_line_karaoke" else "lyrics_translation_line_karaoke")
+                check(layout != 0) { "Missing native translation subtitle layout" }
+                val count = container.childCount
+                try {
+                    inflate(text, layout)
+                    check(container.childCount == count + 1)
+                    val view = container.getChildAt(count) as TextView
+                    renderTranslation(container, view)
+                } catch (error: Exception) {
+                    while (container.childCount > count) container.removeViewAt(count)
+                    throw error
+                }
+            }
+        }
+        update(pronunciation, true)
+        update(translation, false)
+    }
+
     private val nativeLine = ThreadLocal<Any?>()
     private val selection = ThreadLocal<Selection?>()
 
     fun remember(pointer: Any, ttml: String) {
         val presentation = DesktopLyricsPresentation.fromTtml(ttml)
-        if (presentation != null) {
-            managed[pointer] = Managed(TtmlTimingPolicy.isWord(ttml), presentation.pronunciation, presentation.primaryPronunciation)
+        val subtitles = NativeSubtitleLookup(ttml)
+        if (presentation != null || subtitles.hasPronunciation || subtitles.hasTranslation) {
+            managed[pointer] = Managed(TtmlTimingPolicy.isWord(ttml), subtitles.hasPronunciation,
+                presentation?.primaryPronunciation == true, subtitles)
         } else managed.remove(pointer)
     }
+
+    internal fun subtitleLookup(pointer: Any?): NativeSubtitleLookup? = managed[pointer]?.subtitles
+
+    internal fun lineSubtitles(pointer: Any?, original: String): NativeSubtitleLookup.Tracks? =
+        managed[pointer]?.subtitles?.forOriginal(original)
 
     internal fun isManaged(pointer: Any?): Boolean = pointer != null && managed.containsKey(pointer)
 
@@ -120,9 +159,6 @@ internal object NativeLyricsPronunciationSubtitle {
             val base = loader.loadClass(if (modern) "com.apple.android.music.player.n1" else "com.apple.android.music.player.i1")
             val holder = loader.loadClass("androidx.recyclerview.widget.RecyclerView\$D")
             val line = loader.loadClass("com.apple.android.music.ttml.javanative.model.LyricsLine\$LyricsLineNative")
-            val constraints = loader.loadClass("androidx.constraintlayout.widget.ConstraintLayout\$b")
-            constraints.getConstructor(android.view.ViewGroup.LayoutParams::class.java)
-            for (name in listOf("i", "j", "k", "l", "t", "v")) constraints.getField(name)
             val flexbox = loader.loadClass("com.apple.android.music.common.views.FullWidthAlphaGradientFlexboxLayout")
             val subtitle = adapter.getDeclaredMethod(if (modern) "U" else "Z", String::class.java, flexbox,
                 Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Int::class.javaPrimitiveType)
@@ -137,6 +173,27 @@ internal object NativeLyricsPronunciationSubtitle {
             val id = line.getMethod("getLineId")
             val pronunciation = line.getMethod("getHtmlPronunciationLineText")
             val backgroundPronunciation = line.getMethod("getHtmlPronunciationBackgroundVocalsLineText")
+            val translation = line.getMethod("getHtmlTranslationLineText")
+            val backgroundTranslation = line.getMethod("getHtmlTranslatedBackgroundVocalsLineText")
+            val original = line.getMethod("getHtmlLineText")
+            val bindingHolder = loader.loadClass(if (modern) "com.apple.android.music.player.n1\$b" else "com.apple.android.music.player.i1\$b")
+            val rowBinding = bindingHolder.getDeclaredField("u").apply { isAccessible = true }
+            // Verified 1606 karaoke binding; old profiles fail open instead of hiding text.
+            val bindingType = loader.loadClass("q8.p9")
+            val mainWords = bindingType.getDeclaredField("a0").apply { isAccessible = true }
+            val backgroundWords = bindingType.getDeclaredField("Z").apply { isAccessible = true }
+            // 1606's word model caches the original Flex-line mask key per
+            // native timed binding. Ruby reflow must refresh those references.
+            val karaokeMaps=if(modern) runCatching {
+                val type=loader.loadClass("com.apple.android.music.player.A\$a")
+                type to listOf("G","H").map { type.getDeclaredField(it).apply { isAccessible=true } }
+            }.onFailure { ModernXposedRuntime.log("Ruby word-mask references unavailable; kept auxiliary presentation",it) }.getOrNull() else null
+            fun containers(row: Any): List<Pair<ViewGroup, Boolean>> {
+                val nativeBinding = rowBinding.get(row)
+                if (!bindingType.isInstance(nativeBinding)) return emptyList()
+                return listOf((mainWords.get(nativeBinding) as ViewGroup) to false,
+                    (backgroundWords.get(nativeBinding) as ViewGroup) to true)
+            }
             val translationFlag = base.getDeclaredField("d").apply { isAccessible = true }
             val pronunciationFlag = base.getDeclaredField("e").apply { isAccessible = true }
             val fullBind = adapter.getDeclaredMethod(if (modern) "k" else "p", holder, Int::class.javaPrimitiveType).apply { isAccessible = true }
@@ -145,52 +202,41 @@ internal object NativeLyricsPronunciationSubtitle {
             val cachedText = loader.loadClass(if (modern) "com.apple.android.music.player.n1\$b" else "com.apple.android.music.player.i1\$b").getDeclaredField("v").apply { isAccessible = true }
             val payloads = listOf("h", "i").map { base.getDeclaredField(it).apply { isAccessible = true }.get(null) }
             var enabled = false
+            val bindings = NativeAuxiliaryBindingState()
             fun owns(value: Any?): Boolean = enabled && value != null && isManagedWord(pointer.invoke(value))
 
-            ModernXposedRuntime.hookMethod(subtitle, object : ModernMethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (param.throwable != null || renderingHeader.get() == true) return
-                    runCatching {
-                        if (!owns(param.thisObject)) return@runCatching
-                        val container = param.args[1] as ViewGroup
-                        val layouts = listOf("lyrics_translation_line_karaoke", "lyrics_bg_translation_line_karaoke")
-                            .map { container.resources.getIdentifier(it, "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) }
-                        if (param.args[2] !in layouts) return@runCatching
-                        val view = container.getChildAt(container.childCount - 1) as? TextView ?: return@runCatching
-                        renderTranslation(container, view)
-                    }.onFailure { ModernXposedRuntime.log("translation subtitle layout failed open", it) }
-                }
-            })
-
-            // A.g0 finishes the primary word map before we create a separate native
-            // subtitle. Detaching only that appended subtitle preserves word indices.
+            // Clean up only for an actual glyph rebuild. Rendering is repaired after
+            // the outer bind even when Apple's cached tuple skips this method entirely.
             ModernXposedRuntime.hookMethod(rebuild, object : ModernMethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (selection.get()?.owner !== param.thisObject) return
                     runCatching { PronunciationHeaderLayout.clear(param.args[2] as ViewGroup) }
-                        .onFailure { ModernXposedRuntime.log("pronunciation header cleanup failed open", it) }
-                }
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val selected = selection.get() ?: return
-                    if (!selected.pronunciation || param.throwable != null) return
-                    runCatching {
-                        if (selected.owner !== param.thisObject || !hasManagedPronunciation(pointer.invoke(param.thisObject))) return@runCatching
-                        val value = nativeLine.get() ?: return@runCatching
-                        val container = param.args[2] as ViewGroup
-                        if (!PronunciationHeaderLayout.supports(container)) return@runCatching
-                        // Main/background word layouts identify the native row being rebuilt.
-                        val background = when (param.args[3]) {
-                            container.resources.getIdentifier("lyrics_word_karaoke", "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) -> false
-                            container.resources.getIdentifier("lyrics_word_karaoke_bg", "layout", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) -> true
-                            else -> return@runCatching
-                        }
-                        val text = (if (background) backgroundPronunciation else pronunciation).invoke(value) as? String
-                        if (text.isNullOrBlank()) return@runCatching
-                        renderHeader(container, text, background) { value, layout ->
-                            subtitle.invoke(param.thisObject, value, container, layout, param.args[5], 1)
-                        }
-                    }.onFailure { ModernXposedRuntime.log("pronunciation header rendering failed open", it) }
+                        .onFailure { ModernXposedRuntime.log("auxiliary cleanup failed open", it) }
                 }
             })
+            fun repair(target: Any, row: Any, value: Any, selected: Selection) {
+                val data = managed[pointer.invoke(target)] ?: return
+                val primary = original.invoke(value) as? String ?: ""
+                for ((container, background) in containers(row)) {
+                    if (!PronunciationHeaderLayout.supports(container)) continue
+                    if (container.visibility == View.GONE) {
+                        PronunciationHeaderLayout.clear(container)
+                        continue
+                    }
+                    if(karaokeMaps?.first?.isInstance(row)==true) RubyGradientBounds.trackWordMap(container,
+                        karaokeMaps.second[if(background)1 else 0].get(row) as? Map<*,*>)
+                    val pron = ((if (background) backgroundPronunciation else pronunciation).invoke(value) as? String)?.let(LyricsAuxiliaryText::forNative)
+                    val trans = ((if (background) backgroundTranslation else translation).invoke(value) as? String)?.let(LyricsAuxiliaryText::forNative)
+                    val fallback = if (background) null else data.subtitles.forOriginal(primary)
+                    reconcileAuxiliaries(container,
+                        if (selected.pronunciation) pron?.takeIf(String::isNotBlank) ?: fallback?.pronunciation else null,
+                        if (selected.translation) trans?.takeIf(String::isNotBlank) ?: fallback?.translation else null,
+                        background) { text, layout -> subtitle.invoke(target, text, container, layout, false, 1) }
+                    RubyPronunciationRows.bindWords(container, primary,
+                        if (selected.pronunciation && !background) pron?.takeIf(String::isNotBlank) ?: fallback?.pronunciation else null,
+                        data.primaryPronunciation)
+                }
+            }
             // Main karaoke words always remain the original lyrics for these pointers.
             ModernXposedRuntime.hookMethod(base.getDeclaredMethod(if (modern) "B" else "G"), object : ModernMethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
@@ -211,15 +257,17 @@ internal object NativeLyricsPronunciationSubtitle {
                             param.result = null
                             return@runCatching
                         }
-                        if (param.method == fullBind) {
+                        if (!owns(target)) {
+                            bindings.clear(param.args[0]!!)
                             (rowView.get(param.args[0]) as? ViewGroup)?.let { PronunciationHeaderLayout.clearRow(it) }
+                            return@runCatching
                         }
-                        if (!owns(target)) return@runCatching
                         val position = param.args[1] as Int
-                        if (type.invoke(target, position) != 3) return@runCatching
-                        // Native p skips word rebuilding when its three text caches match.
-                        // A full auxiliary rebind must rebuild even if only visibility changed.
-                        if (param.method == fullBind) cachedText.set(param.args[0], null)
+                        if (type.invoke(target, position) != 3) {
+                            bindings.clear(param.args[0]!!)
+                            (rowView.get(param.args[0]) as? ViewGroup)?.let { PronunciationHeaderLayout.clearRow(it) }
+                            return@runCatching
+                        }
                         val changes = if (param.method == partialBind) param.args[2] as List<*> else null
                         if (changes != null && (changes.isEmpty() || changes.any { it in payloads })) {
                             // A pronunciation toggle normally updates only ruby views.
@@ -235,19 +283,26 @@ internal object NativeLyricsPronunciationSubtitle {
                         }
                         val data = processor.get(target) ?: return@runCatching
                         val currentLine = dereference.invoke(lineAt.invoke(data, index.invoke(target, position, true))) ?: return@runCatching
+                        val rowContainers = containers(param.args[0]!!)
+                        if (rowContainers.isEmpty() || rowContainers.any { !PronunciationHeaderLayout.supports(it.first) }) return@runCatching
                         val previous = selection.get()
                         val translated = translationFlag.getBoolean(target)
                         val pronounced = pronunciationFlag.getBoolean(target)
                         // Some partial updates invoke full binding internally;
                         // inherit real choices rather than their temporary masked flags.
                         val selected = Selection.resolve(target, id.invoke(currentLine) as Int, pronounced, translated, previous)
+                        if (param.method == fullBind && bindings.changed(param.args[0]!!,
+                                NativeAuxiliaryBindingState.Identity(requireNotNull(pointer.invoke(target)), selected.lineId,
+                                    selected.pronunciation, selected.translation))) {
+                            (rowView.get(param.args[0]) as? ViewGroup)?.let { PronunciationHeaderLayout.clearRow(it) }
+                            cachedText.set(param.args[0], null)
+                        }
                         param.extras["subtitle-state"] = Triple(previous, translated, pronounced)
                         param.extras["header-previous-line"] = nativeLine.get()
                         nativeLine.set(currentLine)
                         selection.set(selected)
-                        // Native translation bookkeeping must reflect actual translation;
-                        // pronunciation is now outside the word/translation Flexbox.
-                        translationFlag.setBoolean(target, selected.translation)
+                        // No auxiliary participates in native word maps or gradient rectangles.
+                        translationFlag.setBoolean(target, false)
                         pronunciationFlag.setBoolean(target, false)
                     }.onFailure { error ->
                         restore(param)
@@ -267,7 +322,27 @@ internal object NativeLyricsPronunciationSubtitle {
                     }
                 }
                 override fun afterHookedMethod(param: MethodHookParam) {
-                    runCatching { restore(param) }.onFailure { ModernXposedRuntime.log("pronunciation subtitle restore failed", it) }
+                    try {
+                        // Native English and emphasized pronunciation need the
+                        // same post-layout word-key refresh as managed ruby.
+                        // Register their maps even when no subtitle is moved.
+                        if(param.throwable==null && param.method==fullBind && karaokeMaps?.first?.isInstance(param.args[0])==true) {
+                            for((container,background) in containers(param.args[0]!!)) {
+                                RubyGradientBounds.trackWordMap(container,
+                                    karaokeMaps.second[if(background)1 else 0].get(param.args[0]) as? Map<*,*>)
+                            }
+                        }
+                        if (param.throwable != null) bindings.clear(param.args[0]!!)
+                        else if (param.extras.containsKey("subtitle-state")) {
+                            val selected = selection.get()
+                            val value = nativeLine.get()
+                            if (selected != null && value != null) repair(param.thisObject!!, param.args[0]!!, value, selected)
+                        }
+                    } catch (error: Exception) {
+                        ModernXposedRuntime.log("auxiliary post-bind repair failed", error)
+                    } finally {
+                        runCatching { restore(param) }.onFailure { ModernXposedRuntime.log("pronunciation subtitle restore failed", it) }
+                    }
                 }
             }
             ModernXposedRuntime.hookMethod(fullBind, binding)

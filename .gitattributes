@@ -17,3 +17,6 @@ gradlew text eol=lf
 *.bat text eol=crlf
 *.ps1 text eol=lf
 *.jar binary
+
+# Pinned pronunciation data must retain exact upstream bytes.
+app/src/main/assets/pronunciation/** -text

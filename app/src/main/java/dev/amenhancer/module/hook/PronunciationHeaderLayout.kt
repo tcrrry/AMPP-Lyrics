@@ -170,7 +170,22 @@ internal object PronunciationHeaderLayout {
         container.layoutParams = parameters
     }
 
+    fun auxiliary(container: ViewGroup, above: Boolean): View? =
+        (if (above) headers else footers)[container]?.view?.get()?.takeIf { view ->
+            view.parent === container.parent && runCatching {
+                field(container.layoutParams.javaClass, if (above) "topToBottom" else "bottomToTop")
+                    .getInt(container.layoutParams) == view.id
+            }.getOrDefault(false)
+        }
+
+    fun clearAuxiliary(container: ViewGroup, above: Boolean) = clearEdge(container, above)
+
+    fun clearAll() {
+        (headers.keys.toList()+middles.keys.toList()+footers.keys.toList()+nativeAuxiliaries.keys.toList()).distinct().forEach(::clear)
+    }
+
     fun clear(container: ViewGroup) {
+        RubyPronunciationRows.clear(container)
         nativeAuxiliaries.remove(container)?.forEach { reference ->
             reference.get()?.takeIf { it.parent === container }?.let(container::removeView)
         }

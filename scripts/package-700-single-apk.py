@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import sys
 import zipfile
 
 from importlib.util import spec_from_file_location, module_from_spec
@@ -68,9 +69,9 @@ def main():
         # Verify every original split rather than trusting its archive filename.
         for name in SPLITS:
             single.certificate(args.apksigner, original/name, min_sdk=30)
-        subprocess.run(['python3', str(Path(__file__).with_name('verify-host-profile.py')),
+        subprocess.run([sys.executable, str(Path(__file__).with_name('verify-host-profile.py')),
                         str(original/'base.apk'), '--glass'], check=True)
-        subprocess.run(['python3', str(Path(__file__).with_name('verify-700-lyrics-extension.py')),
+        subprocess.run([sys.executable, str(Path(__file__).with_name('verify-700-lyrics-extension.py')),
                         str(original/'base.apk'), '--aapt2', str(args.aapt2)], check=True)
         merged = work/'merged.apk'
         subprocess.run(['java', '-jar', str(args.editor), 'm', '-i', str(original),
