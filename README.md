@@ -28,9 +28,9 @@
 | 使用方式 | 项目入口 | 安装内容 |
 | --- | --- | --- |
 | **想直接安装完整 Apple Music 增强版** | 本项目 [AMPP-Lyrics](https://github.com/tcrrry/AMPP-Lyrics) · [v1.6 下载页](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.6) | 选择现有普通 APK、共存 APK、APKS 或独立模块，使用方式见下文 |
-| **已使用支持插件管理器的 AM++，只想导入歌词插件** | [Tcrrry Lyrics Plugin 独立项目](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin) · [插件 1.0.4 正式版下载页](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin/releases/tag/plugin-v1.0.4) | 将 `Tcrrry-Lyrics-Plugin-1.0.4.zip` 导入 AM++ 插件管理器，启用后重启宿主 |
+| **已使用支持插件管理器的 AM++，只想导入歌词插件** | [Tcrrry Lyrics Plugin 独立项目](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin) · [插件 1.0.5 正式版下载页](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin/releases/tag/plugin-v1.0.5) | 将 `Tcrrry-Lyrics-Plugin-1.0.5.zip` 导入 AM++ 插件管理器，启用后重启宿主 |
 
-独立插件已由用户在 **AM++ 105 嵌入版**完成实机验收；要求 Android 12及以上和 SDK v1 插件管理器，其他及后续宿主版本需另行验证。**要在独立插件中使用离线机器翻译，还必须下载并单独安装 `Tcrrry-Lyrics-Offline-1.0.3.apk`，首次打开授权并下载语言模型；只导入插件 ZIP 不能运行离线机翻。** 已有旧版伴随 APK 可继续使用；平台已有译文、API 翻译和词典注音不依赖该 APK。
+独立插件 **1.0.5** 新增 **AM++ 1012 嵌入版 / Apple Music 1609** 支持，保留 **1606**；已完成静态接口、回归及 ZIP 导入检查，1609 尚未手机实测。1.0.4 的歌词功能曾由用户在 **AM++ 105 嵌入版 / 1606** 完成实机验收。要求 Android 12及以上和 SDK v1 插件管理器，其他宿主版本需另行验证。**要在独立插件中使用离线机器翻译，还必须下载并单独安装 `Tcrrry-Lyrics-Offline-1.0.3.apk`，首次打开授权并下载语言模型；只导入插件 ZIP 不能运行离线机翻。** 已有旧版伴随 APK 可继续使用；平台已有译文、API 翻译和词典注音不依赖该 APK。
 
 上述额外 APK 要求针对独立插件。v1.6 四种完整安装包均已移植插件 1.0.4 的歌词修复，沿用整合包内置离线机翻，无需再导入独立插件或安装其伴随 APK。旧版附件继续保留。
 
