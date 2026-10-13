@@ -117,7 +117,7 @@ internal object TabletLyricTypography {
         "song_lyrics_line",
         "song_lyrics_word",
     ).mapTo(mutableSetOf()) { name ->
-        view.resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE)
+        view.resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE)
     }.filterTo(mutableSetOf()) { id -> id != 0 && id != View.NO_ID }
 
     private fun applyPrimaryLyricTextSize(root: View, primaryLyricTextIds: Set<Int>) {

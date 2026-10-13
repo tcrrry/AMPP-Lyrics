@@ -1,15 +1,5 @@
 # Third-Party Notices
 
-## AM++ media plugin tablet components
-
-Selected output-routing, output icons, volume controls, and native playback-mode
-contracts are adapted from Kifranei/AM-plus-plus-media-plugin, commit `9e3f72b`
-(GPL-3.0). The host retains its own tablet proportions and artwork layout.
-The Halcyon Bluetooth name rules and Kifranei output vectors are retained.
-Flamingo volume vectors and their source record are packaged under `tablet-media/`.
-Apple's speaker/AirPods images retain their source and copyright notice in
-`tablet-media/AppleMusicOutputIcons.txt`; they are not covered by GPL.
-
 ## AMLyricBlur
 
 This project includes code adapted from `a23bc/amlyricblur`, commit
@@ -48,19 +38,6 @@ Source provenance and AM++ changes: `backdrop/UPSTREAM.md`.
 
 Compose Multiplatform 1.12.0 and io.github.kyant0:shapes:1.2.1 are Apache-2.0 dependencies.
 
-## HyperLyrics-Enhanced cellular data settings
-
-The cellular data settings scope and hook behavior in
-`host-applemusic/src/main/java/dev/amenhancer/module/hook/AppleMusicCellularDataEntryTarget.kt`
-are adapted from HyperLyrics-Enhanced's `AppleCellularDataSettingsHooks.kt`,
-source snapshot `38cf511`.
-
-Copyright 2026 juren233. Licensed under the Apache License, Version 2.0.
-AM++ adds its own configuration, exact target profiles, capability installation,
-and a gate that keeps partially registered hooks dormant.
-
-License: https://www.apache.org/licenses/LICENSE-2.0
-
 ## libxposed API and service
 
 This project uses `io.github.libxposed:api:102.0.0` and
@@ -77,3 +54,11 @@ This project uses `org.jetbrains.kotlin:kotlin-stdlib:2.4.10`.
 Licensed under the Apache License, Version 2.0. The license is available at:
 
     https://www.apache.org/licenses/LICENSE-2.0
+# v1.7 Integration
+
+This release integrates Zennmn/AM-plus-plus commit
+`3547a833dac819a23b8515784601873d1d27ed47` with Tcrrry Lyrics Plugin 1.0.6
+(GPL-3.0), source at https://github.com/tcrrry/Tcrrry-Lyrics-Plugin/tree/04cbe23ad798b698c617187f48efd14a65d5e8d0.
+The plugin's dictionary and rendering notices remain inside the bundled ZIP.
+Google ML Kit Translate is `com.google.mlkit:translate:17.0.3`; its native runtime
+belongs to the integrated module, not the standalone plugin DEX.

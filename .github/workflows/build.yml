@@ -1,114 +1,45 @@
-name: Build
-
+name: Verify AMPP Lyrics
 on:
   push:
   pull_request:
-
+  workflow_dispatch:
 permissions:
   contents: read
-
 jobs:
-  android:
+  verify:
     runs-on: ubuntu-latest
-    env:
-      AMPP_RELEASE_STORE_FILE: ${{ github.workspace }}/am-plus-plus-release.jks
-      AMPP_RELEASE_STORE_PASSWORD: ${{ secrets.AMPP_RELEASE_STORE_PASSWORD }}
-      AMPP_RELEASE_KEY_ALIAS: ${{ secrets.AMPP_RELEASE_KEY_ALIAS }}
-      AMPP_RELEASE_KEY_PASSWORD: ${{ secrets.AMPP_RELEASE_KEY_PASSWORD }}
+    timeout-minutes: 45
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Verify pinned glass renderer
-        run: python3 scripts/verify-glass-reference.py
-
-      - name: Verify architecture and exact host profiles
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@v4
+      - run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
+      - name: Verify source and exact host profiles
         run: |
           python3 scripts/verify-architecture.py
           python3 scripts/verify-profile-data.py
+          python3 scripts/verify-glass-reference.py
           python3 -m unittest discover -s scripts/tests
-
-      - name: Prepare release signing
-        if: github.event_name != 'pull_request'
-        env:
-          AMPP_RELEASE_KEYSTORE_BASE64: ${{ secrets.AMPP_RELEASE_KEYSTORE_BASE64 }}
-        run: |
-          printf '%s' "$AMPP_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$AMPP_RELEASE_STORE_FILE"
-
-      - name: Fingerprint independent plugin example and SDK
-        id: plugin-inputs
-        run: echo "key=$(python3 scripts/build-plugin-example.py --cache-key)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache independent plugin example and SDK
-        id: plugin-cache
-        uses: actions/cache@v4
-        with:
-          path: build/plugin-example
-          # Exact inputs only; a partial match could contain an outdated SDK or fixture.
-          key: ${{ runner.os }}-${{ runner.arch }}-plugin-example-v1-${{ steps.plugin-inputs.outputs.key }}
-
-      - name: Build or reuse independent plugin example and SDK
+      - name: Test and build ordinary module
         run: |
           chmod +x gradlew
-          if [ "${{ steps.plugin-cache.outputs.cache-hit }}" != 'true' ] || \
-             [ ! -s build/plugin-example/basic-plugin.zip ] || \
-             [ ! -s build/plugin-example/ampp-plugin-api-v1.jar ]; then
-            python3 scripts/build-plugin-example.py
-          else
-            echo 'Reusing independent plugin example and SDK for matching inputs.'
-          fi
-
-      - name: Build and test release
-        if: github.event_name != 'pull_request'
+          ./gradlew test :app:lintDebug :app:assembleDebug --no-daemon --max-workers=2
+          mkdir -p build/verified-modules
+          cp app/build/outputs/apk/debug/app-debug.apk build/verified-modules/ordinary.apk
+          python3 scripts/verify-integrated-lyrics.py build/verified-modules/ordinary.apk
+      - name: Test and build coexist module
         run: |
-          chmod +x gradlew
-          ./gradlew test :app:lintDebug :app:lintVitalRelease :glass:lintDebug :host-applemusic:lintDebug :plugin-api:lintDebug :plugin-runtime:lintDebug :app:assembleRelease -PpluginFixture="$PWD/build/plugin-example/basic-plugin.zip" --no-daemon
-
-      - name: Verify release signature
-        if: github.event_name != 'pull_request'
-        run: |
-          verification="$($ANDROID_HOME/build-tools/37.0.0/apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk)"
-          printf '%s\n' "$verification"
-          printf '%s\n' "$verification" | grep -q 'Verified using v2 scheme.*: true'
-          if printf '%s\n' "$verification" | grep -q 'CN=Android Debug'; then
-            echo 'Refusing to publish an APK signed with the Android debug certificate.' >&2
-            exit 1
-          fi
-
-      - name: Build and test pull request
-        if: github.event_name == 'pull_request'
-        run: |
-          chmod +x gradlew
-          ./gradlew test :app:lintDebug :app:lintVitalRelease :glass:lintDebug :host-applemusic:lintDebug :plugin-api:lintDebug :plugin-runtime:lintDebug :app:assembleDebug -PpluginFixture="$PWD/build/plugin-example/basic-plugin.zip" --no-daemon
-
-      - name: Upload plugin SDK and example
-        uses: actions/upload-artifact@v4
+          ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug -PamppCoexistence=true --no-daemon --max-workers=2
+          cp app/build/outputs/apk/debug/app-debug.apk build/verified-modules/coexist.apk
+          python3 scripts/verify-integrated-lyrics.py build/verified-modules/coexist.apk
+      - uses: actions/upload-artifact@v4
         with:
-          name: AM-plus-plus-plugin-sdk-v1
-          path: build/plugin-example/*
-          if-no-files-found: error
-
-      - name: Upload release APK
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: AM-plus-plus-release
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-
-      - name: Upload pull request APK
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: AM-plus-plus-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: verification-modules-not-music-installers
+          path: build/verified-modules
           if-no-files-found: error

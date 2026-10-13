@@ -99,7 +99,7 @@ internal object RightLyricsPaneLayout {
     }
 
     private fun targetId(resources: android.content.res.Resources, name: String): Int =
-        resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE)
+        resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE)
             .takeIf { it != 0 }
             ?: error("id/$name resource ID was unavailable")
 
@@ -249,7 +249,7 @@ internal object TranslationsPopupOffsetHook {
         val popupMenuId = resources.getIdentifier(
             TRANSLATIONS_POPUP_MENU,
             "id",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         ).takeIf { it != 0 } ?: run {
             sparseDebug("translations popup offset skipped: id/translations_popup_menu missing")
             return
@@ -295,9 +295,9 @@ internal object TranslationsPopupOffsetHook {
      * keeps the shift on popups anchored inside the lyrics sheet only.
      */
     private fun findLyricsSheetRoot(anchor: View, resources: android.content.res.Resources): View? {
-        val controlsId = resources.getIdentifier(CONTROLS, "id", ModuleConstants.TARGET_PACKAGE)
+        val controlsId = resources.getIdentifier(CONTROLS, "id", ModuleConstants.RESOURCE_PACKAGE)
             .takeIf { it != 0 } ?: return null
-        val gradientsId = resources.getIdentifier(RECYCLER_VIEW_GRADIENTS, "id", ModuleConstants.TARGET_PACKAGE)
+        val gradientsId = resources.getIdentifier(RECYCLER_VIEW_GRADIENTS, "id", ModuleConstants.RESOURCE_PACKAGE)
             .takeIf { it != 0 } ?: return null
         var candidate = anchor.parent as? View
         while (candidate != null) {

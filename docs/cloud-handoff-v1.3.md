@@ -1,0 +1,55 @@
+# v1.3 构建记录
+
+宿主：Apple Music 7.0.0-beta / 1606，来源为上游 embedded-2026.08.10-r1 的 103 分包。
+源 APKS SHA-256：`1adae4761b292221189bd47f2f302fe48c7bb45863b2581663ed5efba9146093`。
+
+## 验证
+
+普通模块 1,108 项、共存模块 1,108 项、glass 22 项测试通过；Lint 与构建通过。入口分流、生命周期回调撤销、共存精确版本识别有回归测试。原宿主 262 项接口与 50 项发音／菜单契约通过。四种产物的身份、签名、原包与模块嵌入、DEX、原生库、资源及共存布局行为通过静态校验。实机反馈仅覆盖此前普通测试版；v1.3 新包仍需实机反馈。
+
+## 重现
+
+使用 Android SDK 37、完整 JDK 17 构建。分别运行并保存普通和共存模块，不能让后一次构建覆盖前一份输入：
+
+```bash
+bash gradlew test :app:lintDebug :glass:lintDebug :glass-lab:lintDebug :app:assembleDebug --no-daemon --max-workers=4
+cp app/build/outputs/apk/debug/app-debug.apk /tmp/ordinary-module.apk
+bash gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug -PamppCoexistence=true --no-daemon --max-workers=4
+cp app/build/outputs/apk/debug/app-debug.apk /tmp/coexist-module.apk
+```
+
+打包使用 JDK 21 的运行时；`--javac` 指向 JDK 17。输入和工具的固定 hash 由脚本强制校验：
+
+```bash
+python3 scripts/package-700-release.py \
+  --input /path/to/103-version-com.apple.android.music-npatched.apks \
+  --module /tmp/ordinary-module.apk --coexist-module /tmp/coexist-module.apk \
+  --output /tmp/v1.3-dist \
+  --editor /path/to/APKEditor-1.4.9.jar \
+  --npatch /path/to/jar-v1.0.7-741-release.jar \
+  --aapt2 /path/to/android-sdk/build-tools/37.0.0/aapt2 \
+  --apksigner /path/to/android-sdk/build-tools/37.0.0/apksigner \
+  --javac /path/to/jdk17/bin/javac
+```
+
+输出四种安装包、SHA-256 和静态校验报告。直接上传 Release，不使用 Actions 临时产物作为发布中转。普通 CI 保留测试，临时 APK 上传改为手动选择且仅保留一天，避免持续占用 Actions 存储。历史 Release 与附件保留。
+
+如当前云代理拒绝二进制上传，可由 `publish-v1-3.yml` 在 GitHub runner 重现全部检查后直接上传发布草稿；不使用 upload-artifact、不占用 Actions 临时产物额度。检查草稿附件完整后再正式发布。
+
+## 发音修复覆盖更新
+
+用户要求直接覆盖现有 v1.3，四种安装包及校验文件均替换，其他发布保留。模块内部版本为 1.6.9 / 119。原因是将旧版辅助字幕资源 ID 转为名称时误对应到逐字发音布局：1606 的 A.U 只接受 q8.D9 / q8.b9，实际辅助字幕绑定 E9 / c9 是对应子类；逐字发音 M9 / O9 不兼容。使用 lyrics_translation_line_karaoke 与 lyrics_bg_translation_line_karaoke 后，原生渲染方法可完成绑定。
+
+运行现有 publish-v1-3.yml 的 workflow_dispatch，显式设 replace_existing=true 才可覆盖已发布的 v1.3。覆盖前校验并备份当前附件；上传失败自动恢复。完成后 v1.3 标签指向修复源码，主页按钮沿用原文件名。
+
+辅助字幕位于同一行的 ConstraintLayout 内：发音在原文上方，译文在下方，均在原生逐字渐变容器之外，使用相同的 white_alpha_35 与 TextView alpha=1。回归验证覆盖顺序、亮度、跨主唱／背景声约束、单独开关与复用清理；ConstraintLayout 参数 l 已从 1606 实际约束解析器确认是 bottomToBottom。
+
+
+## 逐行与无发音轨译文修复
+
+此前仅登记带发音轨的 Word 文档，未保护只有翻译的 Word 文档，也未接入 Line 适配器。1606 的 Y0.U 对原文 b0 和发音 Z 同时执行 View.ALPHA 动画；lyrics_line 默认顺序为原文、发音、翻译。新增 Y0 的全量和局部绑定钩子，使用 q8.l9 的 b0/Z/a0 保留视图身份，调整为发音、原文、翻译；管理中的发音与译文通过弱引用登记，固定 35% 白色与 alpha=1，拦截这些视图的原生亮度更新。切回原生歌词或复用其他行时撤销登记并恢复原约束、文字颜色与 alpha。Line 绑定钩子仅对精确 7.0.0-beta/1606 启用；旧版宿主仍保留原有路径。没有发音轨的 Word 文档仅保护译文，不追加发音行。新增四项逐行回归，覆盖约束链、原文状态、隐藏开关、重复绑定、亮度更新和复用撤销。
+
+
+## 偏移与滚动设置修复
+
+普通设置刷新调用 renderPage 会创建新的 ScrollView 丢失位置；新增布局完成后的滚动恢复，并用于 pageRefresh 和外观刷新。偏移原先只在松手时保存，刷新重建可能中断拖动；现在用户改变滑杆值立即保存当前歌曲／当前源的偏移，以 250ms 合并重新装载请求，松手立即提交，使用 refreshSilently 避免重新搜索来源。拖动时来源状态刷新暂缓整页重建；归零直接更新滑杆和重新装载。无有效来源时滑杆禁用。新增六项回归验证提前／延后／归零、保存及重建、每首歌每个源隔离、逐行与逐字实际 TTML 时间变化、滚动恢复与新 API 配置文本。真实播放仍需用户复测。

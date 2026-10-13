@@ -540,6 +540,6 @@ internal class FragmentTabletDualPaneSession(val controller: Any, val root: View
         restoreSongLayout()
         hidden.clear(); margins.clear(); cover = null
     }
-    private fun find(parent: View, name: String): View? = ids.getOrPut(name) { parent.resources.getIdentifier(name, "id", dev.amenhancer.module.ModuleConstants.TARGET_PACKAGE) }
+    private fun find(parent: View, name: String): View? = ids.getOrPut(name) { parent.resources.getIdentifier(name, "id", dev.amenhancer.module.ModuleConstants.RESOURCE_PACKAGE) }
         .takeIf { it != 0 }?.let { parent.findViewById(it) }
 }

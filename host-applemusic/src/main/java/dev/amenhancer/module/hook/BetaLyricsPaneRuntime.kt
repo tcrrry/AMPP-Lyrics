@@ -81,7 +81,7 @@ internal class BetaLyricsPaneRuntime(private val lyricsClass: Class<*>,
 
     private fun hideChrome(root: View) {
         listOf("current_player_item", "controls", "controls_tap_target").forEach { name ->
-            val id = root.resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE)
+            val id = root.resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE)
             if (id != 0) root.findViewById<View>(id)?.visibility = View.GONE
         }
     }
@@ -165,7 +165,7 @@ internal class BetaLyricsPaneRuntime(private val lyricsClass: Class<*>,
         private fun applyRow(row: View) {
             if (closed || !TabletModeQualifier.isEligible(row.context)) return
             val primaryIds = listOf("song_lyrics_line", "song_lyrics_word").map {
-                row.resources.getIdentifier(it, "id", ModuleConstants.TARGET_PACKAGE)
+                row.resources.getIdentifier(it, "id", ModuleConstants.RESOURCE_PACKAGE)
             }.filter { it != 0 }.toSet()
             val display = row.resources.displayMetrics
             val sizeSp = TabletLyricVisualPolicy.textSizeSp(display.widthPixels.toFloat(), display.heightPixels.toFloat(),

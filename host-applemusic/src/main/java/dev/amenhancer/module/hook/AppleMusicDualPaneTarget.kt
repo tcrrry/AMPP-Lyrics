@@ -147,14 +147,14 @@ internal class AppleMusicDualPaneTarget(
                     val bottomNavigationId = resources.getIdentifier(
                         "bottom_navigation",
                         "id",
-                        ModuleConstants.TARGET_PACKAGE,
+                        ModuleConstants.RESOURCE_PACKAGE,
                     )
                     if (bottomNavigationId == 0) return
                     if (navigation.id != bottomNavigationId) return
                     val tabsHeightId = resources.getIdentifier(
                         "navigation_tabs_height",
                         "dimen",
-                        ModuleConstants.TARGET_PACKAGE,
+                        ModuleConstants.RESOURCE_PACKAGE,
                     )
                     if (tabsHeightId == 0) return
                     val tabsHeight = resources.getDimensionPixelSize(tabsHeightId)
@@ -469,12 +469,12 @@ internal class AppleMusicDualPaneTarget(
                     val stackedRootId = resources.getIdentifier(
                         "bottom_navigation_root_stacked",
                         "id",
-                        ModuleConstants.TARGET_PACKAGE,
+                        ModuleConstants.RESOURCE_PACKAGE,
                     )
                     val flatRootId = resources.getIdentifier(
                         "bottom_navigation_root_flat",
                         "id",
-                        ModuleConstants.TARGET_PACKAGE,
+                        ModuleConstants.RESOURCE_PACKAGE,
                     )
                     val flatRoot = if (flatRootId != 0) {
                         root.findViewById<View>(flatRootId)

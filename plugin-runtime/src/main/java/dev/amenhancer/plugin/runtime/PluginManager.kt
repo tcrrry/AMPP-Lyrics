@@ -25,7 +25,9 @@ data class PluginStatus(val installed: InstalledPlugin, val state: PluginRunStat
     val runningVersion: Long?, val conflicts: List<PluginConflict>, val pendingRestart: Boolean)
 
 /** Per-host-process service. Contains no host-private classes, names or version profiles. */
-class PluginManager(private val application: Application, private val hostLoader: ClassLoader) {
+class PluginManager(private val application: Application, private val hostLoader: ClassLoader,
+    private val prepareBundled: (PluginStore) -> Unit = {},
+    private val assetOverride: (String, String) -> InputStream? = { _, _ -> null }) {
     val store = PluginStore(File(application.filesDir, "ampp-plugins-v1"))
     private val main = Handler(Looper.getMainLooper())
     private val tasks = PluginTasks()
@@ -45,6 +47,7 @@ class PluginManager(private val application: Application, private val hostLoader
         tasks.prepareAndLoad(
             prepare = {
                 store.cleanupAtStartup()
+                prepareBundled(store)
                 store.installed().filter { it.enabled }
             },
             load = { enabled ->
@@ -138,7 +141,8 @@ class PluginManager(private val application: Application, private val hostLoader
             override fun getHostVersionCode() = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
             override fun getDataDirectory() = store.dataDirectory(id)
             override fun getCacheDirectory() = store.cacheDirectory(id)
-            override fun openAsset(path: String): InputStream = PluginStore.child(File(session.installed.directory, "assets"), path).inputStream()
+            override fun openAsset(path: String): InputStream = assetOverride(id, path)
+                ?: PluginStore.child(File(session.installed.directory, "assets"), path).inputStream()
             override fun log(message: String, error: Throwable?) = ModernXposedRuntime.log("[$id] $message", error)
             override fun onClose(cleanup: Runnable) = session.scope.onClose { cleanup.run() }
             override fun claimResource(key: String, exclusive: Boolean): PluginRegistration {

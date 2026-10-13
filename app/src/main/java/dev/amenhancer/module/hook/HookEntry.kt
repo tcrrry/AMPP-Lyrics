@@ -39,6 +39,7 @@ class HookEntry : XposedModule() {
     private var processName: String = ""
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
+        ModuleConstants.TARGET_PACKAGE = dev.amenhancer.module.BuildConfig.HOST_PACKAGE
         ModernXposedRuntime.attach(this)
         val moduleInfo = runCatching { getModuleApplicationInfo() }.getOrNull()
         dev.amenhancer.host.applemusic.AppleMusicHostProfiles.initializeModulePaths(
@@ -119,7 +120,7 @@ class HookEntry : XposedModule() {
                                 resourcePreparationStarted.set(false)
                                 return
                             }
-                            val config = TargetConfigClient(bootstrap.reader) { health ->
+                            val config = TargetConfigClient(dev.amenhancer.module.integration.BundledLyrics.builtinReader(bootstrap.reader)) { health ->
                                 ModernXposedRuntime.log("${health.feature}: ${health.state} - ${health.message} [${health.targetVersion}]")
                             }
                             AppleMusicHostFactory.installDensity(
@@ -180,7 +181,9 @@ class HookEntry : XposedModule() {
                         settingsHost = host
                         AppleMusicHostFactory.installSettingsEntry(application, targetClassLoader, host)
                         runCatching {
-                            val plugins = dev.amenhancer.plugin.runtime.PluginManager(application, targetClassLoader)
+                            val plugins = dev.amenhancer.plugin.runtime.PluginManager(application, targetClassLoader,
+                                prepareBundled = { dev.amenhancer.module.integration.BundledLyrics.install(application, it) },
+                                assetOverride = dev.amenhancer.module.integration.BundledLyrics::updateAsset)
                             host.plugins = plugins
                             plugins.start()
                         }.onFailure { ModernXposedRuntime.log("plugin runtime unavailable", it) }

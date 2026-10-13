@@ -124,7 +124,7 @@ internal object ConstraintLayoutPane {
             BOTTOM_NAVIGATION_ROOT_STACKED,
             BOTTOM_NAVIGATION_ROOT_FLAT,
         ).mapNotNull { name ->
-            resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE)
+            resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE)
                 .takeIf { it != 0 }
         }
         val suppliedRoot = view as? ViewGroup
@@ -262,8 +262,8 @@ internal object ConstraintLayoutPane {
 
     fun install(root: ViewGroup): DualPaneState {
         val resources = root.resources
-        val playerRootId = resources.getIdentifier(PLAYER_ROOT, "id", ModuleConstants.TARGET_PACKAGE)
-        val playerHostId = resources.getIdentifier(PLAYER_FRAGMENTS_HOST, "id", ModuleConstants.TARGET_PACKAGE)
+        val playerRootId = resources.getIdentifier(PLAYER_ROOT, "id", ModuleConstants.RESOURCE_PACKAGE)
+        val playerHostId = resources.getIdentifier(PLAYER_FRAGMENTS_HOST, "id", ModuleConstants.RESOURCE_PACKAGE)
         require(playerRootId != 0 && playerHostId != 0) { "player root/host resource IDs were unavailable" }
 
         val playerRoot = root.findViewById<View>(playerRootId) as? ViewGroup
@@ -345,23 +345,23 @@ internal object ConstraintLayoutPane {
         val artworkId = playerRoot.resources.getIdentifier(
             ARTWORK_CONTAINER,
             "id",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         )
         if (artworkId == 0) return null
         val barrierId = playerRoot.resources.getIdentifier(
             METADATA_BARRIER_TOP,
             "id",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         )
         if (barrierId == 0) return null
         val progressIds = HashMap<String, Int>()
         val findContent: (View, String) -> View? = { parent, name ->
-            progressIds.getOrPut(name) { resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE) }
+            progressIds.getOrPut(name) { resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE) }
                 .takeIf { it != 0 }?.let { parent.findViewById<View>(it) }
         }
         val progressContent = TabletProgressContent(findContent)
-        val videoId = resources.getIdentifier("video_surface", "id", ModuleConstants.TARGET_PACKAGE)
-        val imageId = resources.getIdentifier("artwork_image", "id", ModuleConstants.TARGET_PACKAGE)
+        val videoId = resources.getIdentifier("video_surface", "id", ModuleConstants.RESOURCE_PACKAGE)
+        val imageId = resources.getIdentifier("artwork_image", "id", ModuleConstants.RESOURCE_PACKAGE)
         val layoutLeases = WeakHashMap<View, TabletArtworkLayoutLease>()
         val translations = WeakHashMap<View, OwnedHostProperty<Float>>()
         var artworkLayoutChanged = false
@@ -538,7 +538,7 @@ internal object ConstraintLayoutPane {
         val elevationId = resources.getIdentifier(
             PLAYER_CONTAINER_ELEVATION,
             "dimen",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         )
         if (elevationId != 0) tabsFrame.elevation = resources.getDimension(elevationId)
         tabsFrame.requestLayout()
@@ -701,7 +701,7 @@ internal object ConstraintLayoutPane {
     private fun installTabsDivider(tabsFrame: FrameLayout, resources: android.content.res.Resources) {
         val dividerId = targetId(resources, NAVIGATION_TABS_DIVIDER)
         if (tabsFrame.findViewById<View>(dividerId) != null) return
-        val separatorId = resources.getIdentifier("separator_color", "color", ModuleConstants.TARGET_PACKAGE)
+        val separatorId = resources.getIdentifier("separator_color", "color", ModuleConstants.RESOURCE_PACKAGE)
         val divider = View(tabsFrame.context).apply {
             id = dividerId
             if (separatorId != 0) setBackgroundColor(resources.getColor(separatorId, tabsFrame.context.theme))
@@ -754,7 +754,7 @@ internal object ConstraintLayoutPane {
         resources: android.content.res.Resources,
         name: String,
         type: String = "id",
-    ): Int = resources.getIdentifier(name, type, ModuleConstants.TARGET_PACKAGE)
+    ): Int = resources.getIdentifier(name, type, ModuleConstants.RESOURCE_PACKAGE)
         .takeIf { it != 0 }
         ?: error("$type/$name resource ID was unavailable")
 

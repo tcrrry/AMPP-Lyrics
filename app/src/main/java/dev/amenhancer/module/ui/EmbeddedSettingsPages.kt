@@ -485,6 +485,9 @@ internal fun EmbeddedSettingsHost.renderEmbeddedMainPage(
         ))
         parent.addView(embeddedSpacer(activity, 20))
         parent.addView(embeddedSectionLabel(activity, localizedText(ModuleText.APPLICATION)))
+        parent.addView(embeddedNavigationRow(activity, "Tcrrry 歌词设置", "歌词源、翻译与注音、效果和检查更新", onClick = {
+            openPluginSettings(activity, "com.tcrrry.lyrics")
+        }))
         parent.addView(embeddedNavigationRow(activity, localizedText(ModuleText.PLUGINS), localizedText(ModuleText.PLUGINS_SUMMARY), onClick = { showPluginManagement(activity) }))
         parent.addView(embeddedInfoCard(
             activity,

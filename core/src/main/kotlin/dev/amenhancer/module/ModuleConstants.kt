@@ -2,7 +2,8 @@ package dev.amenhancer.module
 
 object ModuleConstants {
     const val MODULE_PACKAGE = "dev.amenhancer.module"
-    const val TARGET_PACKAGE = "com.apple.android.music"
+    @Volatile var TARGET_PACKAGE = "com.apple.android.music"
+    const val RESOURCE_PACKAGE = "com.apple.android.music"
     const val REMOTE_PREFERENCES_GROUP = "settings"
     const val CONFIG_SCHEMA_VERSION = 15
 

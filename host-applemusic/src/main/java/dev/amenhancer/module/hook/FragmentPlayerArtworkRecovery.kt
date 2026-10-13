@@ -143,7 +143,7 @@ internal class FragmentPlayerArtworkRecovery(
     /** Stable identities belong to this view lifetime; missing children may appear later. */
     private inner class ArtworkViews(val root: View) {
         private fun resource(key: String) = root.resources.getIdentifier(
-            contract.names.getString(key), "id", ModuleConstants.TARGET_PACKAGE,
+            contract.names.getString(key), "id", ModuleConstants.RESOURCE_PACKAGE,
         )
         private val cardId = resource("cardId")
         private val containerId = resource("containerId")

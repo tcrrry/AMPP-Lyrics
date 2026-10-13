@@ -45,7 +45,7 @@ class HookEntryStructuralRegressionTest {
             .substringBefore("override fun afterHookedMethod")
         val afterHook = source.substringAfter("override fun afterHookedMethod")
 
-        assertTrue(beforeHook.contains("val config = TargetConfigClient(bootstrap.reader)"))
+        assertTrue(beforeHook.contains("val config = TargetConfigClient(dev.amenhancer.module.integration.BundledLyrics.builtinReader(bootstrap.reader))"))
         assertTrue(beforeHook.contains("FeatureInstallation.registerResources(config)"))
         assertTrue(beforeHook.contains("migrateRemoteConfiguration(storage)"))
         assertTrue(beforeHook.contains("val migrationDeferred"))

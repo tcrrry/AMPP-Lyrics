@@ -26,6 +26,7 @@ val releaseSigningAvailable = listOf(
     releaseKeyAlias,
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
+val coexistenceBuild = providers.gradleProperty("amppCoexistence").orNull == "true"
 
 android {
     buildFeatures { compose = true; buildConfig = true }
@@ -35,10 +36,11 @@ android {
 
     defaultConfig {
         applicationId = "dev.amenhancer.module"
-        minSdk = 26
+        minSdk = 31
         targetSdk = 37
-        versionCode = 115
-        versionName = "1.6.5"
+        versionCode = 151
+        versionName = "1.7"
+        buildConfigField("String", "HOST_PACKAGE", if (coexistenceBuild) "\"com.tcrrry.ampplyrics.coexist\"" else "\"com.apple.android.music\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -56,8 +58,8 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
+            applicationIdSuffix = if (coexistenceBuild) ".coexist" else ".debug"
+            versionNameSuffix = if (coexistenceBuild) "-coexist" else ""
         }
         release {
             isMinifyEnabled = false
@@ -73,11 +75,14 @@ android {
     packaging {
         resources {
             merges += "META-INF/xposed/*"
+            merges += listOf("META-INF/LICENSE.md", "META-INF/NOTICE.md", "META-INF/CONTRIBUTORS.md")
         }
     }
 }
 
 dependencies {
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation(project(":plugin-api"))
     implementation(project(":plugin-runtime"))
     implementation(project(":core"))

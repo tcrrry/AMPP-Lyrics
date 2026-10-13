@@ -28,7 +28,7 @@ object TabletModeQualifier {
         val tabletId = context.resources.getIdentifier(
             "is_tablet",
             "bool",
-            ModuleConstants.TARGET_PACKAGE,
+            ModuleConstants.RESOURCE_PACKAGE,
         )
         if (tabletId == 0) return false
         return runCatching { context.resources.getBoolean(tabletId) }.getOrDefault(false)

@@ -39,7 +39,7 @@ internal class FragmentPlayerBackgroundRecovery(
         }
         layoutRetries[view]?.close()
         val image = root?.findViewById<ImageView>(root.resources.getIdentifier(
-            contract.names.getString("imageId"), "id", ModuleConstants.TARGET_PACKAGE,
+            contract.names.getString("imageId"), "id", ModuleConstants.RESOURCE_PACKAGE,
         ))
         fun usable(bitmap: Bitmap?): Bitmap? = bitmap?.takeUnless { it.isRecycled }
         fun picture(bitmap: Bitmap?): Bitmap? = usable(bitmap)?.takeIf { it.width > 1 && it.height > 1 }
@@ -130,7 +130,7 @@ internal class FragmentPlayerBackgroundRecovery(
         observe(contract.resume) { param ->
             val root = contract.getView.invoke(param.thisObject) as? View ?: return@observe
             val view = root.findViewById<View>(root.resources.getIdentifier(
-                contract.names.getString("backgroundId"), "id", ModuleConstants.TARGET_PACKAGE,
+                contract.names.getString("backgroundId"), "id", ModuleConstants.RESOURCE_PACKAGE,
             )) ?: return@observe
             if (contract.backgroundDetach.declaringClass.isInstance(view)) {
                 root.post { safely { restore(view, root) } }
@@ -138,10 +138,10 @@ internal class FragmentPlayerBackgroundRecovery(
         }
         observe(ImageView::class.java.getDeclaredMethod("setImageDrawable", android.graphics.drawable.Drawable::class.java)) { param ->
             val image = param.thisObject as? ImageView ?: return@observe
-            if (image.id != image.resources.getIdentifier(contract.names.getString("imageId"), "id", ModuleConstants.TARGET_PACKAGE)) return@observe
+            if (image.id != image.resources.getIdentifier(contract.names.getString("imageId"), "id", ModuleConstants.RESOURCE_PACKAGE)) return@observe
             val root = image.rootView
             val view = root.findViewById<View>(root.resources.getIdentifier(
-                contract.names.getString("backgroundId"), "id", ModuleConstants.TARGET_PACKAGE,
+                contract.names.getString("backgroundId"), "id", ModuleConstants.RESOURCE_PACKAGE,
             )) ?: return@observe
             if (contract.backgroundDetach.declaringClass.isInstance(view)) {
                 image.post { safely { restore(view, root) } }
