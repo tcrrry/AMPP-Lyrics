@@ -60,6 +60,7 @@ class HookEntry : XposedModule() {
         }
         if (!bootstrap.prepare(param.packageName, processName, param.isFirstPackage)) return
         ModernXposedRuntime.attach(this)
+        CoexistenceRoutingRuntime.install()
         val targetClassLoader = param.classLoader
         installApplicationBootstrap(param.applicationInfo.className, targetClassLoader)
     }
@@ -176,7 +177,7 @@ class HookEntry : XposedModule() {
                                 currentSong = { currentSong.current()?.details },
                             ),
                             activityMatcher = AppleMusicHostFactory.settingsActivityMatcher(application, playerActivityClass),
-                            nativeBridgeFactory = { onOpen -> AppleMusicHostFactory.settingsViewBridge(application, onOpen) },
+                            nativeBridgeFactory = { onOpen, onLyrics -> AppleMusicHostFactory.settingsViewBridge(application, onOpen, onLyrics) },
                         )
                         settingsHost = host
                         AppleMusicHostFactory.installSettingsEntry(application, targetClassLoader, host)

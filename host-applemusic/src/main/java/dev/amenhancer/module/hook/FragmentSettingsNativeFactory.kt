@@ -32,10 +32,11 @@ internal object FragmentSettingsNativeFactory {
 
     fun activityMatcher(context: Context): SettingsActivityMatcher = FragmentSettingsActivityMatcher(names(context).mainActivity)
 
-    fun viewBridge(context: Context, onOpen: (Activity) -> Unit): SettingsViewBridge {
+    fun viewBridge(context: Context, onOpen: (Activity) -> Unit, onLyrics: (Activity) -> Unit = onOpen): SettingsViewBridge {
         val names = names(context)
         val loader = context.classLoader
         runtime(loader, names).onOpen = onOpen
+        runtime(loader, names).onLyrics = onLyrics
         return object : SettingsViewBridge {
             override val supportsViewFallback = false
             override fun fragmentView(fragment: Any): ViewGroup? = runCatching {
@@ -46,6 +47,7 @@ internal object FragmentSettingsNativeFactory {
                 if (activity.packageName != ModuleConstants.TARGET_PACKAGE) return false
                 val current = runtime(fragment.javaClass.classLoader ?: loader, names)
                 current.onOpen = onOpen
+                current.onLyrics = onLyrics
                 return current.bind(fragment)
             }
 
@@ -111,6 +113,7 @@ internal class FragmentSettingsRuntime(
     private val hooks: FragmentSettingsHookInstaller = ModernFragmentSettingsHookInstaller,
 ) {
     @Volatile var onOpen: ((Activity) -> Unit)? = null
+    @Volatile var onLyrics: ((Activity) -> Unit)? = null
     private val scope = HookRegistrationScope()
     private var sessions: FragmentSettingsSessions? = null
     private var fragmentClass: Class<*>? = null
@@ -155,7 +158,9 @@ internal class FragmentSettingsRuntime(
             getViewModel = viewModel
             getActivity = activity
             getView = view
-            sessions = FragmentSettingsSessions(models, ::open)
+            sessions = FragmentSettingsSessions(models, { open(it) }).apply {
+                onLyrics = { open(it, lyrics = true) }
+            }
             scope.onClose { sessions?.clear() }
 
             hooks.install(preferenceItems, scope, after = { receiver, _, original ->
@@ -218,13 +223,13 @@ internal class FragmentSettingsRuntime(
         runCatching { notify(receiver, activity) }
     }
 
-    private fun open(fragment: Any) {
+    private fun open(fragment: Any, lyrics: Boolean = false) {
         if (!scope.isActive || getView?.invoke(fragment) == null) return
         val activity = getActivity?.invoke(fragment) as? Activity ?: return
         if (mainClass?.isInstance(activity) != true || activity.packageName != ModuleConstants.TARGET_PACKAGE ||
             activity.isFinishing || activity.isDestroyed) return
         // EmbeddedSettingsHost supplies its existing complete controller, dialog and SAF router here.
-        onOpen?.invoke(activity)
+        (if (lyrics) onLyrics else onOpen)?.invoke(activity)
     }
 
     companion object {

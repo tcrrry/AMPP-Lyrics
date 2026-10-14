@@ -1,0 +1,187 @@
+"""Produce v1.8 ordinary APK/APKS/module and coexist APK from the verified 1609 inputs."""
+import argparse
+import importlib.util
+import json
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+import sys
+import zipfile
+
+spec = importlib.util.spec_from_file_location('beta', Path(__file__).with_name('package-1609-single-apk.py'))
+beta = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(beta)
+single = beta.single
+
+
+def run(*args):
+    return subprocess.check_output([str(x) for x in args], text=True)
+
+
+def check_apk(args, path, identity, expected_cert=beta.CERTIFICATE_SHA256, min_sdk=30):
+    cert = single.certificate(args.apksigner, path, min_sdk=min_sdk)
+    if cert != expected_cert:
+        raise RuntimeError(f'Unexpected signer: {path.name}')
+    if identity and identity not in run(args.aapt2, 'dump', 'badging', path):
+        raise RuntimeError(f'Unexpected identity: {path.name}')
+
+
+def checksum(path):
+    value = single.digest(path)
+    Path(str(path)+'.sha256').write_text(f'{value}  {path.name}\n')
+    return value
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    for name in ('input','module','coexist-module','output','editor','npatch','aapt2','apksigner','javac'):
+        p.add_argument('--'+name, type=Path, required=True)
+    args = p.parse_args()
+    if args.output.exists() and any(args.output.iterdir()):
+        p.error('Refusing to overwrite release artifacts')
+    if single.digest(args.input) != beta.INPUT_SHA256:
+        p.error('Wrong 1012 input archive')
+    for name, expected in single.TOOLS.items():
+        if single.digest(getattr(args,name)) != expected:
+            p.error('Unexpected '+name+' tool')
+    args.output.mkdir(parents=True, exist_ok=True)
+    module = args.output/'AMPP-Lyrics-module.apk'
+    shutil.copyfile(args.module, module)
+    module_identity = "name='dev.amenhancer.module.debug' versionCode='152' versionName='1.8'"
+    if module_identity not in run(args.aapt2,'dump','badging',module):
+        p.error('Wrong ordinary v1.8 module')
+    if "name='dev.amenhancer.module.coexist' versionCode='152' versionName='1.8-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
+        p.error('Wrong coexist v1.8 module')
+    checksum(module)
+    apk = args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk'
+    subprocess.run([sys.executable, str(Path(__file__).with_name('package-1609-single-apk.py')),
+                    str(args.input), str(module), str(apk),
+                    *[item for name in ('editor','npatch','aapt2','apksigner','javac') for item in ('--'+name,str(getattr(args,name)))]],check=True)
+    with tempfile.TemporaryDirectory(prefix='ampp-v18-') as folder:
+        work = Path(folder)
+        security = work/'bc.security'
+        security.write_text('security.provider.13=org.bouncycastle.jce.provider.BouncyCastleProvider\n')
+        def patch(host, embedded, output):
+            subprocess.run(['java',f'-Djava.security.properties={security}','-jar',str(args.npatch),
+                            str(host),'-m',str(embedded),'-l','2','-o',str(output)],check=True)
+            matches=list(output.glob('*-741-npatched.apk'))
+            if len(matches)!=1: raise RuntimeError('Expected one NPatch output')
+            return matches[0]
+        # The 1012 ABI/density splits are already signed with the project's NPatch certificate.
+        # They contain no embedded origin and no module. Keep them byte-identical.
+        with zipfile.ZipFile(args.input) as archive:
+            splits=[]
+            for name in beta.SPLITS:
+                path=work/name;path.write_bytes(archive.read(name));splits.append(path)
+        original=work/'base-original.apk'
+        single.extract_nested(splits[0],'assets/npatch/origin.apk',original)
+        if single.digest(original)!=beta.BASE_SHA256:raise RuntimeError('Wrong original base')
+        classes=work/'sdk-classes';classes.mkdir()
+        subprocess.run([str(args.javac),'-cp',str(args.editor),'-d',str(classes),
+                        str(Path(__file__).with_name('RequireAndroid12.java'))],check=True)
+        raised=work/'base-android12.apk'
+        subprocess.run(['java','-cp',str(classes)+__import__('os').pathsep+str(args.editor),
+                        'RequireAndroid12',str(original),str(raised)],check=True)
+        with zipfile.ZipFile(original) as before,zipfile.ZipFile(raised) as after:
+            for name in before.namelist():
+                if re.fullmatch(r'classes\d*\.dex',name) and before.read(name)!=after.read(name):
+                    raise RuntimeError('Raising minimum SDK changed host DEX')
+        patched_base=patch(raised,module,work/'apks-base')
+        check_apk(args,patched_base,beta.IDENTITY)
+        original_check=work/'apks-origin.apk'
+        single.extract_nested(patched_base,'assets/npatch/origin.apk',original_check)
+        if single.digest(original_check)!=single.digest(raised):raise RuntimeError('Split base DEX/origin changed')
+        embedded=work/'apks-module.apk'
+        single.extract_nested(patched_base,single.MODULE,embedded)
+        if single.digest(embedded)!=single.digest(module):raise RuntimeError('Split module changed')
+        for split in splits[1:]:check_apk(args,split,None)
+        apks=args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks'
+        with zipfile.ZipFile(apks,'x',compression=zipfile.ZIP_STORED) as archive:
+            archive.write(patched_base,'base.apk')
+            for split in splits[1:]:archive.write(split,split.name)
+        with zipfile.ZipFile(apks) as archive:
+            if archive.testzip() is not None or set(archive.namelist())!=set(beta.SPLITS):
+                raise RuntimeError('Incomplete or invalid APKS')
+            for split in splits[1:]:
+                if archive.read(split.name)!=split.read_bytes():raise RuntimeError('ABI/density split changed')
+        checksum(apks)
+        # Isolate the freshly validated merged origin, retaining its code/resource namespace.
+        merged=work/'merged.apk';single.extract_nested(apk,'assets/npatch/origin.apk',merged)
+        isolated=work/'isolated.apk'
+        java_sources=[Path(__file__).with_name(name) for name in ('CoexistenceManifest.java','VerifyCoexistenceLayouts.java','VivoAtomicManifest.java')]
+        classes=work/'classes';classes.mkdir()
+        subprocess.run([str(args.javac),'-encoding','UTF-8','-cp',str(args.editor),'-d',str(classes),*map(str,java_sources)],check=True)
+        classpath=str(classes)+__import__('os').pathsep+str(args.editor)
+        subprocess.run(['java','-cp',classpath,'CoexistenceManifest',str(merged),str(isolated),'AM++ Lyrics 共存版'],check=True)
+        # Preserve vivo discovery in the host manifest, not just in a private preview.
+        vivo_origin=work/'isolated-vivo.apk'
+        subprocess.run(['java','-cp',classpath,'VivoAtomicManifest',str(isolated),str(vivo_origin)],check=True)
+        with zipfile.ZipFile(isolated) as before,zipfile.ZipFile(vivo_origin) as after:
+            entries=lambda archive:{name for name in archive.namelist() if not name.startswith('META-INF/') and not name.endswith('/')}
+            if entries(before)!=entries(after):raise RuntimeError('vivo preparation changed host entries')
+            changed=[name for name in entries(before) if before.read(name)!=after.read(name)]
+            if changed!=['AndroidManifest.xml']:raise RuntimeError('vivo preparation changed more than the manifest')
+        isolated=vivo_origin
+        coex=patch(isolated,args.coexist_module,work/'coexist')
+        target='com.tcrrry.ampplyrics.coexist'
+        check_apk(args,coex,f"name='{target}' versionCode='1609' versionName='7.0.0-beta'")
+        manifest=run(args.aapt2,'dump','xmltree',coex,'--file','AndroidManifest.xml')
+        if any(x in manifest for x in ('sharedUserId','BROWSABLE','isSplitRequired=true')):
+            raise RuntimeError('Coexist shared UID, external links or split dependency remain')
+        if re.search(r'authorities[^\n]*="com\.apple\.android\.music',manifest):
+            raise RuntimeError('Original provider authority remains')
+        if "application-label:'AM++ Lyrics 共存版'" not in run(args.aapt2,'dump','badging',coex):
+            raise RuntimeError('Missing distinct coexist label')
+        config=json.loads(run('unzip','-p',coex,'assets/npatch/config.json'))
+        normal_config=json.loads(run('unzip','-p',apk,'assets/npatch/config.json'))
+        if config.get('newPackage')!=target or config.get('originalSignature')!=normal_config.get('originalSignature') or config.get('useManager'):
+            raise RuntimeError('Unexpected coexist embedding configuration')
+        origin=work/'coex-origin.apk';single.extract_nested(coex,'assets/npatch/origin.apk',origin)
+        if single.digest(origin)!=single.digest(isolated):raise RuntimeError('Isolated original changed')
+        for path in (coex,origin):
+            subprocess.run(['java','-cp',classpath,'VivoAtomicManifest','--verify',str(path)],check=True)
+        subprocess.run(['java','-cp',classpath,'VerifyCoexistenceLayouts',str(coex),str(origin)],check=True)
+        if not single.resources(args.aapt2,merged)<=single.resources(args.aapt2,origin):
+            raise RuntimeError('Coexist lost original resource IDs/names')
+        with zipfile.ZipFile(merged) as before,zipfile.ZipFile(origin) as after,zipfile.ZipFile(coex) as final:
+            for name in before.namelist():
+                if re.fullmatch(r'classes\d*\.dex',name) and before.read(name)!=after.read(name):
+                    raise RuntimeError('Coexist original DEX changed: '+name)
+                if name.startswith('lib/') and not name.endswith('/') and before.read(name)!=final.read(name):
+                    raise RuntimeError('Coexist native library changed: '+name)
+        single.extract_nested(coex,'assets/npatch/modules/dev.amenhancer.module.coexist.apk',embedded)
+        if single.digest(embedded)!=single.digest(args.coexist_module):raise RuntimeError('Coexist module changed')
+        coexist=args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk'
+        shutil.copyfile(coex,coexist);checksum(coexist)
+    report={'release':'v1.8','host':'7.0.0-beta/1609','staticVerified':True,
+            'deviceVerified':False,
+            'previousUserFeedback':'Settings previews accepted; coexist routing background restored by user; vivo preview native player display and service binding verified. Final v1.8 binaries are not newly phone-tested; controls and Atomic Island are not accepted',
+            'upstreamCommit':'3547a833dac819a23b8515784601873d1d27ed47',
+            'portedPlugin':'1.0.7', 'pluginSourceBaseline':'lyrics-cache-preview-4 (automated checks; not a new comprehensive device acceptance)',
+            'minAndroidApi':31,
+            'vivoCoexist':{'discoveryActionVerifiedInFinalAndOrigin':True,
+                           'nativePlayerDeviceAcceptanceRequired':True,
+                           'atomicIslandSupported':False},
+            'updateChannel':'tcrrry/AMPP-Lyrics',
+            'offlineTranslation':'embedded ML Kit; companion APK not required',
+            'matchingUpdate':{'noWordFallback':['Apple Music native','AM++ author','third party'],
+                              'translationPriority':['existing native or AM++','QQ or NetEase','machine'],
+                              'sourceGesture':{'single':'next available source','double':'other match in current source','long':'settings'}},
+            'glow':{'settingsPage':'Tcrrry', 'sensitivityRange':[50,500],
+                    'positions':['all','tail','tail-preferred'], 'diagnosticsEnabled':False},
+            'settings':{'offsetSavedDuringInput':True,'offsetReloadDebounceMs':250,
+                        'offsetReloadWithoutSearchInvalidation':True,'scrollRestoredAfterLayout':True},
+            'presentation':{'order':['pronunciation','original','translation'],
+                            'auxiliaryColor':'white_alpha_35','auxiliaryViewAlpha':1.0,
+                            'pronunciationOutsideWordGradient':True, 'translationInsideNativeContainer':True,
+                            'timingModes':['Word','Line'], 'wordTranslationWithoutPronunciation':True,
+                            'lineAuxiliaryNativeAlphaGuard':True},
+            'files':{path.name:{'sha256':single.digest(path),'bytes':path.stat().st_size}
+                     for path in args.output.iterdir() if path.suffix in ('.apk','.apks')}}
+    (args.output/'v1.8-validation.json').write_text(json.dumps(report,indent=2)+'\n')
+    print('PASS: four v1.8 installation artifacts, signatures, identities and original host contents verified')
+
+
+if __name__=='__main__':main()

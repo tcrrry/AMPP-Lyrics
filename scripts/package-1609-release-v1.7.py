@@ -110,11 +110,20 @@ def main():
         # Isolate the freshly validated merged origin, retaining its code/resource namespace.
         merged=work/'merged.apk';single.extract_nested(apk,'assets/npatch/origin.apk',merged)
         isolated=work/'isolated.apk'
-        java_sources=[Path(__file__).with_name(name) for name in ('CoexistenceManifest.java','VerifyCoexistenceLayouts.java')]
+        java_sources=[Path(__file__).with_name(name) for name in ('CoexistenceManifest.java','VerifyCoexistenceLayouts.java','VivoAtomicManifest.java')]
         classes=work/'classes';classes.mkdir()
         subprocess.run([str(args.javac),'-encoding','UTF-8','-cp',str(args.editor),'-d',str(classes),*map(str,java_sources)],check=True)
         classpath=str(classes)+__import__('os').pathsep+str(args.editor)
         subprocess.run(['java','-cp',classpath,'CoexistenceManifest',str(merged),str(isolated),'AM++ Lyrics 共存版'],check=True)
+        # Preserve vivo discovery in the host manifest, not just in a private preview.
+        vivo_origin=work/'isolated-vivo.apk'
+        subprocess.run(['java','-cp',classpath,'VivoAtomicManifest',str(isolated),str(vivo_origin)],check=True)
+        with zipfile.ZipFile(isolated) as before,zipfile.ZipFile(vivo_origin) as after:
+            entries=lambda archive:{name for name in archive.namelist() if not name.startswith('META-INF/') and not name.endswith('/')}
+            if entries(before)!=entries(after):raise RuntimeError('vivo preparation changed host entries')
+            changed=[name for name in entries(before) if before.read(name)!=after.read(name)]
+            if changed!=['AndroidManifest.xml']:raise RuntimeError('vivo preparation changed more than the manifest')
+        isolated=vivo_origin
         coex=patch(isolated,args.coexist_module,work/'coexist')
         target='com.tcrrry.ampplyrics.coexist'
         check_apk(args,coex,f"name='{target}' versionCode='1609' versionName='7.0.0-beta'")
@@ -131,6 +140,8 @@ def main():
             raise RuntimeError('Unexpected coexist embedding configuration')
         origin=work/'coex-origin.apk';single.extract_nested(coex,'assets/npatch/origin.apk',origin)
         if single.digest(origin)!=single.digest(isolated):raise RuntimeError('Isolated original changed')
+        for path in (coex,origin):
+            subprocess.run(['java','-cp',classpath,'VivoAtomicManifest','--verify',str(path)],check=True)
         subprocess.run(['java','-cp',classpath,'VerifyCoexistenceLayouts',str(coex),str(origin)],check=True)
         if not single.resources(args.aapt2,merged)<=single.resources(args.aapt2,origin):
             raise RuntimeError('Coexist lost original resource IDs/names')
@@ -150,6 +161,9 @@ def main():
             'upstreamCommit':'3547a833dac819a23b8515784601873d1d27ed47',
             'portedPlugin':'1.0.6', 'acceptedPluginBaseline':'settings-preview-v14',
             'minAndroidApi':31,
+            'vivoCoexist':{'discoveryActionVerifiedInFinalAndOrigin':True,
+                           'nativePlayerDeviceAcceptanceRequired':True,
+                           'atomicIslandSupported':False},
             'updateChannel':'tcrrry/AMPP-Lyrics',
             'offlineTranslation':'embedded ML Kit; companion APK not required',
             'matchingUpdate':{'noWordFallback':['Apple Music native','AM++ author','third party'],

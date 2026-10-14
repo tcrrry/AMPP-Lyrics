@@ -11,7 +11,7 @@ class BundledLyricsTest {
         assertNull(BundledLyrics.updateAsset(BundledLyrics.ID, "host-profiles/index.json"))
         val json = BundledLyrics.updateAsset(BundledLyrics.ID, "update-channel.json")!!.bufferedReader().use { JSONObject(it.readText()) }
         assertEquals("tcrrry/AMPP-Lyrics", json.getString("repository"))
-        assertEquals("1.7", json.getString("version"))
+        assertEquals(dev.amenhancer.module.BuildConfig.VERSION_NAME.substringBefore('-'), json.getString("version"))
     }
     @Test fun builtinMaskDoesNotResetTheSavedPluginSettings() {
         val saved = mapOf("custom_lyrics_enabled" to true, "automatic_lyrics_enabled" to true, "other" to 123)

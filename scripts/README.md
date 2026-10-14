@@ -4,6 +4,16 @@ This directory contains host profile checks, build helpers and optional device r
 Use the [host adaptation guide](../docs/host-adaptation-guide.md) for the per-build workflow.
 Functional acceptance is manual by default; run device scripts only when explicitly requested.
 
+## Coexist vivo player release gate
+
+See [the regression record](../docs/COEXIST-PLAYER-REGRESSION-PREVENTION.md) before changing host inputs or coexist packaging.
+`package-1609-release-v1.7.py` now adds vivo discovery after package isolation and verifies
+both the final coexist APK and its embedded origin using `VivoAtomicManifest --verify`.
+The existing exported Apple MediaPlaybackService must retain its browser action and exactly
+one `com.vivo.musicwidgetmix.support.service` action. A missing declaration fails packaging.
+Keep coexist routing startup registration and its tests; preserve accepted plugin bytes.
+Static success does not prove device player controls or Atomic Island support.
+
 ## Device script requirements
 
 - PowerShell 7 and ADB
@@ -70,6 +80,14 @@ Related changes invalidate the cache; unrelated application source changes can r
 it. There is no partial-key restore, and either missing output causes a rebuild.
 
 Full tests, Lint, release assembly and signature verification remain in the workflow.
+
+## v1.8 release
+
+Use `bundle-released-lyrics.py PLUGIN.zip --main-version 1.8` before building both modules.
+`verify-integrated-lyrics.py` pins the final 1.0.7 manifest and code.jar; only the update
+channel differs. `package-1609-release-v1.8.py --help` produces all four installation
+forms from pinned 1012 inputs. It verifies vivo discovery in both final coexist APK
+and origin. See `docs/COEXIST-PLAYER-REGRESSION-PREVENTION.md` for acceptance limits.
 Source-contract tests declare repository sources/build configuration as inputs, and
 plugin import tests declare the fixture ZIP contents, so changes invalidate their
 test results even when compiled class files or fixture paths stay unchanged.

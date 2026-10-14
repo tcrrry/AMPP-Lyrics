@@ -16,7 +16,7 @@ import java.util.zip.ZipFile
 /** Install the owned plugin before the SDK loads it; preserve newer/disabled/deleted installations. */
 internal object BundledLyrics {
     const val ID = "com.tcrrry.lyrics"
-    const val VERSION = 22L
+    const val VERSION = 27L
     fun updateAsset(id: String, path: String): java.io.InputStream? {
         if (id != ID || path != "update-channel.json") return null
         return JSONObject().put("repository", "tcrrry/AMPP-Lyrics").put("tagPrefix", "v")

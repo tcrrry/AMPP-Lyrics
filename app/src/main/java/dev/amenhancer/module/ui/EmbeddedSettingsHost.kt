@@ -33,9 +33,11 @@ internal class EmbeddedSettingsHost private constructor(
     internal val safRouter: EmbeddedSafResultRouter,
     internal val selectionHandler: EmbeddedSafSelectionHandler,
     internal val activityMatcher: dev.amenhancer.module.hook.SettingsActivityMatcher,
-    nativeBridgeFactory: ((Activity)->Unit)->dev.amenhancer.module.hook.SettingsViewBridge,
+    nativeBridgeFactory: ((Activity)->Unit, (Activity)->Unit)->dev.amenhancer.module.hook.SettingsViewBridge,
 ) : Application.ActivityLifecycleCallbacks, dev.amenhancer.module.hook.SettingsEntryObserver {
-    internal val nativeBridge = nativeBridgeFactory(::showSettingsDialog)
+    internal val nativeBridge = nativeBridgeFactory(::showSettingsDialog) { activity ->
+        openPluginSettings(activity, "com.tcrrry.lyrics")
+    }
     internal val lifecycleState = EmbeddedSettingsLifecycleState()
     internal var activityReference: WeakReference<Activity>? = null
     internal var dialogReference: WeakReference<Dialog>? = null
@@ -625,7 +627,7 @@ internal class EmbeddedSettingsHost private constructor(
             safRouter: EmbeddedSafResultRouter = EmbeddedSafResultRouter(),
             selectionHandler: EmbeddedSafSelectionHandler = EmbeddedSafSelectionHandler { _, _ -> },
             activityMatcher: dev.amenhancer.module.hook.SettingsActivityMatcher,
-            nativeBridgeFactory: ((Activity)->Unit)->dev.amenhancer.module.hook.SettingsViewBridge,
+            nativeBridgeFactory: ((Activity)->Unit, (Activity)->Unit)->dev.amenhancer.module.hook.SettingsViewBridge,
         ): EmbeddedSettingsHost = EmbeddedSettingsHost(
             application = application,
             controller = controller,

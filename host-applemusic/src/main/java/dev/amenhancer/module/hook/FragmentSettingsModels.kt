@@ -104,11 +104,15 @@ internal class FragmentSettingsModels private constructor(
     private val categoryItems: Field,
     private val actionCallback: Field,
 ) {
-    fun createCategory(onOpen: () -> Unit): Any {
-        val callback = Proxy.newProxyInstance(loader, arrayOf(callbackClass), EntryCallback(unit, onOpen))
+    fun createCategory(onLyrics: (() -> Unit)? = null, onOpen: () -> Unit): Any {
         // This is the same optimized constructor and default mask as native navigation rows.
-        val action = actionConstructor.newInstance("AM++", null, false, null, null, callback, 0x17a)
-        return categoryConstructor.newInstance(null, listOf(action), null, 0x3b)
+        fun row(title: String, click: () -> Unit): Any {
+            val callback = Proxy.newProxyInstance(loader, arrayOf(callbackClass), EntryCallback(unit, click))
+            return actionConstructor.newInstance(title, null, false, null, null, callback, 0x17a)
+        }
+        val rows = mutableListOf(row("AM++", onOpen))
+        if (onLyrics != null) rows.add(row("Tcrrry 歌词设置", onLyrics))
+        return categoryConstructor.newInstance(null, rows, null, 0x3b)
     }
 
     fun prependUnique(original: Any?, category: Any): Any? {
@@ -126,11 +130,11 @@ internal class FragmentSettingsModels private constructor(
     internal fun isModuleCategory(value: Any?): Boolean {
         if (!categoryItems.declaringClass.isInstance(value)) return false
         val rows = categoryItems.get(value) as? List<*> ?: return false
-        return rows.size == 1 && rows.single()?.let { row ->
-            if (!actionCallback.declaringClass.isInstance(row)) return@let false
-            val callback = actionCallback.get(row) ?: return@let false
+        return rows.isNotEmpty() && rows.all { row ->
+            if (!actionCallback.declaringClass.isInstance(row)) return@all false
+            val callback = actionCallback.get(row) ?: return@all false
             Proxy.isProxyClass(callback.javaClass) && Proxy.getInvocationHandler(callback) is EntryCallback
-        } == true
+        }
     }
 
     private class EntryCallback(private val unit: Any, private val onOpen: () -> Unit) : InvocationHandler {
@@ -178,6 +182,7 @@ internal class FragmentSettingsSessions(
     private val models: FragmentSettingsModels,
     private val onOpen: (Any) -> Unit,
 ) {
+    var onLyrics: ((Any) -> Unit)? = null
     private class Session(fragment: Any, viewModel: Any) {
         val fragment = WeakReference(fragment)
         val viewModel = WeakReference(viewModel)
@@ -197,11 +202,14 @@ internal class FragmentSettingsSessions(
             previous.fragment.get()?.let { if (fragments[it] === previous) fragments.remove(it) }
         }
         val session = Session(fragment, viewModel)
-        session.category = models.createCategory {
+        fun click(open: (Any) -> Unit) {
             val current = synchronized(this) {
                 session.fragment.get()?.takeIf { session.active && fragments[it] === session }
             }
-            if (current != null) onOpen(current)
+            if (current != null) open(current)
+        }
+        session.category = models.createCategory(onLyrics = onLyrics?.let { open -> { click(open) } }) {
+            click(onOpen)
         }
         fragments[fragment] = session
         viewModels[viewModel] = session

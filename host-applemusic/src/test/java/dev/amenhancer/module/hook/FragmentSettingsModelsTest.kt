@@ -9,6 +9,44 @@ class FragmentSettingsModelsTest {
     private val models = FragmentSettingsModels.resolve(SettingsContractLoader(), FragmentSettingsContract())
 
     @Test
+    fun `lyrics is a native sibling with independent callback and no duplicate group`() {
+        val opened = mutableListOf<String>()
+        val category = models.createCategory(onLyrics = { opened.add("lyrics") }) { opened.add("ampp") } as SettingsHostCategory
+        val rows = category.c.map { it as SettingsHostAction }
+        assertEquals(listOf("AM++", "Tcrrry 歌词设置"), rows.map { it.b })
+        rows[1].j!!.invoke()
+        rows[0].j!!.invoke()
+        assertEquals(listOf("lyrics", "ampp"), opened)
+        val original = listOf(category, Any(), models.createCategory {})
+        val result = models.prependUnique(original, category) as List<*>
+        assertEquals(2, result.size)
+        assertSame(category, result.first())
+        assertEquals(3, original.size)
+    }
+
+    @Test
+    fun `destroying the settings view revokes both sibling callbacks`() {
+        val opened = mutableListOf<String>()
+        val sessions = FragmentSettingsSessions(models) { opened.add("ampp") }.apply {
+            onLyrics = { opened.add("lyrics") }
+        }
+        val fragment = Any()
+        val vm = Any()
+        sessions.bind(fragment, vm)
+        val category = (sessions.transform(vm, listOf(Any())) as List<*>).first() as SettingsHostCategory
+        val rows = category.c.map { it as SettingsHostAction }
+        rows.forEach { it.j!!.invoke() }
+        assertEquals(listOf("ampp", "lyrics"), opened)
+        sessions.unbind(fragment)
+        rows.forEach { it.j!!.invoke() }
+        assertEquals(listOf("ampp", "lyrics"), opened)
+        sessions.bind(fragment, vm)
+        val fresh = (sessions.transform(vm, listOf(Any())) as List<*>).first() as SettingsHostCategory
+        assertEquals(2, fresh.c.size)
+        assertNotSame(category, fresh)
+    }
+
+    @Test
     fun `native constructors retain enabled navigation style and host Unit`() {
         var opened = 0
         val category = models.createCategory { opened++ } as SettingsHostCategory
