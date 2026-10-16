@@ -38,8 +38,8 @@ android {
         applicationId = "dev.amenhancer.module"
         minSdk = 31
         targetSdk = 37
-        versionCode = 152
-        versionName = "1.8"
+        versionCode = 153
+        versionName = "1.9"
         buildConfigField("String", "HOST_PACKAGE", if (coexistenceBuild) "\"com.tcrrry.ampplyrics.coexist\"" else "\"com.apple.android.music\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

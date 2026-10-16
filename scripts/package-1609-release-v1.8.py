@@ -34,7 +34,7 @@ def checksum(path):
     return value
 
 
-def main():
+def main(release_version='1.8', module_code=152, plugin_version='1.0.7'):
     p = argparse.ArgumentParser(description=__doc__)
     for name in ('input','module','coexist-module','output','editor','npatch','aapt2','apksigner','javac'):
         p.add_argument('--'+name, type=Path, required=True)
@@ -49,11 +49,11 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     module = args.output/'AMPP-Lyrics-module.apk'
     shutil.copyfile(args.module, module)
-    module_identity = "name='dev.amenhancer.module.debug' versionCode='152' versionName='1.8'"
+    module_identity = f"name='dev.amenhancer.module.debug' versionCode='{module_code}' versionName='{release_version}'"
     if module_identity not in run(args.aapt2,'dump','badging',module):
-        p.error('Wrong ordinary v1.8 module')
-    if "name='dev.amenhancer.module.coexist' versionCode='152' versionName='1.8-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
-        p.error('Wrong coexist v1.8 module')
+        p.error('Wrong ordinary module release identity')
+    if f"name='dev.amenhancer.module.coexist' versionCode='{module_code}' versionName='{release_version}-coexist'" not in run(args.aapt2,'dump','badging',args.coexist_module):
+        p.error('Wrong coexist module release identity')
     checksum(module)
     apk = args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk'
     subprocess.run([sys.executable, str(Path(__file__).with_name('package-1609-single-apk.py')),
@@ -155,11 +155,11 @@ def main():
         if single.digest(embedded)!=single.digest(args.coexist_module):raise RuntimeError('Coexist module changed')
         coexist=args.output/'AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk'
         shutil.copyfile(coex,coexist);checksum(coexist)
-    report={'release':'v1.8','host':'7.0.0-beta/1609','staticVerified':True,
+    report={'release':'v'+release_version,'host':'7.0.0-beta/1609','staticVerified':True,
             'deviceVerified':False,
-            'previousUserFeedback':'Settings previews accepted; coexist routing background restored by user; vivo preview native player display and service binding verified. Final v1.8 binaries are not newly phone-tested; controls and Atomic Island are not accepted',
+            'previousUserFeedback':f'Settings previews accepted; coexist routing background restored by user; vivo preview native player display and service binding verified. Final v{release_version} binaries are not newly phone-tested; controls and Atomic Island are not accepted',
             'upstreamCommit':'3547a833dac819a23b8515784601873d1d27ed47',
-            'portedPlugin':'1.0.7', 'pluginSourceBaseline':'lyrics-cache-preview-4 (automated checks; not a new comprehensive device acceptance)',
+            'portedPlugin':plugin_version, 'pluginSourceBaseline':('lyrics-cache-preview-4 (automated checks; not a new comprehensive device acceptance)' if release_version == '1.8' else f'formal {plugin_version}; preview.8 button fix accepted by user; integrated language manager pending device acceptance'),
             'minAndroidApi':31,
             'vivoCoexist':{'discoveryActionVerifiedInFinalAndOrigin':True,
                            'nativePlayerDeviceAcceptanceRequired':True,
@@ -180,8 +180,8 @@ def main():
                             'lineAuxiliaryNativeAlphaGuard':True},
             'files':{path.name:{'sha256':single.digest(path),'bytes':path.stat().st_size}
                      for path in args.output.iterdir() if path.suffix in ('.apk','.apks')}}
-    (args.output/'v1.8-validation.json').write_text(json.dumps(report,indent=2)+'\n')
-    print('PASS: four v1.8 installation artifacts, signatures, identities and original host contents verified')
+    (args.output/f'v{release_version}-validation.json').write_text(json.dumps(report,indent=2)+'\n')
+    print(f'PASS: four v{release_version} installation artifacts, signatures, identities and original host contents verified')
 
 
 if __name__=='__main__':main()

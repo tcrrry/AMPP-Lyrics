@@ -23,6 +23,8 @@ import com.google.mlkit.nl.translate.TranslatorOptions
 import dev.amenhancer.module.hook.ModernXposedRuntime
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import java.util.function.BiConsumer
+import java.util.function.Consumer
 
 /** Deliberate parent-loader adapter for our bundled plugin's public offline-client surface.
  * Standalone ZIPs keep the companion implementation; the integrated module owns ML Kit/native libs.
@@ -59,6 +61,35 @@ object OfflineTranslationClient {
             try { return Tasks.await(translator.translate(text), 30, TimeUnit.SECONDS) }
             finally { translator.close() }
         } finally { slots.release() }
+    }
+    fun queryModels(context: Context, complete: BiConsumer<Set<String>?, String?>) {
+        try {
+            initialize(context)
+            RemoteModelManager.getInstance().getDownloadedModels(TranslateRemoteModel::class.java)
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) complete.accept(task.result.map { it.language }.toSet(), null)
+                    else complete.accept(null, "读取语言包失败，请稍后重试")
+                }
+        } catch (_: Exception) { complete.accept(null, "无法初始化内置离线翻译") }
+    }
+    fun downloadModels(context: Context, language: String, complete: Consumer<String?>) {
+        try {
+            val models = OfflineModelPolicy.downloads(language, languages)
+            initialize(context)
+            val manager = RemoteModelManager.getInstance()
+            val tasks = models.map { manager.download(TranslateRemoteModel.Builder(it).build(), DownloadConditions.Builder().build()) }
+            Tasks.whenAll(tasks).addOnCompleteListener { task ->
+                complete.accept(if (task.isSuccessful) null else "下载失败，请检查网络后重试")
+            }
+        } catch (_: Exception) { complete.accept("无法下载所选语言模型") }
+    }
+    fun deleteModel(context: Context, language: String, complete: Consumer<String?>) {
+        try {
+            require(OfflineModelPolicy.canDelete(language, languages))
+            initialize(context)
+            RemoteModelManager.getInstance().deleteDownloadedModel(TranslateRemoteModel.Builder(language).build())
+                .addOnCompleteListener { task -> complete.accept(if (task.isSuccessful) null else "删除失败，请稍后重试") }
+        } catch (_: Exception) { complete.accept("无法删除所选语言模型") }
     }
     fun openManager(activity: Activity) {
         try { initialize(activity) } catch (error: Exception) {

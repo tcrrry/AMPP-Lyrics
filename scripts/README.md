@@ -81,7 +81,18 @@ it. There is no partial-key restore, and either missing output causes a rebuild.
 
 Full tests, Lint, release assembly and signature verification remain in the workflow.
 
-## v1.8 release
+## v1.9 release
+
+Use `bundle-released-lyrics.py PLUGIN.zip --main-version 1.9`, then build ordinary and
+coexist modules. The bundled manifest code and `BundledLyrics.VERSION` must both be 36.
+`package-1609-release-v1.9.py` reuses the prior release's host/signature/vivo gates;
+the old entry retains its 1.8 defaults. The new integrated offline model APIs are
+optional for old plugin/host compatibility, but mandatory in the 1.9 artifact verifier.
+Language search and manager UI live in the exact same formal plugin code.jar.
+On Windows set `PYTHONUTF8=1` for the packaging process so nested Python verifiers
+decode APKEditor/aapt output as UTF-8 too; `python -X utf8` alone does not propagate.
+
+## v1.8 release (historical)
 
 Use `bundle-released-lyrics.py PLUGIN.zip --main-version 1.8` before building both modules.
 `verify-integrated-lyrics.py` pins the final 1.0.7 manifest and code.jar; only the update
