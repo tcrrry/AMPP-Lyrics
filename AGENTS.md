@@ -1,5 +1,7 @@
 # Project boundaries
 
+- v1.10 bundles the released lyrics and translation SDK ZIPs. Preserve both bundles, the independent install markers, and their shared plugin settings UI. Do not restore the old parent-loader OfflineTranslationClient: it shadows the SDK client and bypasses the new translation protocol/model manager.
+
 - This project's new lyrics controls belong in the independent **Tcrrry 歌词设置** page (`TcrrryLyricsSettingsUi`), including glow enhancement, sensitivity and trigger position. Keep them out of the upstream AM++ main settings page. Preserve this boundary for future plugin extraction.
 - Keep existing saved setting keys and values when moving controls. UI relocation must not reset user preferences.
 - Production releases omit development diagnostic copy buttons and test labels. Keep “查看当前匹配信息” in independent Tcrrry settings in production: show playback input and the actually applied result’s title, artist, album, duration and ID. API connection checks and lyrics matching history/preview are normal product features.

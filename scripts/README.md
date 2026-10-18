@@ -4,6 +4,14 @@ This directory contains host profile checks, build helpers and optional device r
 Use the [host adaptation guide](../docs/host-adaptation-guide.md) for the per-build workflow.
 Functional acceptance is manual by default; run device scripts only when explicitly requested.
 
+## v1.10 release
+
+Use `bundle-released-lyrics.py --main-version 1.10 --translation TRANSLATION_ZIP LYRICS_ZIP`
+to embed both released extensions. Their exact hashes are recorded in `docs/integration-v1.10.json`.
+Build/test Gradle with Java 17. The pinned NPatch 741 packager requires Java 21;
+select the existing Java 21 executable on the packaging process PATH, without changing global Java settings.
+Use `package-1609-release-v1.10.py` for all four installation forms and the existing coexist gates.
+
 ## Coexist vivo player release gate
 
 See [the regression record](../docs/COEXIST-PLAYER-REGRESSION-PREVENTION.md) before changing host inputs or coexist packaging.

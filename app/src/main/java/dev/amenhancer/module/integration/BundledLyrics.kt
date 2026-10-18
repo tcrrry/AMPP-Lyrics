@@ -16,7 +16,9 @@ import java.util.zip.ZipFile
 /** Install the owned plugin before the SDK loads it; preserve newer/disabled/deleted installations. */
 internal object BundledLyrics {
     const val ID = "com.tcrrry.lyrics"
-    const val VERSION = 36L
+    const val VERSION = 53L
+    const val TRANSLATION_ID = "com.tcrrry.translation"
+    const val TRANSLATION_VERSION = 3L
     fun updateAsset(id: String, path: String): java.io.InputStream? {
         if (id != ID || path != "update-channel.json") return null
         return JSONObject().put("repository", "tcrrry/AMPP-Lyrics").put("tagPrefix", "v")
@@ -32,24 +34,37 @@ internal object BundledLyrics {
     }
 
     fun install(application: Application, store: PluginStore) {
-        val state = application.getSharedPreferences("tcrrry-bundled-lyrics", Context.MODE_PRIVATE)
-        val old = store.installed().firstOrNull { it.manifest.id == ID }
+        // Each bundle has an independent install marker: deleting or disabling
+        // one extension must never reinstall it or suppress the other bundle.
+        installBundle(application, store, TRANSLATION_ID, TRANSLATION_VERSION,
+            "tcrrry-translation.zip", "tcrrry-bundled-translation", migrateLyrics = false)
+        installBundle(application, store, ID, VERSION, "tcrrry-lyrics.zip",
+            "tcrrry-bundled-lyrics", migrateLyrics = true)
+    }
+
+    internal fun shouldInstall(existingVersion: Long?, previouslyInstalled: Boolean, bundledVersion: Long) =
+        if (existingVersion == null) !previouslyInstalled else existingVersion < bundledVersion
+
+    private fun installBundle(application: Application, store: PluginStore, id: String,
+        version: Long, asset: String, stateName: String, migrateLyrics: Boolean) {
+        val state = application.getSharedPreferences(stateName, Context.MODE_PRIVATE)
+        val old = store.installed().firstOrNull { it.manifest.id == id }
         if (old == null && state.contains("installed")) return
-        if (old == null || old.manifest.versionCode < VERSION) {
+        if (shouldInstall(old?.manifest?.versionCode, state.contains("installed"), version)) {
             val info = checkNotNull(ModernXposedRuntime.activeModule()?.moduleApplicationInfo)
             val bytes = ZipFile(info.sourceDir).use { zip ->
-                val entry = checkNotNull(zip.getEntry("assets/bundled/tcrrry-lyrics.zip"))
-                check(entry.size in 1..(64L * 1024 * 1024))
+                val entry = checkNotNull(zip.getEntry("assets/bundled/$asset"))
+                check(entry.size in 1..(128L * 1024 * 1024))
                 zip.getInputStream(entry).use { it.readBytes() }
             }
             store.prepare(bytes.inputStream(), Build.VERSION.SDK_INT).use { prepared ->
-                check(prepared.manifest.id == ID && prepared.manifest.versionCode == VERSION)
+                check(prepared.manifest.id == id && prepared.manifest.versionCode == version)
                 store.commit(prepared)
             }
-            if (old == null) store.setEnabled(ID, true)
+            if (old == null) store.setEnabled(id, true)
         }
-        migrate(application, store.dataDirectory(ID))
-        check(state.edit().putLong("installed", VERSION).commit())
+        if (migrateLyrics) migrate(application, store.dataDirectory(id))
+        check(state.edit().putLong("installed", version).commit())
     }
 
     internal fun encode(values: Map<String, *>): String = JSONObject().apply {

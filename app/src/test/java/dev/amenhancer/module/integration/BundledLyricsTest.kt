@@ -6,6 +6,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BundledLyricsTest {
+    @Test fun bundleUpgradePreservesDeletedAndNewerInstallationsIndependently() {
+        assertTrue(BundledLyrics.shouldInstall(null, false, BundledLyrics.TRANSLATION_VERSION))
+        assertFalse(BundledLyrics.shouldInstall(null, true, BundledLyrics.TRANSLATION_VERSION))
+        assertTrue(BundledLyrics.shouldInstall(36L, true, BundledLyrics.VERSION))
+        assertFalse(BundledLyrics.shouldInstall(54L, true, BundledLyrics.VERSION))
+        assertFalse(BundledLyrics.shouldInstall(3L, true, BundledLyrics.TRANSLATION_VERSION))
+    }
     @Test fun onlyOurUpdateChannelIsOverriddenAndAllOtherAssetsStayOwnedByThePlugin() {
         assertNull(BundledLyrics.updateAsset("another.plugin", "update-channel.json"))
         assertNull(BundledLyrics.updateAsset(BundledLyrics.ID, "host-profiles/index.json"))

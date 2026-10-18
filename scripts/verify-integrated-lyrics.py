@@ -1,4 +1,4 @@
-"""Validate the exact released plugin code and its intentional integrated offline adapter."""
+"""Validate both released SDK bundles and exclude the obsolete parent-loader offline adapter."""
 import argparse
 import hashlib
 import io
@@ -8,50 +8,44 @@ import re
 import zipfile
 import host_dex
 
-CODE_SHA256 = '6ac752f53f50be3a00b104962bac7b17cfb43f39956016e8ccf237cdf0074207'
+PINS = Path(__file__).resolve().parents[1]/'docs/integration-v1.10.json'
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('module', type=Path)
-    parser.add_argument('--preview-plugin', type=Path, help='Explicit preview ZIP; default is pinned to the formal 1.0.8 release')
     args = parser.parse_args()
+    pins = json.loads(PINS.read_text(encoding='utf8'))
     with zipfile.ZipFile(args.module) as module:
         with zipfile.ZipFile(io.BytesIO(module.read('assets/bundled/tcrrry-lyrics.zip'))) as plugin:
             manifest = json.loads(plugin.read('plugin.json'))
             assert manifest['id'] == 'com.tcrrry.lyrics'
-            if args.preview_plugin:
-                with zipfile.ZipFile(args.preview_plugin) as expected:
-                    assert plugin.read('plugin.json') == expected.read('plugin.json')
-                    assert plugin.read('code.jar') == expected.read('code.jar')
-            else:
-                assert manifest['versionName'] == '1.0.8' and manifest['versionCode'] == 36
-                assert hashlib.sha256(plugin.read('code.jar')).hexdigest() == CODE_SHA256
+            assert manifest['versionName'] == '1.0.9' and manifest['versionCode'] == 53
+            assert hashlib.sha256(plugin.read('code.jar')).hexdigest() == pins['bundles']['tcrrry-lyrics.zip']['codeSha256']
+            assert not any(n.startswith(('assets/pure-offline/', 'assets/bundled-models/')) for n in plugin.namelist())
             channel = json.loads(plugin.read('assets/update-channel.json'))
-            assert channel['repository'] == 'tcrrry/AMPP-Lyrics' and channel['version'] == '1.9'
-        assert 'lib/arm64-v8a/libtranslate_jni.so' in module.namelist()
+            assert channel['repository'] == 'tcrrry/AMPP-Lyrics' and channel['version'] == '1.10'
+        for asset, expected in pins['bundles'].items():
+            payload = module.read('assets/bundled/' + asset)
+            assert hashlib.sha256(payload).hexdigest() == expected['sha256'], asset
+            with zipfile.ZipFile(io.BytesIO(payload)) as bundle:
+                descriptor = json.loads(bundle.read('plugin.json'))
+                assert descriptor['id'] == expected['id'] and descriptor['versionCode'] == expected['versionCode']
+                assert hashlib.sha256(bundle.read('code.jar')).hexdigest() == expected['codeSha256']
+                if descriptor['id'] == 'com.tcrrry.translation':
+                    assert hashlib.sha256(bundle.read('assets/bundled-models/zh.zip')).hexdigest() == pins['chineseModelSha256']
+                    runtime = bundle.read('assets/pure-offline/runtime.apk')
+                    assert hashlib.sha256(runtime).hexdigest() == json.loads(bundle.read('assets/pure-offline/runtime.json'))['sha256']
         classes = {}
         for name in module.namelist():
             if re.fullmatch(r'classes\d*\.dex', name):
                 classes.update(host_dex.dex_classes(module.read(name)))
-        adapter = classes['Lcom/tcrrry/lyrics/plugin/OfflineTranslationClient;']
-        required = {
-            'getLanguages()Ljava/util/List;', 'installed(Landroid/content/Context;)Z',
-            'statusText(Landroid/content/Context;)Ljava/lang/String;',
-            'requireInstalled(Landroid/content/Context;)V',
-            'translate(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;',
-            'openManager(Landroid/app/Activity;)V',
-            'queryModels(Landroid/content/Context;Ljava/util/function/BiConsumer;)V',
-            'downloadModels(Landroid/content/Context;Ljava/lang/String;Ljava/util/function/Consumer;)V',
-            'deleteModel(Landroid/content/Context;Ljava/lang/String;Ljava/util/function/Consumer;)V',
-        }
-        assert required <= set(adapter['methods'])
+        assert 'Lcom/tcrrry/lyrics/plugin/OfflineTranslationClient;' not in classes, 'Old parent adapter shadows SDK client'
         assert 'Ldev/amenhancer/plugin/api/AmppPlugin;' in classes
-        assert not any(name.startswith('Lcom/tcrrry/lyrics/engine/') for name in classes)
-    print(json.dumps({'module': args.module.name, 'releasedPluginCodeUnchanged': not bool(args.preview_plugin),
-                      'explicitPreviewCodeVerified': bool(args.preview_plugin),
-                      'offlineAdapterMethods': len(required), 'mainUpdateChannel': channel,
-                      'sdkInParentOnly': True, 'embeddedNativeTranslation': True}, ensure_ascii=False))
+        assert not any(name.startswith(('Lcom/tcrrry/lyrics/engine/', 'Lcom/google/mlkit/')) for name in classes)
+    print(json.dumps({'module': args.module.name, 'releasedPluginCodeUnchanged': True,
+                      'mainUpdateChannel': channel, 'obsoleteAdapterAbsent': True,
+                      'sdkInParentOnly': True, 'bundledTranslationAndChineseVerified': True}, ensure_ascii=False))
 
 
 if __name__ == '__main__':

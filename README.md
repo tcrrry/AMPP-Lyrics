@@ -3,45 +3,38 @@
 
 # AM++ Lyrics · 歌词增强版
 
-**Apple Music 7.0.0-beta / 1609 · v1.9 · Android 12+ · arm64**
+**Apple Music 7.0.0-beta / 1609 · v1.10 · Android 12+ · arm64**
 
-[![普通版 APK｜推荐](docs/images/downloads/ordinary-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.9/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk)
+[![普通版 APK｜推荐](docs/images/downloads/ordinary-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.10/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apk)
 
-[![共存版 APK｜保留官方版](docs/images/downloads/coexist-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.9/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk)
+[![共存版 APK｜保留官方版](docs/images/downloads/coexist-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.10/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64-coexist.apk)
 
-[![APKS 分包版](docs/images/downloads/split-apks.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.9/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks)
+[![APKS 分包版](docs/images/downloads/split-apks.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.10/AMPP-Lyrics-AppleMusic-7.0.0-beta-arm64.apks)
 
-[![独立模块｜非主程序](docs/images/downloads/module-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.9/AMPP-Lyrics-module.apk)
+[![独立模块｜非主程序](docs/images/downloads/module-apk.svg)](https://github.com/tcrrry/AMPP-Lyrics/releases/download/v1.10/AMPP-Lyrics-module.apk)
 
-**[打开 v1.9 下载页](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.9)** · [历史版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [独立歌词插件](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin)
+**[打开 v1.10 下载页](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.10)** · [历史版本](https://github.com/tcrrry/AMPP-Lyrics/releases) · [独立歌词插件](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin)
 </div>
 
 ## 怎么选
 
-- **直接安装完整增强版**：本项目普通 APK 或共存 APK，无需 Root、另装 LSPosed、导入歌词 ZIP 或安装离线翻译伴随 APK。离线机翻语言模型仍需首次下载。
-- **已使用支持 SDK v1 的 AM++**：[独立插件 1.0.8](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin/releases/tag/plugin-v1.0.8) 导入插件管理器。独立插件的离线机翻需要另外安装其伴随 APK。
+- **直接安装完整增强版**：本项目普通 APK 或共存 APK，无需 Root、另装 LSPosed、导入歌词 ZIP 或安装离线翻译伴随 APK。中文模型已内置，其他语言按需首次下载。
+- **已使用支持 SDK v1 的 AM++**：[独立插件 1.0.9](https://github.com/tcrrry/Tcrrry-Lyrics-Plugin/releases/tag/plugin-v1.0.9) 导入插件管理器。独立插件的离线机翻改用可选翻译插件 ZIP，两个 ZIP 都导入插件管理器。
 - **Android 11 用户**：保留 [v1.6 / 1606](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.6)。旧版 6.5.3 见 [v1.2](https://github.com/tcrrry/AMPP-Lyrics/releases/tag/v1.2)。
 
-## v1.9 更新
+## v1.10 更新
 
-- 同步正式插件 1.0.8：署名区块与零时长标点修复、QQ 残缺逐字回退完整逐行、中文歌冷启动方形菜单常驻。
-- 内嵌离线语言包改为搜索与同风格小窗，支持中文、英文和代码，不再逐个翻下拉列表；列表为轻量控件。
-- 融合已测试的播放模式修复；设置名“强制覆盖循环方式”，默认开启、原逻辑不变。停用独立播放模式插件避免重复接管。
-- 歌词自然填行、缓存策略修复、0–1024 MB 缓存管理与同曲内容柔和过渡。
-- 修复共存设置玻璃、来源滚动重置与播放页灰底；恢复共存路由和 vivo 原生播放器发现声明，纳入最终包验证。
-- 共存原生播放器显示有预览实测依据，不承诺原子岛；正式四包仍需各自实机验证。
-- 少数无可用歌词歌曲持续转圈未修复，保存[异常证据](docs/NO-LYRICS-SPINNER-1807802486.md)。
+- 内置正式歌词插件 **1.0.9** 和离线翻译插件 **1.0.0**，歌词修复与独立插件同步，不再依赖主项目旧离线适配器。
+- 歌词采用原生 ViewModel 结果提交与时间索引初始化，减少重复刷新；保留来源切换、设置、逐字时序与共存路由。
+- 修复韩语、粤语逐字注音触发率及排版，保持注音字号；保留日语效果、原生分行、发音／原文／译文顺序与仅原文高亮。
+- 修复繁简显示、混合语言和设置缓存；日语原文保持原样。
+- 同步语言搜索键盘与离线面板修复，提供搜索、已下载语言包管理、检测离线翻译及下载进度或状态。中文模型内置，下载其他语言需开启代理。
+- 主项目安装后自动导入内置的两个插件，无需另外下载翻译 APK 或 ZIP。保留各插件已禁用、已删除状态及更高版本，不重复开启用户关闭的功能。
+- 保留辉光、短单元平滑、缓存管理、播放模式修复、磨砂设置、更新提醒，以及共存版 vivo 播放器发现声明；共存版不承诺原子岛支持。
 
-原有功能继续保留：
+从旧主项目升级时，原 ML Kit 模型及配置不删除。新翻译扩展独立管理模型，除内置中文外，其他语言可能需要重新下载。少数无正文歌曲持续加载仍未修复，见[异常证据](docs/NO-LYRICS-SPINNER-1807802486.md)。
 
-- 升级 **Apple Music 1609**，同步 AM++ 1012 对应的上游宿主适配与 SDK v1 插件管理器。
-- 内置 **Tcrrry Lyrics Plugin 1.0.8**，首次启动自动导入并启用。升级保留数据，不降级更新的插件版本，不重新启用用户已经关闭或删除的插件。
-- 同步已验收的设置页：二级分类、紧凑小窗、磨砂玻璃、入口收回转场、说明翻页、来源单向滚动和完整详情。播放页入口保留专辑色，主页设置入口沿用宿主底色。
-- **Tcrrry 歌词设置 → 更多工具 → 检查更新** 检查主项目新版本。新正式版本首次主动提醒，可忽略此版本、稍后一天提醒或关闭自动提醒；手动检查仍可用，不自动下载或安装。
-- 保留内置离线 ML Kit 与语言包管理，不需要伴随 APK。迁移旧歌词偏好、翻译设置和自定义歌词文件；API 密钥在本机重新加密迁移，不上传或记录明文，失败时保留原加密文件供下次启动重试。
-- 普通 APK、共存 APK、APKS、模块 APK 同步更新，旧发布与附件不替换。
-
-设计与构建基线见 [整合说明](docs/integration-v1.7.md)，完整更新说明见 [v1.9 发布说明](docs/release-v1.9.md)。
+完整更新见 [v1.10 发布说明](docs/release-v1.10.md)。宿主仍为 Apple Music **1609**，Android **12+**，不是升级 Apple Music 本体。
 
 ## 使用
 
@@ -50,7 +43,7 @@
 3. 正常登录 Apple Music 并播放；账号、订阅和权限仍按原服务规则使用。
 4. 在 Apple Music 设置页点击与 **AM++ 设置** 平行的 **Tcrrry 歌词设置**，或从插件管理器进入；亦可长按播放页歌词菜单中的来源项。
 5. 来源项单击换源、双击寻找当前源其他匹配、长按设置。匹配信息、历史和预览继续保留。
-6. 离线机翻在 **翻译与注音 → 离线语言包管理** 下载原语言和中文模型，无需伴随 APK。
+6. 离线机翻在 **翻译与注音 → 离线机翻** 搜索并下载所需原语言模型；中文内置，无需伴随 APK。
 
 | 文件 | 包名与用途 |
 | --- | --- |
@@ -71,7 +64,7 @@
 
 ## 验证
 
-已执行 1609 接口、歌词扩展、单元测试、Lint、嵌套插件内容、签名、身份、资源、原始 DEX、原生库及分包完整性检查。具体结果、源码提交与附件哈希见发布附件 `v1.9-validation.json` 和 `.sha256`。
+已执行 1609 接口、歌词扩展、单元测试、Lint、嵌套插件内容、签名、身份、资源、原始 DEX、原生库及分包完整性检查。具体结果、源码提交与附件哈希见发布附件 `v1.10-validation.json` 和 `.sha256`。
 
 **设置预览已由用户验收；共存背景修复有用户确认，vivo 原生播放器显示/绑定有预览实测，控件操作与原子岛未验收。正式四包重新构建，自动检查不替代实际播放与设备兼容性测试。**
 

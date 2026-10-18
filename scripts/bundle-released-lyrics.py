@@ -2,14 +2,21 @@
 import argparse
 import hashlib
 import json
+import shutil
 from pathlib import Path
 import zipfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('plugin', type=Path)
 parser.add_argument('--main-version', required=True)
+parser.add_argument('--translation', type=Path, required=True)
 args = parser.parse_args()
 target = Path(__file__).resolve().parents[1] / 'app/src/main/assets/bundled/tcrrry-lyrics.zip'
+with zipfile.ZipFile(args.translation) as translation:
+    descriptor = json.loads(translation.read('plugin.json'))
+    assert descriptor['id'] == 'com.tcrrry.translation'
+    assert descriptor['versionName'] == '1.0.0' and descriptor['versionCode'] == 3
+shutil.copyfile(args.translation, target.with_name('tcrrry-translation.zip'))
 with zipfile.ZipFile(args.plugin) as source:
     manifest = json.loads(source.read('plugin.json'))
     assert manifest['id'] == 'com.tcrrry.lyrics'
