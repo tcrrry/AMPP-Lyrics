@@ -151,11 +151,15 @@ internal fun HleMetadataSurfaceBridge.createMetadataHostAdapters(): HleMetadataS
                     )
                 }
 
+                override fun scheduleMetadataResolution(mediaIds: Collection<String>, priority: AppleInternalCatalogResolver.RequestPriority) =
+                    scheduleMetadataResolution(mediaIds, priority, InAppOriginalResolutionMode.AFTER_LOCALIZED)
+
                 override fun scheduleMetadataResolution(
                     mediaIds: Collection<String>,
                     priority: AppleInternalCatalogResolver.RequestPriority,
+                    originalResolutionMode: InAppOriginalResolutionMode,
                 ) = bridge.hostCall("library.scheduleMetadataResolution", Unit) {
-                    bridge.resolutionCoordinator.schedule(mediaIds, priority)
+                    bridge.resolutionCoordinator.schedule(mediaIds, priority, originalResolutionMode)
                 }
 
                 override fun isRefreshableMediaId(mediaId: String): Boolean =
@@ -247,6 +251,11 @@ internal fun HleMetadataSurfaceBridge.createMetadataHostAdapters(): HleMetadataS
                         "dataBinding.originalResolutionMode",
                         InAppOriginalResolutionMode.AFTER_LOCALIZED,
                     ) { bridge.artistSurfaceHooks.originalResolutionMode(binding) }
+
+                override fun tracksRenderedAlias(binding: Any, mediaId: String): Boolean =
+                    bridge.hostCall("dataBinding.tracksRenderedAlias", false) {
+                        bridge.artistSurfaceHooks.isHeaderBinding(binding, mediaId)
+                    }
 
                 override fun shouldInvalidateAppliedAlias(
                     binding: Any,

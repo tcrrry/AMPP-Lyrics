@@ -3,7 +3,7 @@ package dev.amenhancer.module.hook
 import dev.amenhancer.module.ModuleConstants
 
 /**
- * Installs the narrow Apple Music 6.5.2 karaoke animation adaptation.
+ * Installs CJK glow animation; terminal feather compensation belongs to lyric effects optimization.
  *
  * The target adapter owns all version and symbol checks; unsupported hosts
  * therefore report a degraded health result without touching existing lyric

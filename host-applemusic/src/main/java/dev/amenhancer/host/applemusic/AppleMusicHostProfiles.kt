@@ -27,7 +27,9 @@ object AppleMusicHostProfiles {
         }
     }
 
+    /** Installation package names may change; descriptors follow the exact version tuple. */
     fun find(packageName: String, versionName: String, versionCode: Long): AppleMusicHostProfile? {
+        if (packageName.isBlank()) return null
         val name = "$versionName-$versionCode.json"
         if (name !in filenames) return null
         val canonical = if (packageName == "com.tcrrry.ampplyrics.coexist") "com.apple.android.music" else packageName
@@ -39,6 +41,12 @@ object AppleMusicHostProfiles {
 
     fun supportsGlass(versionCode: Long, versionName: String): Boolean =
         find("com.apple.android.music", versionName, versionCode)?.let { it.productionEnabled && it.capability("glass") } == true
+
+    /** Scroll collapse needs its own verified seams; ordinary glass support does not imply it. */
+    fun supportsGlassScrollCollapse(versionCode: Long, versionName: String): Boolean =
+        find("com.apple.android.music", versionName, versionCode)?.let {
+            it.productionEnabled && it.capability("glass") && it.capability("glassScrollCollapse")
+        } == true
 
     fun supportsCellular(packageName: String, versionName: String, versionCode: Long): Boolean =
         find(packageName, versionName, versionCode)?.let { it.productionEnabled && it.capability("cellular") } == true

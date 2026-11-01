@@ -17,11 +17,11 @@ class HostResearchBoundaryTest {
         assertTrue(AppleMusicHostProfiles.supportsGlass(1606, "7.0.0-beta"))
         assertTrue(AppleMusicHostProfiles.supportsCellular(profile.packageName, "7.0.0-beta", 1606))
         assertFalse(AppleMusicHostProfiles.supportsGlass(1606, "7.0.0"))
-        assertFalse(AppleMusicHostProfiles.isProductionBuild(profile.packageName, "7.0.0-beta", 1607))
+        assertFalse(AppleMusicHostProfiles.isProductionBuild(profile.packageName, "7.0.0-beta", 1608))
         assertFalse(profile.document.getJSONObject("evidence").getBoolean("runtimeVerified"))
         assertEquals(0, profile.document.getJSONArray("legacyFirstMatchExceptions").length())
         assertNull(AppleMusicHostProfiles.find(fixture.getString("packageName"), "7.0.0", fixture.getLong("versionCode")))
-        assertNull(AppleMusicHostProfiles.find(fixture.getString("packageName"), fixture.getString("versionName"), 1607))
+        assertNull(AppleMusicHostProfiles.find(fixture.getString("packageName"), fixture.getString("versionName"), 1608))
     }
     @Test fun `old Activity and future Fragment expose independent navigation and mini regions`() {
         val fixtures = listOf(

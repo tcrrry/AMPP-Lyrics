@@ -18,6 +18,8 @@ import android.view.WindowInsets
 import android.widget.FrameLayout
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +29,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.ViewBackdrop
@@ -38,6 +41,7 @@ import dev.amenhancer.glass.GlassPolicy
 import dev.amenhancer.glass.GlassTab
 import dev.amenhancer.glass.NativeButtonInput
 import dev.amenhancer.glass.NativeLiquidButton
+import dev.amenhancer.glass.GlassCollapseShapes
 import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.config.TargetConfigClient
 import dev.amenhancer.module.model.FeatureHealth
@@ -119,9 +123,17 @@ internal open class PhoneGlassSession(
     private var contentDownY = 0f
     private var observingPress = false
     private var underlap = false
+    private var contentInset: Int? = null
+    private var expandedContentInset = -1
     private var scanNeeded = true
     private var scrollTargets: List<View> = emptyList()
+    private var composeScenes: List<View> = emptyList()
     private var hierarchyDirty = false
+    protected var glassSettings = config.settings()
+        private set
+    private val barCollapse = GlassBarCollapseController(activity, hostBinding,
+        inputActive = { activated && !closed && isCollapsed }, failure = ::scheduleFailure)
+    private val collapseSupported: Boolean get() = !geometry.sideBySide && hostBinding.supportsScrollCollapse
     private val layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
         scanNeeded = true; hierarchyDirty = true; hostBinding.invalidateViews()
     }
@@ -134,7 +146,7 @@ internal open class PhoneGlassSession(
     // height consumer (frame, content padding, peek) agrees within a frame.
     protected var bottomGapDp = GlassPolicy.BOTTOM_DP
     private var navBlurDp = GlassPolicy.PANEL_BLUR_DP.toInt()
-
+    private var miniBackdropSize by mutableStateOf(IntSize.Zero)
     /** Capsule geometry shared by every occupied-height consumer; a diverging form overrides this. */
     protected open val geometry: GlassGeometry get() = GlassGeometry.Phone
 
@@ -216,7 +228,7 @@ internal open class PhoneGlassSession(
     // Form seams overridden by the dual-pane session; the phone behavior below stays
     // exactly what shipped on the stacked host.
     protected open fun sessionEligible(): Boolean =
-        config.settings().phoneLiquidGlassEnabled && !TabletModeQualifier.isOfficialTablet(activity)
+        glassSettings.phoneLiquidGlassEnabled && !TabletModeQualifier.isOfficialTablet(activity)
 
     protected open fun resolveBottomNavigationRoot(): View? = find(ChromeResource.BOTTOM_NAVIGATION_ROOT_STACKED)
 
@@ -237,6 +249,9 @@ internal open class PhoneGlassSession(
         InitialGlassSlide.resolve(it.state, sheet.top, it.collapsedTop, it.expandedTop)
     }
 
+    /** Host-specific collapse target/layout coordination, before sampling the mini's anchor. */
+    protected open fun reconcileCollapsedPlayer(): Boolean = false
+
     /** Phone keeps its bottom fade inside the native tabs frame. */
     protected open fun attachNavigationScrim(frame: FrameLayout, scrim: GlassHostView) {
         frame.addView(scrim, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -254,7 +269,6 @@ internal open class PhoneGlassSession(
             return
         }
         if (navGlass == null) {
-            val glassSettings = config.settings()
             bottomGapDp = ModuleSettings.normalizePhoneLiquidGlassBottomGapDp(glassSettings.phoneLiquidGlassBottomGapDp)
             navBlurDp = ModuleSettings.normalizePhoneLiquidGlassPanelBlurDp(glassSettings.phoneLiquidGlassPanelBlurDp)
             hostRoot = resolveBottomNavigationRoot() ?: return
@@ -277,7 +291,9 @@ internal open class PhoneGlassSession(
             }
             attachHandler.removeCallbacks(retryAttach)
             retryPending = false
-            val bg = ViewBackdrop(content, ::scheduleFailure).also { backdrop = it; it.start() }
+            barCollapse.configure(glassSettings, collapseSupported)
+            val bg = ViewBackdrop(content, ::scheduleFailure,
+                sourceRenderer = { hostBinding.drawContentBackdrop(content, it) }).also { backdrop = it; it.start() }
             refreshMenu()
             // Bottom fade: blurred, washed-out strip under the tabs, matching the
             // reference apps' gradient bar. Added first so the tabs stay on top.
@@ -288,15 +304,24 @@ internal open class PhoneGlassSession(
                 scrim.content { HostConfiguration { BottomScrim(bg) } }
                 attachNavigationScrim(frame, scrim)
             }
-            val glass = GlassHostView(moduleContext()).also { navGlass = it }
+            val glass = GlassHostView(moduleContext(), traceName = "AM++/nav").also { navGlass = it }
             glass.alpha = 0f
-            glass.content { HostConfiguration { GlassNavigation(tabs, selectedId, accent, foreground, bg, ::selectTab, panelBlur = navBlurDp.dp) } }
+            glass.content { HostConfiguration { GlassNavigation(tabs, selectedId, accent, foreground, bg, ::selectTab, panelBlur = navBlurDp.dp,
+                // A null progress keeps legacy and tablet navigation in its expanded layout.
+                collapseProgress = if (barCollapse.hasPresentation) ::collapseProgress else null,
+                onExpandRequest = barCollapse::expand,
+                collapseReboundScale = barCollapse.appearance.collapseReboundScale,
+                expandReboundScale = barCollapse.appearance.expandReboundScale) } }
             val navSlot = capsuleMarginsPx(frame.width, mini = false)
             frame.addView(glass, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(GlassPolicy.NAV_HEIGHT_DP), Gravity.TOP).apply {
                 leftMargin = navSlot[0]; rightMargin = navSlot[1]
             })
-            observer = activity.window.decorView.viewTreeObserver.also { it.addOnPreDrawListener(this); it.addOnGlobalLayoutListener(layoutListener) }
+            observer = activity.window.decorView.viewTreeObserver.also {
+                it.addOnPreDrawListener(this)
+                it.addOnGlobalLayoutListener(layoutListener)
+            }
         }
+        barCollapse.attach(activity.window.decorView.viewTreeObserver)
         val root = (find(ChromeResource.MINI_PLAYER) ?: find(ChromeResource.MINI_PLAYER_TOUCH_PANEL)) as? FrameLayout
         val content = root?.findViewById<View>(resourceId(ChromeResource.MINI_PLAYER_CONTENT))
         if (root != null && (root !== miniRoot || content !== miniContent)) {
@@ -312,13 +337,17 @@ internal open class PhoneGlassSession(
             miniRoot = root
             miniContent = content
             val bg = backdrop ?: return
-            val glass = GlassHostView(moduleContext()).also { miniGlass = it }
+            val glass = GlassHostView(moduleContext(), traceName = "AM++/mini").also { miniGlass = it }
             glass.alpha = 0f
             glass.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
             glass.content {
                 HostConfiguration {
-                    NativeLiquidButton(bg, input, glassExpansion, panelBlur = navBlurDp.dp, autoClip = geometry.sideBySide,
-                        miniHeightDp = geometry.miniHeightDp) { sx, sy, x, y ->
+                    val reserveBackdrop by remember { derivedStateOf { barCollapse.isRunning } }
+                    NativeLiquidButton(bg, input, glassExpansion, panelBlur = navBlurDp.dp,
+                        autoClip = geometry.sideBySide || (barCollapse.hasPresentation && glassExpansion == 0f),
+                        miniHeightDp = geometry.miniHeightDp,
+                        minLayerSize = if (reserveBackdrop && glassExpansion == 0f) miniBackdropSize else IntSize.Zero,
+                        capsuleShape = GlassCollapseShapes.capsule(barCollapse.hasPresentation)) { sx, sy, x, y ->
                         miniContent?.let { v -> writeOwnedTransform(v, "scaleX", sx); writeOwnedTransform(v, "scaleY", sy); writeOwnedTransform(v, "translationX", x); writeOwnedTransform(v, "translationY", y) }
                     }
                 }
@@ -370,7 +399,12 @@ internal open class PhoneGlassSession(
     }
 
     private fun refreshMenu() {
-        if (hostConfiguration != activity.resources.configuration) hostConfiguration = Configuration(activity.resources.configuration)
+        if (hostConfiguration != activity.resources.configuration) {
+            hostConfiguration = Configuration(activity.resources.configuration)
+            // A new configuration re-measures every slot, so the collapsed geometry would be
+            // computed against a stale width. Return to the expanded bar and start over.
+            barCollapse.expand()
+        }
         val nav = navigation ?: return
         val snapshot = hostBinding.navigation(nav)
         val menu = snapshot.menu
@@ -386,16 +420,35 @@ internal open class PhoneGlassSession(
             tabs = items.map {
                 val icon = it.icon?.constantState?.newDrawable(activity.resources)?.mutate()?.apply { setTint(fg) }
                     ?: it.icon
-                GlassTab(it.itemId, it.title?.toString().orEmpty(), icon, it.isEnabled)
+                GlassTab(it.itemId, it.title?.toString().orEmpty(), icon, it.isEnabled, isSearch = isSearchItem(it.itemId))
             }
             foreground = Color(fg)
             accent = Color(hostAccent)
         }
-        if (selectedId != selected) selectedId = selected
+        if (selectedId != selected) {
+            barCollapse.expand()
+            selectedId = selected
+        }
     }
+
+    /**
+     * The legacy host exposes only a [Menu] and its item IDs, so the search destination is
+     * identified from the item's own resource entry name. Unreadable or unmatched names
+     * report false on purpose: the scroll collapse then keeps every tab inside one capsule
+     * instead of detaching a control that cannot be proven to be search.
+     */
+    private fun isSearchItem(itemId: Int): Boolean =
+        runCatching { activity.resources.getResourceEntryName(itemId).contains("search", ignoreCase = true) }
+            .getOrDefault(false)
+
+    /** Shared animation read by Compose, the native mini, content padding and peek. */
+    protected fun collapseProgress(): Float = barCollapse.progress
 
     private fun selectTab(id: Int): Int {
         if (tabs.none { it.id == id && it.enabled }) return selectedId
+        // Choosing a destination returns the bar to its expanded form: the collapsed capsule
+        // shows one glyph, so a selection made from it would otherwise be unverifiable.
+        barCollapse.expand()
         runCatching {
             navigation?.let { hostBinding.selectNavigation(it, id) }
             refreshMenu()
@@ -407,15 +460,17 @@ internal open class PhoneGlassSession(
         if (closed || failureScheduled) return true
         states.forEach { (view,state) -> state.observeNative(view) }
         try {
-            if (hierarchyDirty) { hierarchyDirty = false; attachAvailableViews() }
             val now = android.os.SystemClock.uptimeMillis()
             if (now >= nextSettingsCheck) {
                 nextSettingsCheck = now + 500
+                glassSettings = config.settings()
                 if (!sessionEligible()) {
                     activity.window.decorView.post { close() }
                     return true
                 }
+                barCollapse.configure(glassSettings, collapseSupported)
             }
+            if (hierarchyDirty) { hierarchyDirty = false; attachAvailableViews() }
             refreshMenu()
             if (!activated && backdrop?.ready == true && navGlass?.isLaidOut == true && glassMenuReady) {
                 activate()
@@ -433,6 +488,8 @@ internal open class PhoneGlassSession(
                 }
                 navigation?.alpha = if (menuReady) 0f else 1f
                 updateGeometry()
+                // Peek is moving while the bar animates; reconcile the native sheet once it settles.
+                if (!barCollapse.isRunning && reconcileCollapsedPlayer()) return false
                 val sourceNeedsLayout = updateUnderlap()
                 val transitionNeedsLayout = updateTransition()
                 val waitingForCapture = glassConsumersVisible && backdrop?.ready == false && canRefreshBackdrop()
@@ -526,6 +583,8 @@ internal open class PhoneGlassSession(
         listOf(ChromeResource.PLAYER_ROOT, ChromeResource.PLAYER_TOP_SHADOW, ChromeResource.BACKGROUND_LAYERS, ChromeResource.MOTION_SWITCHER, ChromeResource.PLAYER_FRAGMENTS_HOST).mapNotNull(::find).forEach(::save)
     }
 
+    protected fun miniDropPx(): Float = barCollapse.miniDropPx(dp(geometry.miniHeightDp).toFloat())
+
     private fun updateGeometry() {
         val height = dp(GlassPolicy.NAV_HEIGHT_DP + bottomGapDp) + bottomInset
         navFrame?.let { frame ->
@@ -534,13 +593,34 @@ internal open class PhoneGlassSession(
             // The capsule slots may follow the host width (see the tablet row);
             // resync every surface whenever a resolved slot edge changes.
             val navSlot = capsuleMarginsPx(frame.width, mini = false)
-            val miniSlot = capsuleMarginsPx(frame.width, mini = true)
+            val expandedMiniSlot = capsuleMarginsPx(frame.width, mini = true)
+            // Mini margins never become negative: the parent's width bounds even its rebound.
+            // Reserve only during animation and recompute after width/configuration changes.
+            val expandedMiniWidth = frame.width - expandedMiniSlot[0] - expandedMiniSlot[1]
+            miniBackdropSize = if (barCollapse.hasPresentation && expandedMiniWidth > 0) {
+                IntSize(frame.width, dp(geometry.miniHeightDp))
+            } else IntSize.Zero
+            val miniSlot = barCollapse.miniMargins(expandedMiniSlot, hasDetachedSearch,
+                hostConfiguration.layoutDirection == View.LAYOUT_DIRECTION_RTL)
             fun applySlot(view: View?, slot: IntArray) {
                 val surface = view ?: return
                 val params = surface.layoutParams as? ViewGroup.MarginLayoutParams ?: return
                 if (params.leftMargin != slot[0] || params.rightMargin != slot[1]) {
                     params.leftMargin = slot[0]; params.rightMargin = slot[1]
-                    surface.layoutParams = params
+                    val nativeRoot = miniRoot
+                    if (surface === miniContent && barCollapse.isRunning && isCollapsed &&
+                        nativeRoot != null && surface.parent === nativeRoot && nativeRoot.isLaidOut &&
+                        nativeRoot.isShown && nativeRoot.width > 0 && nativeRoot.height > 0 &&
+                        !nativeRoot.isLayoutRequested && !surface.isLayoutRequested) {
+                        // Only this native mini subtree changes width. Measuring its existing
+                        // FrameLayout locally keeps the host page out of the animation layout.
+                        surface.forceLayout()
+                        nativeRoot.forceLayout()
+                        nativeRoot.measure(View.MeasureSpec.makeMeasureSpec(nativeRoot.width, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(nativeRoot.height, View.MeasureSpec.EXACTLY))
+                        nativeRoot.layout(nativeRoot.left, nativeRoot.top, nativeRoot.right, nativeRoot.bottom)
+                        nativeRoot.invalidate()
+                    } else surface.layoutParams = params
                 }
             }
             val slotsChanged = !navSlot.contentEquals(navMarginPx) || !miniSlot.contentEquals(miniMarginPx)
@@ -565,7 +645,17 @@ internal open class PhoneGlassSession(
         }
     }
 
-    override fun peekHeight(): Int = GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry) + if (miniVisible) dimen(ChromeResource.SHADOW_HEIGHT) else 0
+    /**
+     * True only when the current menu offers a detachable search tab, i.e. search is the last
+     * tab and detaching it still leaves a real tab strip behind. Mirrors
+     * [NavigationSnapshot.searchTab] for the legacy menu path, which builds its own tab list.
+     */
+    private val hasDetachedSearch: Boolean
+        get() = tabs.size > 2 && tabs.last().isSearch
+
+    override fun peekHeight(): Int =
+        GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry,
+            collapse = barCollapse.progress) + if (miniVisible) dimen(ChromeResource.SHADOW_HEIGHT) else 0
 
     override fun observeNativePeek(height: Int) = nativePeek.observe(height)
 
@@ -597,12 +687,31 @@ internal open class PhoneGlassSession(
                     entries.remove()
                 }
             }
-            val candidates = descendants(root).filter { view ->
-            view.isShown && view.height >= root.height / 2 && view.height > 0 && !isViewPagerPageHost(view) && hostBinding.isScrollContainer(view)
-            }.toList()
-            scrollTargets = candidates.filter { child ->
-                generateSequence(child.parent) { it.parent }.takeWhile { it !== root }.none { parent -> candidates.any { it === parent } }
+            val targets = ArrayList<View>()
+            val scenes = ArrayList<View>()
+            val pending = ArrayDeque<ViewGroup>()
+            pending.add(root)
+            while (pending.isNotEmpty()) {
+                val parent = pending.removeLast()
+                for (index in 0 until parent.childCount) {
+                    val view = parent.getChildAt(index)
+                    // Compose owns its virtual children; native list rows cannot introduce
+                    // another outer scroll target. Do not visit recycled cells on each layout.
+                    // Keep hidden Compose scenes registered: visibility can change without layout.
+                    if (hostBinding.isComposeScene(view)) {
+                        scenes.add(view)
+                    } else if (view.isShown && view.height > 0 && view.height >= root.height / 2 &&
+                        !isViewPagerPageHost(view) && hostBinding.isScrollContainer(view)) {
+                        targets.add(view)
+                    } else if (view is ViewGroup) {
+                        pending.add(view)
+                    }
+                }
             }
+            scrollTargets = targets
+            composeScenes = scenes
+            barCollapse.updateTargets(scrollTargets,
+                composeScenes.mapNotNull(hostBinding::verticalScrollTouchTarget).distinct())
         }
         val terminal = scrollTargets
         // A view that stopped being a target (for example the pager RecyclerView we no
@@ -616,23 +725,37 @@ internal open class PhoneGlassSession(
         // Library / New / parts of Search are Compose scenes in 1586. They do
         // not expose RecyclerView children. Padding their View viewport removes
         // the very pixels the backdrop needs; their own content owns scrolling.
-        val composeScene = descendants(root).any { view ->
-            view.isShown && view.height > 0 && hostBinding.isComposeScene(view)
+        val occupied = if (navFrame?.isShown == true) GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry, collapse = barCollapse.progress) else 0
+        val expanded = if (navFrame?.isShown == true) GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry) else 0
+        if (expandedContentInset != expanded) {
+            expandedContentInset = expanded
+            contentInset = null
         }
-        val occupied = if (navFrame?.isShown == true) GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry) else 0
-        if (terminal.isEmpty() && !composeScene) {
+        // Off the end of a long list, bottom padding is outside the visible content.
+        // Commit it once the spring settles; short/end/unknown targets stay live.
+        val deferContentInset = barCollapse.isRunning && isCollapsed && navFrame?.isShown == true &&
+            terminal.isNotEmpty() && terminal.all {
+                states[it]?.scrollPaddingActive == true && hostBinding.canScrollVertically(it, 1) == true
+            }
+        val layoutOccupied = if (deferContentInset) contentInset ?: occupied else occupied
+        contentInset = layoutOccupied
+        val composeSceneVisible = composeScenes.any { it.isShown && it.height > 0 }
+        if (terminal.isEmpty() && !composeSceneVisible) {
             underlap = false
             if (root.paddingBottom != occupied) root.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, occupied)
             return sourceNeedsLayout
         }
         underlap = true
         if (root.paddingBottom != 0) root.setPadding(root.paddingLeft, root.paddingTop, root.paddingRight, 0)
-        root.clipToPadding = false
+        if (root.clipToPadding) root.clipToPadding = false
         terminal.forEach { view ->
             val initial = save(view).also { it.scrollPadding = true; it.scrollPaddingActive = true }
-            val desired = initial.bottomPadding + occupied
+            val desired = initial.bottomPadding + layoutOccupied
             if (view.paddingBottom != desired) view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, desired)
-            (view as? ViewGroup)?.clipToPadding = false
+            // RecyclerView requests layout even when setClipToPadding receives
+            // the current value. Writing it on each pre-draw keeps the window
+            // laying out and recording the backdrop while the list is idle.
+            if (view is ViewGroup && view.clipToPadding) view.clipToPadding = false
         }
         return sourceNeedsLayout
     }
@@ -668,8 +791,13 @@ internal open class PhoneGlassSession(
                     // horizontal morph at 80% of the sheet width. This reduces
                     // the fading surface area without changing its timing.
                     val sideInset = if (geometry.sideBySide) sheet.width * 0.10f * materialProgress else 0f
+                    // The cached mini slot already carries the scroll collapse, so the
+                    // material follows the native content into the collapsed row. Both are
+                    // multiplied by the player's own morph so opening the player returns the
+                    // row to its expanded geometry smoothly.
                     val left = (miniMarginPx[0] * (1f - materialProgress) + sideInset).roundToInt()
                     val right = (miniMarginPx[1] * (1f - materialProgress) + sideInset).roundToInt()
+                    // The native position already includes miniDropPx; do not apply it twice.
                     val top = (miniOffsetInSheet * (1f - materialProgress)).roundToInt()
                     val collapsedHeight = dp(geometry.miniHeightDp)
                     val height = (collapsedHeight + (sheet.height - collapsedHeight) * progress).roundToInt().coerceAtLeast(collapsedHeight)
@@ -766,7 +894,7 @@ internal open class PhoneGlassSession(
     }
 
     override fun redirectedPadding(view: Any?): Int? = if (activated && view === source) {
-        if (underlap) 0 else if (navFrame?.isShown == true) GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry) else 0
+        if (underlap) 0 else if (navFrame?.isShown == true) GlassPolicy.occupiedHeight(density, bottomInset, miniVisible, bottomGapDp, geometry, collapse = barCollapse.progress) else 0
     } else null
 
     // Only the tablet form narrows the full-width host touch surfaces.
@@ -774,6 +902,7 @@ internal open class PhoneGlassSession(
 
     override fun shouldBypassPlayerIntercept(event: MotionEvent): Boolean = false
 
+    /** The phone mini stays native; the tablet form separately narrows its host touch surface. */
     override fun dispatchCollapsedMiniTouch(view: View, event: MotionEvent): Boolean? = null
 
     private fun miniGlassPosition(event: MotionEvent): Pair<Float, Float>? {
@@ -785,6 +914,17 @@ internal open class PhoneGlassSession(
             (event.rawX - location[0]).coerceIn(0f, glass.width.toFloat()) to
                 (event.rawY - location[1]).coerceIn(0f, glass.height.toFloat())
             )
+    }
+
+    /** Observes one root event; the host still owns dispatch and every native mini control. */
+    open fun observeContentTouch(event: MotionEvent): Boolean? {
+        barCollapse.observeTouch(event) {
+            GlassBarTouchRegions.mini(event, barCollapse.progress, miniRoot, miniContent, miniGlass) ||
+                GlassBarTouchRegions.navigation(event, navGlass, barCollapse.progress, density,
+                    hostConfiguration.layoutDirection == View.LAYOUT_DIRECTION_RTL, tabs.size,
+                    hasDetachedSearch, barCollapse.appearance)
+        }
+        return null
     }
 
     override fun observeTouch(event: MotionEvent) {
@@ -802,7 +942,17 @@ internal open class PhoneGlassSession(
     }
 
     override fun foreground(active: Boolean) {
-        if (!active) captureWait.timedOut(0L, false)
+        if (active) {
+            glassSettings = config.settings()
+            nextSettingsCheck = android.os.SystemClock.uptimeMillis() + 500L
+            contentInset = null
+            hierarchyDirty = true
+            scanNeeded = true
+        }
+        if (!active) {
+            captureWait.timedOut(0L, false)
+            barCollapse.resetInput()
+        }
         navGlass?.foreground(active); navScrim?.foreground(active); miniGlass?.foreground(active)
     }
 
@@ -824,6 +974,9 @@ internal open class PhoneGlassSession(
         retryPending = false
         observer?.takeIf { it.isAlive }?.removeOnPreDrawListener(this)
         observer?.takeIf { it.isAlive }?.removeOnGlobalLayoutListener(layoutListener)
+        barCollapse.close()
+        scrollTargets = emptyList()
+        composeScenes = emptyList()
         backdrop?.close()
         listOfNotNull(navGlass, navScrim, miniGlass).forEach { (it.parent as? ViewGroup)?.removeView(it) }
         states.forEach { (view, state) -> state.restore(view) }
@@ -839,17 +992,12 @@ internal open class PhoneGlassSession(
         activity.window.decorView.requestLayout()
     }
 
-    private fun descendants(root: ViewGroup): Sequence<View> = sequence {
-        for (i in 0 until root.childCount) { val view = root.getChildAt(i); yield(view); if (view is ViewGroup) yieldAll(descendants(view)) }
-    }
-
     private fun isDescendant(child: View, parent: View) = generateSequence(child.parent) { it.parent }.any { it === parent }
 
     /** ViewPager2 hosts its pages in an internal RecyclerView. Padding that RecyclerView
      * shrinks every page instead of adding scroll space, so the page content stops above
      * the glass and the bar samples empty background. Pad the lists inside the pages. */
     private fun isViewPagerPageHost(view: View): Boolean = hostBinding.isPagerPageHost(view)
-
 
     private class NativeViewState(view: View) {
         private val currentValues = HashMap<String,Any?>(24)

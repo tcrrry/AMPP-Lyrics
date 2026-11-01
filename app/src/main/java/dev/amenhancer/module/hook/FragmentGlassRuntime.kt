@@ -58,7 +58,10 @@ internal object FragmentGlassRuntime {
                     firstDraws.remove(identity)?.close()
                     sessions.remove(identity)?.close()
                 }
-                override fun onMiniTouch(identity: Any, event: MotionEvent) { sessions[identity]?.observeMiniTouch(event) }
+                override fun onMiniTouch(identity: Any, event: MotionEvent): Boolean? =
+                    sessions[identity]?.observeMiniTouch(event)
+                override fun onContentTouch(identity: Any, event: MotionEvent): Boolean? =
+                    sessions[identity]?.observeContentTouch(event)
                 override fun onFailure(identity: Any?, error: Throwable) {
                     if (identity != null) {
                         firstDraws.remove(identity)?.close()

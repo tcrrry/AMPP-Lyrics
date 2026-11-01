@@ -6,7 +6,7 @@
 
 ## 模块边界
 
-新增 plugin-api（Android/Java 接口，无项目模块依赖）和 plugin-runtime（仅依赖 SDK 与 hook-runtime）。app 装配运行时和管理 UI；hook-runtime 增加通用注册记录，host-applemusic 的 HLE 注册出口也登记记录。原功能仍走原安装流程，原配置 schema、歌词缓存、profile、玻璃代码和模块职责不变。
+plugin-api 定义 Android/Java 公共接口，不依赖项目其他模块；plugin-runtime 依赖 SDK 与 hook-runtime。app 装配运行时和管理 UI；hook-runtime 与 host-applemusic 的 HLE 注册出口登记 Hook 记录。配置、歌词缓存、profile 和玻璃等功能仍由各自模块维护。
 
 SDK 与加载器没有 Apple Music 内部符号、布局或精确版本表。主项目现有精确版本门禁保持有效；适配新 Apple Music 时，主项目与插件作者各自维护自己的宿主接入。Android/Xposed 加载机制变化或 SDK 升级仍可能需要修改插件系统。
 

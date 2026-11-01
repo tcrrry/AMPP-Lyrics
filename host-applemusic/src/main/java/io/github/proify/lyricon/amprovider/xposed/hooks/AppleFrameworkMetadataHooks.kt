@@ -244,7 +244,7 @@ internal class AppleFrameworkMetadataHooks(
         if (!shouldOpenFullPlayerFromNotification(notification.category, hasMediaSession)) return
         val intent = Intent().apply {
             component = ComponentName(
-                Constants.APPLE_MUSIC_PACKAGE_NAME,
+                runtime.application.packageName,
                 mainContentActivityClassName,
             )
             putExtra(APPLE_MUSIC_SHOW_FULL_PLAYER_EXTRA, true)

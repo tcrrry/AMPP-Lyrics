@@ -10,7 +10,7 @@ import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 import org.json.JSONObject
 
-/** Names and complete signatures verified against the 1606 descriptors, including case collisions. */
+/** Exact profile contracts with the reviewed legacy signatures retained for existing builds. */
 internal data class FragmentSettingsContract(
     val fragmentClass: String = "com.apple.android.music.settings2.fragment.SettingsFragment",
     val mainActivity: String = "com.apple.android.music.common.MainActivity",
@@ -28,8 +28,21 @@ internal data class FragmentSettingsContract(
     val unitField: String = "a",
     val categoryItemsField: String = "c",
     val actionCallbackField: String = "j",
+    val members: JSONObject? = null,
 ) {
+    private fun profiledMethod(loader: ClassLoader, role: String): Method? = members?.let {
+        require(it.getInt("contractVersion") == 1) { "Unsupported native settings member contract" }
+        FragmentProfileMembers(loader, it, "settings.members",
+            FragmentMemberRequirements(methods = setOf("preferenceItems", "compose"))).method(role)
+    }
+
     fun preferenceItemsMethod(loader: ClassLoader): Method {
+        profiledMethod(loader, "preferenceItems")?.let { method ->
+            require(method.declaringClass == loader.loadClass(viewModelClass) &&
+                method.name == preferenceItemsMethod && !Modifier.isStatic(method.modifiers) &&
+                method.returnType == List::class.java)
+            return method
+        }
         val function0 = loader.loadClass(callbackClass)
         val function1 = loader.loadClass("pi.l")
         val function2 = loader.loadClass("pi.p")
@@ -45,6 +58,14 @@ internal data class FragmentSettingsContract(
             isAccessible = true
         }
     }
+
+    fun composeMethod(loader: ClassLoader): Method =
+        (profiledMethod(loader, "compose") ?: loader.loadClass(fragmentClass)
+            .getDeclaredMethod(composeMethod, loader.loadClass(composerClass))).apply {
+            require(declaringClass == loader.loadClass(fragmentClass) && name == composeMethod &&
+                !Modifier.isStatic(modifiers) && returnType == Void.TYPE)
+            isAccessible = true
+        }
 
     fun dataCategoryMethod(loader: ClassLoader): Method =
         loader.loadClass(viewModelClass).getDeclaredMethod(dataCategoryMethod, loader.loadClass(callbackClass)).apply {
@@ -89,6 +110,7 @@ internal data class FragmentSettingsContract(
                 unitField = name("unitField", defaults.unitField),
                 categoryItemsField = name("categoryItemsField", defaults.categoryItemsField),
                 actionCallbackField = name("actionCallbackField", defaults.actionCallbackField),
+                members = if (names.has("members")) names.getJSONObject("members") else null,
             )
         }
     }

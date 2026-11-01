@@ -4,14 +4,21 @@ import dev.amenhancer.module.model.EnhancementDefaults
 import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.model.CustomLyricsManifest
 import dev.amenhancer.module.model.LyricsFontManifest
+import dev.amenhancer.module.model.LlmLyricsThinkingEffort
 import dev.amenhancer.module.model.ModuleSettings
 
 object ModuleSettingsSchema {
     /** Keys removed by the profile migration. */
     val obsoleteKeys: Set<String> = setOf(KEY_TITLE_CORRECTION_TARGET_LANGUAGE)
 
-    fun decode(values: Map<String, *>): ModuleSettings = ModuleSettings(
+    fun decode(values: Map<String, *>): ModuleSettings = decode(values, values.customLyricsManifest())
+
+    /** Feature/animation reads never deserialize the independent legacy lyrics index. */
+    fun decodeOrdinarySettings(values: Map<String, *>): ModuleSettings = decode(values, CustomLyricsManifest.empty())
+
+    private fun decode(values: Map<String, *>, customLyricsManifest: CustomLyricsManifest): ModuleSettings = ModuleSettings(
         dualPaneEnabled = values.boolean(KEY_DUAL_PANE, default = true),
+        dualPaneHideStatusBarEnabled = values.boolean(KEY_DUAL_PANE_HIDE_STATUS_BAR, default = false),
         disableEditorialVideoOnTablet = values.boolean(
             KEY_DISABLE_EDITORIAL_VIDEO_ON_TABLET,
             default = true,
@@ -30,16 +37,47 @@ object ModuleSettingsSchema {
                 ModuleSettings.MIN_PHONE_LIQUID_GLASS_PANEL_BLUR_DP,
                 ModuleSettings.MAX_PHONE_LIQUID_GLASS_PANEL_BLUR_DP,
             ) ?: EnhancementDefaults.GLASS_PANEL_BLUR_DP.toInt(),
+        phoneLiquidGlassCollapseEnabled = values.boolean(
+            KEY_PHONE_LIQUID_GLASS_COLLAPSE,
+            default = true,
+        ),
+        phoneLiquidGlassTabletCollapseEnabled = values.boolean(
+            KEY_PHONE_LIQUID_GLASS_TABLET_COLLAPSE,
+            default = false,
+        ),
+        phoneLiquidGlassCollapseReboundPercent = values.number(KEY_PHONE_LIQUID_GLASS_COLLAPSE_REBOUND_PERCENT)
+            ?.coerceIn(
+                ModuleSettings.MIN_PHONE_LIQUID_GLASS_COLLAPSE_REBOUND_PERCENT,
+                ModuleSettings.MAX_PHONE_LIQUID_GLASS_COLLAPSE_REBOUND_PERCENT,
+            ) ?: EnhancementDefaults.GLASS_COLLAPSE_REBOUND_PERCENT,
+        phoneLiquidGlassExpandReboundPercent = values.number(KEY_PHONE_LIQUID_GLASS_EXPAND_REBOUND_PERCENT)
+            ?.coerceIn(
+                ModuleSettings.MIN_PHONE_LIQUID_GLASS_EXPAND_REBOUND_PERCENT,
+                ModuleSettings.MAX_PHONE_LIQUID_GLASS_EXPAND_REBOUND_PERCENT,
+            ) ?: EnhancementDefaults.GLASS_EXPAND_REBOUND_PERCENT,
+        phoneLiquidGlassMiniReboundPercent = values.number(KEY_PHONE_LIQUID_GLASS_MINI_REBOUND_PERCENT)
+            ?.coerceIn(
+                ModuleSettings.MIN_PHONE_LIQUID_GLASS_MINI_REBOUND_PERCENT,
+                ModuleSettings.MAX_PHONE_LIQUID_GLASS_MINI_REBOUND_PERCENT,
+            ) ?: EnhancementDefaults.GLASS_MINI_REBOUND_PERCENT,
+        phoneLiquidGlassMiniSinkBounceDp = values.number(KEY_PHONE_LIQUID_GLASS_MINI_SINK_BOUNCE_DP)
+            ?.coerceIn(
+                ModuleSettings.MIN_PHONE_LIQUID_GLASS_MINI_SINK_BOUNCE_DP,
+                ModuleSettings.MAX_PHONE_LIQUID_GLASS_MINI_SINK_BOUNCE_DP,
+            ) ?: EnhancementDefaults.GLASS_MINI_SINK_BOUNCE_DP,
         futureBlurEnabled = values.boolean(KEY_FUTURE_BLUR, default = true),
         cjkKaraokeAnimationEnabled = values.boolean(
             KEY_CJK_KARAOKE_ANIMATION_ENABLED,
             default = true,
         ),
+        lyricEffectsOptimizationEnabled = values.boolean(KEY_LYRIC_EFFECTS_OPTIMIZATION_ENABLED, default = false),
         navigationCompensationEnabled = values.boolean(
             KEY_NAVIGATION_COMPENSATION,
             default = false,
         ),
         forceCellularDataEntryEnabled = values.boolean(KEY_FORCE_CELLULAR_DATA_ENTRY, default = false),
+        startupPagePrewarmEnabled = values.boolean(KEY_STARTUP_PAGE_PREWARM,
+            default = EnhancementDefaults.STARTUP_PAGE_PREWARM_ENABLED),
         lyricBlurRadiusOffsetPx = values.number(KEY_LYRIC_BLUR_RADIUS_OFFSET)
             ?.coerceIn(
                 ModuleSettings.MIN_LYRIC_BLUR_RADIUS_OFFSET_PX,
@@ -58,8 +96,16 @@ object ModuleSettingsSchema {
             default = values.boolean(KEY_LEGACY_ONLINE_LYRIC_REPLACEMENT, default = false),
         ),
         automaticLyricsEnabled = values.boolean(KEY_AUTOMATIC_LYRICS_ENABLED, default = true),
+        automaticLyricsPreferNative = values.boolean(KEY_AUTOMATIC_LYRICS_PREFER_NATIVE, default = true),
+        automaticLyricsSourceOrder = values.automaticLyricsSourceOrder(),
+        llmLyricsEnabled = values.boolean(KEY_LLM_LYRICS_ENABLED, default = false),
+        llmLyricsBaseUrl = ModuleSettings.normalizeLlmLyricsBaseUrl(values.string(KEY_LLM_LYRICS_BASE_URL)),
+        llmLyricsApiKey = ModuleSettings.normalizeLlmLyricsApiKey(values.string(KEY_LLM_LYRICS_API_KEY)),
+        llmLyricsModel = ModuleSettings.normalizeLlmLyricsModel(values.string(KEY_LLM_LYRICS_MODEL)),
+        llmLyricsThinkingEnabled = values.boolean(KEY_LLM_LYRICS_THINKING_ENABLED, default = false),
+        llmLyricsThinkingEffort = LlmLyricsThinkingEffort.decode(values.string(KEY_LLM_LYRICS_THINKING_EFFORT)),
         fontManifest = values.fontManifest(),
-        customLyricsManifest = values.customLyricsManifest(),
+        customLyricsManifest = customLyricsManifest,
         schemaVersion = values.number(KEY_SCHEMA_VERSION)
             ?: ModuleConstants.CONFIG_SCHEMA_VERSION,
     )
@@ -78,6 +124,7 @@ object ModuleSettingsSchema {
     fun encodeOrdinarySettings(settings: ModuleSettings): Map<String, Any> {
         val values = linkedMapOf<String, Any>(
             KEY_DUAL_PANE to settings.dualPaneEnabled,
+            KEY_DUAL_PANE_HIDE_STATUS_BAR to settings.dualPaneHideStatusBarEnabled,
             KEY_DISABLE_EDITORIAL_VIDEO_ON_TABLET to settings.disableEditorialVideoOnTablet,
             KEY_PHONE_LIQUID_GLASS to settings.phoneLiquidGlassEnabled,
             KEY_PHONE_LIQUID_GLASS_BOTTOM_GAP_DP to
@@ -88,10 +135,30 @@ object ModuleSettingsSchema {
                 ModuleSettings.normalizePhoneLiquidGlassPanelBlurDp(
                     settings.phoneLiquidGlassPanelBlurDp,
                 ),
+            KEY_PHONE_LIQUID_GLASS_COLLAPSE to settings.phoneLiquidGlassCollapseEnabled,
+            KEY_PHONE_LIQUID_GLASS_TABLET_COLLAPSE to settings.phoneLiquidGlassTabletCollapseEnabled,
+            KEY_PHONE_LIQUID_GLASS_COLLAPSE_REBOUND_PERCENT to
+                ModuleSettings.normalizePhoneLiquidGlassCollapseReboundPercent(
+                    settings.phoneLiquidGlassCollapseReboundPercent,
+                ),
+            KEY_PHONE_LIQUID_GLASS_EXPAND_REBOUND_PERCENT to
+                ModuleSettings.normalizePhoneLiquidGlassExpandReboundPercent(
+                    settings.phoneLiquidGlassExpandReboundPercent,
+                ),
+            KEY_PHONE_LIQUID_GLASS_MINI_REBOUND_PERCENT to
+                ModuleSettings.normalizePhoneLiquidGlassMiniReboundPercent(
+                    settings.phoneLiquidGlassMiniReboundPercent,
+                ),
+            KEY_PHONE_LIQUID_GLASS_MINI_SINK_BOUNCE_DP to
+                ModuleSettings.normalizePhoneLiquidGlassMiniSinkBounceDp(
+                    settings.phoneLiquidGlassMiniSinkBounceDp,
+                ),
             KEY_FUTURE_BLUR to settings.futureBlurEnabled,
             KEY_CJK_KARAOKE_ANIMATION_ENABLED to settings.cjkKaraokeAnimationEnabled,
+            KEY_LYRIC_EFFECTS_OPTIMIZATION_ENABLED to settings.lyricEffectsOptimizationEnabled,
             KEY_NAVIGATION_COMPENSATION to settings.navigationCompensationEnabled,
             KEY_FORCE_CELLULAR_DATA_ENTRY to settings.forceCellularDataEntryEnabled,
+            KEY_STARTUP_PAGE_PREWARM to settings.startupPagePrewarmEnabled,
             KEY_LYRIC_BLUR_RADIUS_OFFSET to settings.lyricBlurRadiusOffsetPx.coerceIn(
                 ModuleSettings.MIN_LYRIC_BLUR_RADIUS_OFFSET_PX,
                 ModuleSettings.MAX_LYRIC_BLUR_RADIUS_OFFSET_PX,
@@ -103,6 +170,19 @@ object ModuleSettingsSchema {
             KEY_TITLE_CORRECTION_MODE to settings.titleCorrectionMode.storageValue,
             KEY_CUSTOM_LYRICS_ENABLED to settings.customLyricsEnabled,
             KEY_AUTOMATIC_LYRICS_ENABLED to settings.automaticLyricsEnabled,
+            KEY_AUTOMATIC_LYRICS_PREFER_NATIVE to settings.automaticLyricsPreferNative,
+            KEY_AUTOMATIC_LYRICS_SOURCE_ORDER to
+                ModuleSettings.normalizeAutomaticLyricsSourceOrder(settings.automaticLyricsSourceOrder)
+                    .joinToString(","),
+            KEY_LLM_LYRICS_ENABLED to settings.llmLyricsEnabled,
+            KEY_LLM_LYRICS_BASE_URL to
+                ModuleSettings.normalizeLlmLyricsBaseUrl(settings.llmLyricsBaseUrl),
+            KEY_LLM_LYRICS_API_KEY to
+                ModuleSettings.normalizeLlmLyricsApiKey(settings.llmLyricsApiKey),
+            KEY_LLM_LYRICS_MODEL to
+                ModuleSettings.normalizeLlmLyricsModel(settings.llmLyricsModel),
+            KEY_LLM_LYRICS_THINKING_ENABLED to settings.llmLyricsThinkingEnabled,
+            KEY_LLM_LYRICS_THINKING_EFFORT to settings.llmLyricsThinkingEffort.storageValue,
         )
         values[KEY_SCHEMA_VERSION] = ModuleConstants.CONFIG_SCHEMA_VERSION
         return values
@@ -194,6 +274,11 @@ object ModuleSettingsSchema {
         )
     }
 
+    private fun Map<String, *>.automaticLyricsSourceOrder(): List<String> =
+        ModuleSettings.normalizeAutomaticLyricsSourceOrder(
+            string(KEY_AUTOMATIC_LYRICS_SOURCE_ORDER).split(','),
+        )
+
     /**
      * Returns the host-local values required before removing the v11 target
      * language key.  This is intentionally independent of the schema version:
@@ -243,14 +328,23 @@ object ModuleSettingsSchema {
 
     private val settingKeys = setOf(
         KEY_DUAL_PANE,
+        KEY_DUAL_PANE_HIDE_STATUS_BAR,
         KEY_DISABLE_EDITORIAL_VIDEO_ON_TABLET,
         KEY_PHONE_LIQUID_GLASS,
         KEY_PHONE_LIQUID_GLASS_BOTTOM_GAP_DP,
         KEY_PHONE_LIQUID_GLASS_PANEL_BLUR_DP,
+        KEY_PHONE_LIQUID_GLASS_COLLAPSE,
+        KEY_PHONE_LIQUID_GLASS_TABLET_COLLAPSE,
+        KEY_PHONE_LIQUID_GLASS_COLLAPSE_REBOUND_PERCENT,
+        KEY_PHONE_LIQUID_GLASS_EXPAND_REBOUND_PERCENT,
+        KEY_PHONE_LIQUID_GLASS_MINI_REBOUND_PERCENT,
+        KEY_PHONE_LIQUID_GLASS_MINI_SINK_BOUNCE_DP,
         KEY_FUTURE_BLUR,
         KEY_CJK_KARAOKE_ANIMATION_ENABLED,
+        KEY_LYRIC_EFFECTS_OPTIMIZATION_ENABLED,
         KEY_NAVIGATION_COMPENSATION,
         KEY_FORCE_CELLULAR_DATA_ENTRY,
+        KEY_STARTUP_PAGE_PREWARM,
         KEY_LYRIC_BLUR_RADIUS_OFFSET,
         KEY_APPLE_MUSIC_DPI_OVERRIDE_DPI,
         KEY_TITLE_CORRECTION_ENABLED,
@@ -258,6 +352,14 @@ object ModuleSettingsSchema {
         KEY_TITLE_CORRECTION_TARGET_LANGUAGE,
         KEY_CUSTOM_LYRICS_ENABLED,
         KEY_AUTOMATIC_LYRICS_ENABLED,
+        KEY_AUTOMATIC_LYRICS_PREFER_NATIVE,
+        KEY_AUTOMATIC_LYRICS_SOURCE_ORDER,
+        KEY_LLM_LYRICS_ENABLED,
+        KEY_LLM_LYRICS_BASE_URL,
+        KEY_LLM_LYRICS_API_KEY,
+        KEY_LLM_LYRICS_MODEL,
+        KEY_LLM_LYRICS_THINKING_ENABLED,
+        KEY_LLM_LYRICS_THINKING_EFFORT,
         KEY_LEGACY_ONLINE_LYRIC_REPLACEMENT,
         KEY_FONT_ENABLED,
         KEY_FONT_FILE_ID,
@@ -275,13 +377,26 @@ object ModuleSettingsSchema {
     )
 
     private const val KEY_DUAL_PANE = "dual_pane_enabled"
+    private const val KEY_DUAL_PANE_HIDE_STATUS_BAR = "dual_pane_hide_status_bar_enabled"
     private const val KEY_DISABLE_EDITORIAL_VIDEO_ON_TABLET =
         "disable_editorial_video_on_tablet"
     private const val KEY_PHONE_LIQUID_GLASS = "phone_liquid_glass_enabled"
     private const val KEY_PHONE_LIQUID_GLASS_BOTTOM_GAP_DP = "phone_liquid_glass_bottom_gap_dp"
     private const val KEY_PHONE_LIQUID_GLASS_PANEL_BLUR_DP = "phone_liquid_glass_panel_blur_dp"
+    private const val KEY_PHONE_LIQUID_GLASS_COLLAPSE = "phone_liquid_glass_collapse_enabled"
+    private const val KEY_PHONE_LIQUID_GLASS_TABLET_COLLAPSE = "phone_liquid_glass_tablet_collapse_enabled"
+    private const val KEY_PHONE_LIQUID_GLASS_COLLAPSE_REBOUND_PERCENT =
+        "phone_liquid_glass_collapse_rebound_percent"
+    private const val KEY_PHONE_LIQUID_GLASS_EXPAND_REBOUND_PERCENT =
+        "phone_liquid_glass_expand_rebound_percent"
+    private const val KEY_PHONE_LIQUID_GLASS_MINI_REBOUND_PERCENT =
+        "phone_liquid_glass_mini_rebound_percent"
+    private const val KEY_PHONE_LIQUID_GLASS_MINI_SINK_BOUNCE_DP =
+        "phone_liquid_glass_mini_sink_bounce_dp"
     private const val KEY_FUTURE_BLUR = "future_blur_enabled"
+    private const val KEY_STARTUP_PAGE_PREWARM = "startup_page_prewarm_enabled"
     private const val KEY_CJK_KARAOKE_ANIMATION_ENABLED = "cjk_karaoke_animation_enabled"
+    private const val KEY_LYRIC_EFFECTS_OPTIMIZATION_ENABLED = "lyric_effects_optimization_enabled"
     private const val KEY_NAVIGATION_COMPENSATION = "navigation_compensation_enabled"
     private const val KEY_FORCE_CELLULAR_DATA_ENTRY = "force_cellular_data_entry_enabled"
     private const val KEY_LYRIC_BLUR_RADIUS_OFFSET = "lyric_blur_radius_offset_px"
@@ -291,6 +406,14 @@ object ModuleSettingsSchema {
     private const val KEY_TITLE_CORRECTION_TARGET_LANGUAGE = "title_correction_target_language"
     private const val KEY_CUSTOM_LYRICS_ENABLED = "custom_lyrics_enabled"
     private const val KEY_AUTOMATIC_LYRICS_ENABLED = "automatic_lyrics_enabled"
+    private const val KEY_AUTOMATIC_LYRICS_PREFER_NATIVE = "automatic_lyrics_prefer_native"
+    private const val KEY_AUTOMATIC_LYRICS_SOURCE_ORDER = "automatic_lyrics_source_order"
+    private const val KEY_LLM_LYRICS_ENABLED = "llm_lyrics_enabled"
+    private const val KEY_LLM_LYRICS_BASE_URL = "llm_lyrics_base_url"
+    private const val KEY_LLM_LYRICS_API_KEY = "llm_lyrics_api_key"
+    private const val KEY_LLM_LYRICS_MODEL = "llm_lyrics_model"
+    private const val KEY_LLM_LYRICS_THINKING_ENABLED = "llm_lyrics_thinking_enabled"
+    private const val KEY_LLM_LYRICS_THINKING_EFFORT = "llm_lyrics_thinking_effort"
     private const val KEY_LEGACY_ONLINE_LYRIC_REPLACEMENT = "online_lyric_replacement_enabled"
     private const val KEY_FONT_ENABLED = "lyrics_font_enabled"
     private const val KEY_FONT_FILE_ID = "lyrics_font_file_id"

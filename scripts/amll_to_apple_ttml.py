@@ -4,11 +4,16 @@
 amll_to_apple_ttml.py -- convert AMLL TTML into Apple Music TTML.
 
 Standalone Python port of the AM++ module converter
-(app/src/main/java/dev/amenhancer/module/lyrics/AmllTtmlFormatConverter.kt).
+(core/src/main/kotlin/dev/amenhancer/module/lyrics/AmllTtmlFormatConverter.kt).
 It rewrites the AMLL variant of TTML (translations / romanizations inline in
 every lyric line, empty ``xmlns=""`` overrides) into the Apple Music format
 (auxiliary tracks declared once in the head and linked back through
 ``itunes:key``).
+
+It also sorts lyric lines and auxiliary entries by numeric begin time and
+combines same-start translations into the first entry using newlines, retaining
+the other entries as space placeholders. Lyric voices and romanization remain
+separate, and interleaving sections retain their original ownership.
 
 The rewrite is textual on purpose: whitespace between ``<span>`` tags carries
 word separation and a DOM round-trip would not preserve it. Only markup is
@@ -30,12 +35,15 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+from decimal import Decimal, localcontext
 import re
 import sys
 import textwrap
 import urllib.request
 from typing import Callable
 
+TTML_NAMESPACE = "http://www.w3.org/ns/ttml"
+TTML_METADATA_NAMESPACE = "http://www.w3.org/ns/ttml#metadata"
 ITUNES_NAMESPACE = "http://music.apple.com/lyric-ttml-internal"
 ROLE_TRANSLATION = "x-translation"
 ROLE_ROMAN = "x-roman"
@@ -70,13 +78,17 @@ EMPTY_DEFAULT_NAMESPACE = re.compile(r"""\s+xmlns\s*=\s*(?:""|'')""")
 ROLE_ATTRIBUTE = _attribute_pattern("ttm:role")
 LANGUAGE_ATTRIBUTE = _attribute_pattern("xml:lang")
 KEY_ATTRIBUTE = _attribute_pattern("itunes:key")
+FOR_ATTRIBUTE = _attribute_pattern("for")
 BEGIN_ATTRIBUTE_VALUE = _attribute_pattern("begin")
+END_ATTRIBUTE_VALUE = _attribute_pattern("end")
 TIMING_ATTRIBUTE_VALUE = _attribute_pattern("itunes:timing")
 ITUNES_DECLARATION = _attribute_pattern("xmlns:itunes")
 SPAN_TIMING = re.compile(
     r"""\s(?:begin|end)\s*=\s*"[^"]*"|\s(?:begin|end)\s*=\s*'[^']*'"""
 )
 PARENTHESIZED = re.compile(r"^\s*[(（].*[)）]\s*$", re.DOTALL)
+TIMELINE_OFFSET = re.compile(r"([0-9]+(?:\.[0-9]+)?)(ms|s|m|h)")
+TIMELINE_NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?")
 
 
 @dataclasses.dataclass
@@ -121,6 +133,26 @@ class Element:
     content_end: int
     end: int
     self_closing: bool
+
+
+@dataclasses.dataclass(eq=False)
+class TimelineSection:
+    element: Element
+    prefix: str
+    tail: str = ""
+
+
+@dataclasses.dataclass
+class TimelineLine:
+    element: Element
+    begin: Decimal
+    ancestors: list[TimelineSection]
+    prefix: str
+
+
+@dataclasses.dataclass
+class TrackFormatting:
+    edit: Edit | None
 
 
 # --- Minimal XML element scanning -------------------------------------
@@ -285,6 +317,12 @@ def clock_seconds(value: str | None) -> float | None:
 # --- Track migration --------------------------------------------------
 
 
+def quote_raw_attribute_value(value: str) -> str:
+    """Source attribute content already carries entities; choose a safe delimiter."""
+    delimiter = "'" if '"' in value else '"'
+    return delimiter + value + delimiter
+
+
 def to_apple_format(ttml: str) -> TtmlFormatConversion:
     if not ttml:
         return TtmlFormatConversion(ttml, False)
@@ -294,15 +332,202 @@ def to_apple_format(ttml: str) -> TtmlFormatConversion:
     declared = declared_tracks(ttml)
     if declared.any and not has_undeclared_inline_track(ttml, declared):
         # The head already speaks for every kind the body carries, so this is
-        # Apple's own document and nothing, the root included, is rewritten.
-        return TtmlFormatConversion(ttml, False)
+        # Apple's own document; only its timeline needs formatting.
+        formatted = format_timeline(ttml)
+        return TtmlFormatConversion(formatted, formatted != ttml)
     migrated = migrate_auxiliary_tracks(ttml, declared)
     body = next_element(migrated, "body", 0)
     result = normalize_tags(
         migrated,
         word_timed=body is not None and has_timed_span(migrated, body),
     )
+    result = format_timeline(result)
     return TtmlFormatConversion(result, result != ttml)
+
+
+def timeline_time(value: str | None) -> Decimal | None:
+    """Exact decimal comparison, including equivalent clock/offset forms."""
+    if value is None:
+        return None
+    text = value.strip()
+    with localcontext() as context:
+        context.prec = max(28, len(text) * 2)
+        offset = TIMELINE_OFFSET.fullmatch(text)
+        if offset:
+            multiplier = {"ms": Decimal("0.001"), "m": Decimal(60), "h": Decimal(3600)}.get(offset[2], Decimal(1))
+            return (Decimal(offset[1]) * multiplier).normalize()
+        parts = text.split(":")
+        if not 1 <= len(parts) <= 3 or any(not TIMELINE_NUMBER.fullmatch(part) for part in parts):
+            return None
+        seconds = Decimal(0)
+        for part in parts:
+            seconds = seconds * 60 + Decimal(part)
+        return seconds.normalize()
+
+
+def collect_timeline(
+    ttml: str, section: TimelineSection, ancestors: list[TimelineSection], lines: list[TimelineLine]
+) -> bool:
+    children = child_elements(ttml, section.element)
+    if not children:
+        return False
+    cursor = section.element.content_start
+    pending = ""
+    for child in children:
+        prefix = pending + ttml[cursor:child.start]
+        pending = ""
+        if is_element(ttml, child.start, "p"):
+            begin = timeline_time(attribute(child.attributes, BEGIN_ATTRIBUTE_VALUE))
+            if begin is None:
+                return False
+            lines.append(TimelineLine(child, begin, ancestors, prefix))
+        elif is_element(ttml, child.start, "div"):
+            if not child_elements(ttml, child):
+                pending = prefix + ttml[child.start:child.end]
+            else:
+                nested = TimelineSection(child, prefix)
+                if not collect_timeline(ttml, nested, ancestors + [nested], lines):
+                    return False
+        else:
+            return False
+        cursor = child.end
+    section.tail = pending + ttml[cursor:section.element.content_end]
+    return True
+
+
+def replace_attribute(tag: str, pattern: re.Pattern, value: str | None) -> str:
+    if value is None:
+        return tag
+    match = pattern.search(tag)
+    if match is None:
+        return tag
+    group = 1 if match[1] is not None else 2
+    start, end = match.span(group)
+    return tag[:start] + value + tag[end:]
+
+
+def render_timeline(ttml: str, root: TimelineSection, lines: list[TimelineLine]) -> str:
+    result: list[str] = []
+    opened: list[TimelineSection] = []
+    seen: set[TimelineSection] = set()
+    last = {section: index for index, line in enumerate(lines) for section in line.ancestors}
+
+    def close_to(depth: int, index: int) -> None:
+        while len(opened) > depth:
+            section = opened.pop()
+            if last[section] == index:
+                result.append(section.tail)
+            result.append(ttml[section.element.content_end:section.element.end])
+
+    for index, line in enumerate(lines):
+        common = 0
+        for previous, current in zip(opened, line.ancestors):
+            if previous is not current:
+                break
+            common += 1
+        close_to(common, index - 1)
+        for section in line.ancestors[common:]:
+            if section not in seen:
+                seen.add(section)
+                result.append(section.prefix)
+            tag = ttml[section.element.start:section.element.content_start]
+            tag = replace_attribute(tag, BEGIN_ATTRIBUTE_VALUE, attribute(line.element.attributes, BEGIN_ATTRIBUTE_VALUE))
+            ends: list[tuple[Decimal, str]] = []
+            for candidate in lines[index:]:
+                if section not in candidate.ancestors:
+                    break
+                value = attribute(candidate.element.attributes, END_ATTRIBUTE_VALUE)
+                end = timeline_time(value)
+                if end is not None:
+                    ends.append((end, value))
+            end_value = max(ends, key=lambda item: item[0])[1] if ends else None
+            result.append(replace_attribute(tag, END_ATTRIBUTE_VALUE, end_value))
+            opened.append(section)
+        result.append(line.prefix)
+        result.append(ttml[line.element.start:line.element.end])
+    close_to(0, len(lines) - 1)
+    result.append(root.tail)
+    return "".join(result)
+
+
+def element_content(ttml: str, element: Element) -> str:
+    return "" if element.self_closing else ttml[element.content_start:element.content_end]
+
+
+def format_track(ttml: str, track: Element, lines: list[TimelineLine], merge: bool) -> TrackFormatting | None:
+    entries = child_elements(ttml, track)
+    if not entries:
+        return TrackFormatting(None)
+    if any(not is_element(ttml, entry.start, "text") for entry in entries):
+        return None
+    keys = [attribute(line.element.attributes, KEY_ATTRIBUTE) for line in lines]
+    by_key = {attribute(entry.attributes, FOR_ATTRIBUTE): entry for entry in entries}
+    if len(by_key) != len(entries) or any(key not in keys for key in by_key):
+        return None
+    texts = [element_content(ttml, by_key[key]) if key in by_key else ABSENT_TEXT for key in keys]
+    texts = [text if text.strip() else ABSENT_TEXT for text in texts]
+    if merge:
+        groups: dict[Decimal, list[int]] = {}
+        for index, line in enumerate(lines):
+            groups.setdefault(line.begin, []).append(index)
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+            combined = "\n".join(dict.fromkeys(texts[index] for index in group if texts[index].strip()))
+            texts[group[0]] = combined or ABSENT_TEXT
+            for index in group[1:]:
+                texts[index] = ABSENT_TEXT
+    prefixes: dict[int, str] = {}
+    cursor = track.content_start
+    for entry in entries:
+        prefixes[entry.start] = ttml[cursor:entry.start]
+        cursor = entry.end
+    result: list[str] = []
+    for index, key in enumerate(keys):
+        entry = by_key.get(key)
+        if entry is None:
+            result.append(f"<text for={quote_raw_attribute_value(key)}>{texts[index]}</text>")
+        else:
+            result.append(prefixes[entry.start])
+            if entry.self_closing:
+                result.append(f"<text{entry.attributes}>{texts[index]}</text>")
+            else:
+                result.extend((ttml[entry.start:entry.content_start], texts[index], ttml[entry.content_end:entry.end]))
+    result.append(ttml[cursor:track.content_end])
+    formatted = "".join(result)
+    return TrackFormatting(None if formatted == element_content(ttml, track) else Edit(track.content_start, track.content_end, formatted))
+
+
+def format_timeline(ttml: str) -> str:
+    body = next_element(ttml, "body", 0)
+    if body is None:
+        return ttml
+    root = TimelineSection(body, "")
+    lines: list[TimelineLine] = []
+    if not collect_timeline(ttml, root, [], lines) or not lines:
+        return ttml
+    ordered = sorted(lines, key=lambda line: line.begin)
+    edits: list[Edit] = []
+    if ordered != lines:
+        edits.append(Edit(body.content_start, body.content_end, render_timeline(ttml, root, ordered)))
+    keys = [attribute(line.element.attributes, KEY_ATTRIBUTE) for line in ordered]
+    if (any(key is None or not key.strip() for key in keys) or len(set(keys)) != len(keys)) and declared_tracks(ttml).any:
+        return ttml
+    if all(key is not None for key in keys) and len(set(keys)) == len(keys):
+        metadata = next_element(ttml, "metadata", 0)
+        if metadata is not None:
+            for container_name, item_name in (("translations", "translation"), ("transliterations", "transliteration")):
+                container = next_element(ttml, container_name, metadata.content_start)
+                if container is None or container.end > metadata.content_end:
+                    continue
+                for track in child_elements(ttml, container):
+                    if is_element(ttml, track.start, item_name):
+                        formatted = format_track(ttml, track, ordered, container_name == "translations")
+                        if formatted is None:
+                            return ttml
+                        if formatted.edit is not None:
+                            edits.append(formatted.edit)
+    return apply_edits(ttml, edits)
 
 
 def declared_tracks(ttml: str) -> DeclaredTracks:
@@ -542,7 +767,7 @@ def append_track(
     head += f' xml:lang="{language}">'
     parts.append(head)
     for entry in entries:
-        parts.append(f'<text for="{entry.key}">')
+        parts.append(f"<text for={quote_raw_attribute_value(entry.key)}>")
         parts.append(append_entry_text(entry))
         parts.append("</text>")
     parts.append(f"</{item}>")
@@ -561,7 +786,7 @@ def append_entry_text(entry: TrackEntry) -> str:
         return result
     return (
         result
-        + f'<span ttm:role="{ROLE_BACKGROUND}">'
+        + f'<span xmlns="{TTML_NAMESPACE}" xmlns:ttm="{TTML_METADATA_NAMESPACE}" ttm:role="{ROLE_BACKGROUND}">'
         + parenthesized(entry.background)
         + "</span>"
     )
@@ -955,7 +1180,8 @@ def _selftest() -> int:
         )
         result = to_apple_format(background_only).ttml
         assert (
-            '<text for="L9"> <span ttm:role="x-bg">(BT)</span></text>' in result
+            '<text for="L9"> <span xmlns="http://www.w3.org/ns/ttml" '
+            'xmlns:ttm="http://www.w3.org/ns/ttml#metadata" ttm:role="x-bg">(BT)</span></text>' in result
         )
         return True
 

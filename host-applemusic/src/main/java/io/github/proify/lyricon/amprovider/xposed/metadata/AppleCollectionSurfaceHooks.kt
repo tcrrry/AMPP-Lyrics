@@ -526,7 +526,23 @@ internal class AppleCollectionSurfaceHooks(
                         )
                     }
 
-                    else -> host.handleArtistFinalBinding(model, chain.thisObject, position)
+                    else -> {
+                        val entity = librarySurfaceHooks.presentationRowEntity(model)
+                        if (entity == null) {
+                            host.handleArtistFinalBinding(model, chain.thisObject, position)
+                        } else {
+                            val mediaId = host.mediaApiEntityCatalogId(entity) ?: return@installHook
+                            host.registerLibraryEntity(mediaId, entity, InAppLibraryEntityKind.SONG)
+                            dataBindingHooks.recordCurrentRecyclerMediaId(mediaId)
+                            val binding = bindingFromFinalHolder(chain.thisObject, modelHolderMethod)
+                            if (binding != null) {
+                                dataBindingHooks.beginModelBind(binding)
+                                dataBindingHooks.capture(binding, dataBindingHooks.itemViewFromHolder(chain.thisObject))
+                                dataBindingHooks.register(mediaId, binding, InAppOriginalResolutionMode.ORIGINAL_FIRST)
+                            }
+                            onCollectionPageRowBound(mediaId, entity, "song")
+                        }
+                    }
                 }
             })
             ProviderLogger.info(

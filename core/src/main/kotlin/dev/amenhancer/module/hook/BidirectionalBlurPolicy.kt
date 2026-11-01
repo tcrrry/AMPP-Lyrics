@@ -1,5 +1,9 @@
 package dev.amenhancer.module.hook
 
+/* Directional radius policy derived from a23bc/amlyricblur, commit 3417e217d7692ae742bbae80d2bd51aadffcd59e.
+ * Copyright (c) 2026 a23bc. Licensed under the MIT License.
+ */
+
 import dev.amenhancer.module.model.ModuleSettings
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -10,51 +14,6 @@ object BidirectionalBlurPolicy {
     private val PAST_RADII_BY_DISTANCE = floatArrayOf(0f, 13f, 17f, MAX_BLUR_RADIUS)
     private val FUTURE_RADII_BY_DISTANCE = floatArrayOf(0f, 8f, 13f, 17f, MAX_BLUR_RADIUS)
     const val TRANSITION_DURATION_MS = 300L
-
-    fun resolveDisplayHighlights(
-        active: Set<Int>,
-        visiblePositions: List<Int>,
-        gapAnchorPosition: Int = -1,
-    ): Set<Int> {
-        if (gapAnchorPosition >= 0) return setOf(gapAnchorPosition)
-        if (active.isNotEmpty()) return active.toSet()
-        return visiblePositions
-            .asSequence()
-            .filter { position -> position >= 0 }
-            .minOrNull()
-            ?.let(::setOf)
-            .orEmpty()
-    }
-
-    fun selectInstrumentalGapAnchor(
-        active: Set<Int>,
-        isGap: Boolean,
-        isOpeningHighlight: Boolean,
-        instrumentalPositions: List<Int>,
-        visiblePositions: List<Int>,
-    ): Int {
-        val referencePosition = active.maxOrNull()
-        if (active.isNotEmpty() && !isGap) {
-            if (!isOpeningHighlight) return -1
-            val earliestVisible = visiblePositions
-                .asSequence()
-                .filter { position -> position >= 0 }
-                .minOrNull()
-                ?: return -1
-            if (!active.contains(earliestVisible)) return -1
-            return instrumentalPositions
-                .asSequence()
-                .filter { position -> position >= 0 && position < earliestVisible }
-                .maxOrNull()
-                ?: -1
-        }
-        return instrumentalPositions
-            .asSequence()
-            .filter { position -> position >= 0 }
-            .minByOrNull { position ->
-                referencePosition?.let { reference -> abs(position - reference) } ?: 0
-            } ?: -1
-    }
 
     fun targetRadius(position: Int, highlighted: Set<Int>): Float {
         if (highlighted.isEmpty()) return MAX_BLUR_RADIUS

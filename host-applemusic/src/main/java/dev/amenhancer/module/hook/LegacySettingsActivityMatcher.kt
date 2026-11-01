@@ -1,16 +1,16 @@
 package dev.amenhancer.module.hook
 import android.app.Activity
 import android.view.View
-import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.ui.EmbeddedHostActivityRole
 import dev.amenhancer.module.ui.EmbeddedSettingsTextPolicy
 internal class LegacySettingsActivityMatcher(
     private val playerActivityClass: Class<*>? = null,
     private val playerActivityName: String,
     private val mainName: String,
+    private val hostPackageName: String,
 ) : SettingsActivityMatcher {
     override fun roleFor(activity: Activity): EmbeddedHostActivityRole? {
-        if (activity.packageName != ModuleConstants.TARGET_PACKAGE) return null
+        if (activity.packageName != hostPackageName) return null
         if (isMainContentActivity(activity)) return EmbeddedHostActivityRole.MainContent
         if (isPlayerActivity(activity)) return EmbeddedHostActivityRole.Player
         if (EmbeddedSettingsTextPolicy.isSettingsClassName(activity.javaClass.name)) {

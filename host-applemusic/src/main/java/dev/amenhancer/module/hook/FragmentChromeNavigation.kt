@@ -47,7 +47,8 @@ internal class FragmentChromeNavigation(
         val ready: Boolean
         if (menu != null) {
             items = (0 until menu.size()).map(menu::getItem).filter { it.isVisible }.map {
-                NavigationItem(it.itemId, it.title?.toString().orEmpty(), it.icon, it.isEnabled)
+                NavigationItem(it.itemId, it.title?.toString().orEmpty(), it.icon, it.isEnabled,
+                    isSearch = isSearchMenuItem(view, it))
             }
             selectedId = selectedIdMethod!!.invoke(view) as Int
             ready = true
@@ -69,17 +70,29 @@ internal class FragmentChromeNavigation(
                 val label = if (kindName == "LIBRARY") libraryTitleValue?.invoke(libraryTitleLive) as? String else null
                 NavigationItem(id, label ?: contract.kindLabel.invoke(kind) as String,
                     if (kindName == "SEARCH" && iconId != 0) icons.getOrPut(iconId) { view.context.getDrawable(iconId) } else null,
-                    menuItem?.isEnabled ?: true)
+                    menuItem?.isEnabled ?: true,
+                    isSearch = kindName == "SEARCH")
             }
             selectedId = selected.invoke(vm)?.let { contract.kindId.invoke(it) as Int }
             // The callback may be captured for an equivalent model object from the same live menu.
             ready = items.size > 1 && contract.nativeMenuListener.get(owner) != null
         }
-        val nextKey = items.flatMap { listOf(it.id, it.label, it.enabled, it.icon?.constantState) } +
+        val nextKey = items.flatMap { listOf(it.id, it.label, it.enabled, it.isSearch, it.icon?.constantState) } +
             listOf(selectedId, ready, view.resources.configuration.hashCode())
         if (key != nextKey) { key = nextKey; revision++ }
         return NavigationSnapshot(items, selectedId, placement, revision, ready)
     }
+
+    /**
+     * The menu branch has no enum kind to read, so the search destination is identified
+     * from the menu item's own resource entry name. This is deliberately best-effort:
+     * an unreadable or unmatched name reports false, and the bar keeps its single
+     * capsule rather than detaching a control it cannot prove is search.
+     */
+    private fun isSearchMenuItem(view: View, item: android.view.MenuItem): Boolean =
+        runCatching {
+            view.resources.getResourceEntryName(item.itemId).contains("search", ignoreCase = true)
+        }.getOrDefault(false)
 
     private fun callbackFor(model: Any): Any? = callbacks[model] ?: callbacks.entries.firstOrNull {
         contract.modelKind.get(it.key) == contract.modelKind.get(model)

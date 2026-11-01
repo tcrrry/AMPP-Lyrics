@@ -4,6 +4,10 @@ This directory contains host profile checks, build helpers and optional device r
 Use the [host adaptation guide](../docs/host-adaptation-guide.md) for the per-build workflow.
 Functional acceptance is manual by default; run device scripts only when explicitly requested.
 
+## v1.11 release
+
+Use `bundle-released-lyrics.py` with plugin 1.2.1 and translation 1.0.0, then verify both modules with `verify-integrated-lyrics-v1.11.py`. Use `package-1614-release-v1.11.py` for all four forms. `docs/integration-v1.11.json` pins the bundled artifacts; coexist routing and both vivo manifest gates remain required.
+
 ## v1.10 release
 
 Use `bundle-released-lyrics.py --main-version 1.10 --translation TRANSLATION_ZIP LYRICS_ZIP`
@@ -48,6 +52,8 @@ the members recorded for static verification and the exact contracts described b
 
 For Fragment builds, verification also covers all declared method/field/constructor descriptors
 in the dual-pane, lyrics runtime, karaoke width, video handoff and optional song-layout sections.
+Declared `settings.members` contracts additionally cover the exact preference-list and Compose
+entry signatures, including required roles and their ViewModel/Fragment ownership.
 Layout policy and the six comparison-evidence fields must be explicit. Installation additionally
 checks the code-owned required-role inventory before registering any hook; an omitted JSON role
 cannot silently disable a dependency. Use [the adaptation checklist](../docs/host-adaptation-checklist.md)
@@ -68,6 +74,11 @@ Besides the pinned classes, methods and fields, the script asserts the two seams
 reuses between builds: the direct catalog query (only one method may satisfy the
 `(String, Map, Continuation)` shape, and it must be the verified name for that version) and the
 obfuscated `androidx.lifecycle.LiveData` alias that `COMPOSE_OBSERVE_AS_STATE` accepts.
+
+Optional `metadataPresentation` v1 inventories cover the native snapshot factory/accessors,
+visible lockup, Room entity preparation, paginated row builder/cache rebuild, entity type getter and
+search-row entity fields. Keep the required roles aligned with the runtime installer;
+an incomplete declaration must report degradation instead of silently using a guessed member.
 
 ## Independent plugin build and CI caching
 

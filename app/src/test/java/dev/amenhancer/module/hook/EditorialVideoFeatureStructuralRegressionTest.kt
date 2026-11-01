@@ -59,7 +59,7 @@ class EditorialVideoFeatureStructuralRegressionTest {
         assertTrue(client.contains("valuesProvider"))
         assertFalse(settings.contains("平板隐藏编辑视频"))
         // Copy is independent of the legacy key; the visible row controls dual pane.
-        assertTrue(settings.contains("settings.copy(dualPaneEnabled = it)"))
+        assertTrue(settings.contains("currentSettings().copy(dualPaneEnabled = it)"))
     }
 
     @Test

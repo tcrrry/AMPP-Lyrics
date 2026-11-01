@@ -97,9 +97,6 @@ internal class LyricsTypefaceSession : LyricsTypefaceResourceBinding {
         }
         LyricsTypefaceLayoutContract.layoutNames.forEach { layoutName ->
             LayoutInflationRegistry.register(layoutName) { root ->
-                if (layoutName == LyricsTypefaceLayoutContract.INSTRUMENTAL_LAYOUT_NAME) {
-                    InstrumentalRowIdentity.mark(root)
-                }
                 applyToLyricsLayout(root)
                 installRowLayoutChangeObserver(root)
             }

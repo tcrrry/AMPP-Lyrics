@@ -22,7 +22,7 @@ object AppleMusicHostFactory {
     fun preservesNativeEditorialVideo(context: android.content.Context): Boolean = fragmentFamily(context)
     fun settingsActivityMatcher(context: android.content.Context, playerClass: Class<*>?): SettingsActivityMatcher =
         if (fragmentFamily(context)) FragmentSettingsNativeFactory.activityMatcher(context)
-        else settingsNames(context).let { LegacySettingsActivityMatcher(playerClass,it.getString("playerActivity"),it.getString("mainActivity")) }
+        else settingsNames(context).let { LegacySettingsActivityMatcher(playerClass,it.getString("playerActivity"),it.getString("mainActivity"),context.packageName) }
     fun settingsViewBridge(context: android.content.Context, onOpen: (android.app.Activity)->Unit,
         onLyrics: (android.app.Activity)->Unit = onOpen): SettingsViewBridge =
         if (fragmentFamily(context)) FragmentSettingsNativeFactory.viewBridge(context,onOpen,onLyrics)
@@ -64,11 +64,51 @@ object AppleMusicHostFactory {
             source = ApkTargetClassSource(application, classLoader),
         )
         val settings = config.settings()
+        val customLyrics = AppleMusicCustomLyricsTarget(
+            config = config,
+            symbols = resolver,
+            currentSong = currentSong,
+            autoLyricsRuntime = autoLyricsRuntime,
+        )
+        val karaokeAnimation = AppleMusicCjkKaraokeAnimationTarget(
+            symbols = resolver,
+            foregroundTextField = profile.document.optJSONObject("cjk")
+                ?.optString("foregroundTextField", "U") ?: "U",
+            maxSpanGlowCharacters = profile.document.optJSONObject("cjk")
+                ?.optInt("maxSpanGlowCharacters", 1) ?: 1,
+        )
+        val lyricRepairs by lazy {
+            val parser = customLyrics.installParserRepair()
+            val alignment = installLineLyricAgentAlignment(profile, classLoader, application.resources) {
+                config.settings().lyricEffectsOptimizationEnabled
+            }
+            val terminal = AppleMusicCjkTerminalGradientTarget(profile, classLoader).install()
+            val splitGlow = karaokeAnimation.installSplitWordGlow(
+                profile.document.optJSONObject("cjk")?.optBoolean("splitWordGlow", false) == true,
+            )
+            val repairs = listOf(parser) + listOf(alignment, terminal, splitGlow)
+                .filterNot { it is TargetCapabilityInstall.Unsupported }
+            val message = listOf(parser, alignment, terminal, splitGlow).joinToString("; ") { it.message }
+            when {
+                repairs.all { it is TargetCapabilityInstall.Active } -> TargetCapabilityInstall.Active(message)
+                repairs.all { it is TargetCapabilityInstall.Unsupported } -> TargetCapabilityInstall.Unsupported(message)
+                else -> TargetCapabilityInstall.Degraded(message)
+            }
+        }
         return TargetAdaptation(
             identity = build.displayName,
             build = build,
             currentSong = currentSong,
             playerRecovery = FragmentPlayerRecoveryTarget(resolver, build),
+            startupPagePrewarm = FragmentStartupPagePrewarmTarget(
+                application, classLoader, { config.settings().startupPagePrewarmEnabled },
+                onFailure = { error -> config.reportHealth(dev.amenhancer.module.model.FeatureHealth(
+                    dev.amenhancer.module.ModuleConstants.FEATURE_STARTUP_PAGE_PREWARM,
+                    dev.amenhancer.module.model.FeatureState.DEGRADED,
+                    "Startup page prewarming stopped: ${error.cause?.message ?: error.message ?: error.javaClass.simpleName}",
+                    build.displayName,
+                )) },
+            ),
             dualPane = if (profile.family == "fragment-content") FragmentDualPaneTarget(resolver, build)
                 else AppleMusicDualPaneTarget(resolver, build),
             editorialVideo = editorialVideoTargetForFamily(profile.family) {
@@ -81,19 +121,21 @@ object AppleMusicHostFactory {
                 build = build,
                 enabled = { config.settings().forceCellularDataEntryEnabled },
             ),
-            bidirectionalLyricBlur = AppleMusicBidirectionalLyricBlurTarget(resolver),
-            cjkKaraokeAnimation = AppleMusicCjkKaraokeAnimationTarget(resolver,
-                profile.document.optJSONObject("cjk")?.optString("foregroundTextField", "U") ?: "U"),
+            bidirectionalLyricBlur = AppleMusicBidirectionalLyricBlurTarget(profile, classLoader),
+            cjkKaraokeAnimation = karaokeAnimation,
+            lyricWrapSweep = AppleMusicLyricWrapSweepTarget(profile, classLoader),
+            lyricBackgroundHighlight = AppleMusicLyricBackgroundHighlightTarget(profile, classLoader,
+                onFailure = { message -> config.reportHealth(dev.amenhancer.module.model.FeatureHealth(
+                    dev.amenhancer.module.ModuleConstants.FEATURE_LYRIC_BACKGROUND_HIGHLIGHT,
+                    dev.amenhancer.module.model.FeatureState.DEGRADED, message, build.displayName,
+                )) },
+            ),
             lyricsTypeface = AppleMusicLyricsTypefaceTarget(
                 symbols = resolver,
                 session = lyricsTypefaceSession as LyricsTypefaceSession,
             ),
-            customLyrics = AppleMusicCustomLyricsTarget(
-                config = config,
-                symbols = resolver,
-                currentSong = currentSong,
-                autoLyricsRuntime = autoLyricsRuntime,
-            ),
+            customLyrics = customLyrics,
+            lyricsParser = LyricsParserTarget { lyricRepairs },
             currentSongIdentity = AppleMusicCurrentSongIdentityTarget(
                 resolver,
                 currentSong,

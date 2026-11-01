@@ -7,8 +7,12 @@
 package io.github.proify.lyricon.amprovider.xposed
 
 import android.os.SystemClock
+import android.os.Looper
 import android.view.Choreographer
 import com.juren233.hyperlyricsenhanced.BuildConfig
+import dev.amenhancer.host.applemusic.AppleMusicHostProfiles
+import dev.amenhancer.module.hook.FragmentMemberRequirements
+import dev.amenhancer.module.hook.FragmentProfileMembers
 import io.github.proify.lyricon.amprovider.xposed.internal.WeakIdentityMap
 import java.lang.ref.WeakReference
 import java.lang.reflect.Modifier
@@ -67,6 +71,9 @@ internal interface AppleLibrarySurfaceHost {
         priority: AppleInternalCatalogResolver.RequestPriority,
     )
 
+    fun scheduleMetadataResolution(mediaIds: Collection<String>, priority: AppleInternalCatalogResolver.RequestPriority,
+        originalResolutionMode: InAppOriginalResolutionMode) = scheduleMetadataResolution(mediaIds, priority)
+
     fun isRefreshableMediaId(mediaId: String): Boolean
 
     fun nextMetadataTraceSequence(): Long
@@ -109,6 +116,17 @@ internal class AppleLibrarySurfaceHooks(
     private val entityIds = WeakIdentityMap<Any, String>()
     private val entityAttributes = WeakIdentityMap<Any, Any>()
     private val entityEnrichedIds = WeakIdentityMap<Any, String>()
+    private val presentationStates = WeakIdentityMap<Any, Any>()
+    private val presentationRows = WeakIdentityMap<Any, WeakReference<Any>>()
+    @Volatile private var presentationMembers: FragmentProfileMembers? = null
+    private val presentationNames by lazy {
+        val version = runtime.hookResolver.version
+        val name = version.versionName
+        val code = version.versionCode
+        if (name == null || code == null) null else
+            AppleMusicHostProfiles.find("com.apple.android.music", name, code)?.document
+                ?.optJSONObject("metadataPresentation")
+    }
     private val mediaApiAttributeBindings =
         WeakIdentityMap<Any, InAppMediaApiAttributeBinding>()
     private val mediaApiAttributeHookedMethods =
@@ -429,6 +447,7 @@ internal class AppleLibrarySurfaceHooks(
                     .onSuccess { changed = true }
             }
         }
+        if (changed) publishPresentation(attributes, alias)
         return changed
     }
 
@@ -463,6 +482,7 @@ internal class AppleLibrarySurfaceHooks(
                             )
                         }
                     }
+                    publishPresentation(attributes, null)
                 }
             }
             add(mediaId)
@@ -494,6 +514,7 @@ internal class AppleLibrarySurfaceHooks(
                     val target = chain.thisObject ?: return@installResultOverrideHook original
                     val binding = mediaApiAttributeBindings[target]
                         ?: return@installResultOverrideHook original
+                    observePresentation(target, binding.mediaId)
                     recordComposeMediaId(binding.mediaId)
                     host.recordCurrentRecyclerMediaId(binding.mediaId)
                     host.effectiveAlias(binding.mediaId)?.let { alias ->
@@ -506,6 +527,138 @@ internal class AppleLibrarySurfaceHooks(
                 )
             }
         }
+    }
+
+    fun hasPresentationSurface(): Boolean = presentationNames != null
+
+    fun hasPresentationObservation(): Boolean = presentationMembers != null
+
+    /** Use native snapshot reads at the text getter, inside the actual row composition. */
+    fun installPresentationHooks() {
+        val names = checkNotNull(presentationNames)
+        check(names.getInt("contractVersion") == 1) { "Unsupported metadata presentation contract" }
+        val members = FragmentProfileMembers(runtime.classLoader, names, "metadataPresentation",
+            FragmentMemberRequirements(
+                methods = setOf("createState", "readState", "writeState", "entityType", "lockup", "roomPrepare", "pagedRow", "pagedRebuild"),
+                fields = setOf("searchSongRow", "searchGridRow"),
+            ))
+        val create = members.method("createState")
+        val read = members.method("readState")
+        val write = members.method("writeState")
+        val entityType = members.method("entityType")
+        val roomPrepare = members.method("roomPrepare")
+        val pagedRow = members.method("pagedRow")
+        val pagedRebuild = members.method("pagedRebuild")
+        val lockup = members.method("lockup")
+        check(Modifier.isStatic(create.modifiers) && create.parameterTypes.contentEquals(arrayOf(Any::class.java)) &&
+            read.declaringClass.isAssignableFrom(create.returnType) && read.parameterCount == 0 &&
+            read.returnType == Any::class.java && write.declaringClass == read.declaringClass &&
+            write.parameterTypes.contentEquals(arrayOf(Any::class.java)) && write.returnType == Void.TYPE &&
+            !Modifier.isStatic(read.modifiers) && !Modifier.isStatic(write.modifiers)) {
+            "Metadata snapshot factory/accessor mismatch"
+        }
+        check(entityType.parameterCount == 0 && entityType.returnType == String::class.java &&
+            roomPrepare.parameterTypes.contentEquals(arrayOf(List::class.java)) && roomPrepare.returnType == List::class.java &&
+            pagedRow.parameterTypes.contentEquals(arrayOf(Int::class.javaPrimitiveType, entityType.declaringClass)) &&
+            pagedRebuild.declaringClass.isAssignableFrom(pagedRow.declaringClass) &&
+            pagedRebuild.parameterCount == 0 && pagedRebuild.returnType == Void.TYPE &&
+            lockup.parameterCount == 11 && lockup.parameterTypes[2] == List::class.java && lockup.returnType == Void.TYPE &&
+            listOf(entityType, roomPrepare, pagedRow, pagedRebuild, lockup).none { Modifier.isStatic(it.modifiers) } &&
+            listOf("searchSongRow", "searchGridRow").all { members.field(it).type == entityType.declaringClass }) {
+            "Metadata presentation surface relationship mismatch"
+        }
+        runtime.hookRegistrar.onInstallationClose {
+            val states = presentationStates.keys().mapNotNull { presentationStates[it] }
+            presentationMembers = null
+            presentationStates.clear()
+            presentationRows.clear()
+            val restore = {
+                states.forEach { state ->
+                    runCatching { write.invoke(state, null) }.onFailure {
+                        ProviderLogger.error("Apple Music metadata presentation restore failed", it)
+                    }
+                }
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) restore() else runtime.mainHandler.post(restore)
+        }
+        runtime.hookRegistrar.installHook(members.method("roomPrepare"), after = { _, result ->
+            (result as? Iterable<*>)?.filterNotNull()?.forEach { registerPresentationSong(it, members) }
+        })
+        // Both artist top songs and Room2 render their visible lockups through this factory.
+        runtime.hookRegistrar.installHook(members.method("lockup"), before = { chain ->
+            val entities = (chain.args.getOrNull(2) as? Iterable<*>)?.filterNotNull().orEmpty()
+            val ids = entities.mapNotNull { registerPresentationSong(it, members) }.distinct()
+            if (ids.isNotEmpty()) {
+                val target = chain.args.getOrNull(2) ?: return@installHook
+                val work = {
+                    if (presentationMembers === members) resolveVisibleMediaIds(ids, InAppOriginalResolutionMode.ORIGINAL_FIRST)
+                }
+                val queue = refreshQueue
+                if (queue == null) runtime.mainHandler.post(work) else queue.enqueueAction(
+                    kind = AppleMetadataRefreshKind.VISIBLE_RESOLUTION,
+                    target = target,
+                    mediaIds = ids,
+                    originalResolutionMode = InAppOriginalResolutionMode.ORIGINAL_FIRST,
+                    action = work,
+                )
+            }
+        })
+        runtime.hookRegistrar.installHook(members.method("pagedRow"), before = { chain ->
+            val entity = chain.args.getOrNull(1) ?: return@installHook
+            val mediaId = registerPresentationSong(entity, members) ?: return@installHook
+            chain.thisObject?.let { registerController(mediaId, it) }
+        }, after = { chain, model ->
+            val entity = chain.args.getOrNull(1) ?: return@installHook
+            if (model != null && entityMediaId(entity) != null) presentationRows[model] = WeakReference(entity)
+        })
+        presentationMembers = members
+    }
+
+    fun presentationRowEntity(model: Any): Any? {
+        presentationRows[model]?.get()?.let { return it }
+        val members = presentationMembers ?: return null
+        return listOf("searchSongRow", "searchGridRow").firstNotNullOfOrNull { role ->
+            members.field(role).takeIf { it.declaringClass.isInstance(model) }?.get(model)
+        }?.takeIf { members.method("entityType").invoke(it) == "songs" }
+    }
+
+    fun requestPresentationControllerBuild(controller: Any): Boolean {
+        val members = presentationMembers ?: return false
+        if (!members.method("pagedRow").declaringClass.isInstance(controller)) return false
+        // The native paging cache otherwise reuses models whose title strings predate the alias.
+        members.method("pagedRebuild").invoke(controller)
+        return true
+    }
+
+    private fun registerPresentationSong(entity: Any, members: FragmentProfileMembers): String? {
+        val type = members.method("entityType")
+        if (!type.declaringClass.isInstance(entity) || type.invoke(entity) != "songs") return null
+        val attributes = host.mediaApiEntityAttributes(entity) ?: return null
+        val mediaId = host.mediaApiEntityCatalogId(entity, attributes) ?: return null
+        registerEntity(mediaId, entity, InAppLibraryEntityKind.SONG, attributes, requestResolution = false)
+        return mediaId
+    }
+
+    private fun observePresentation(attributes: Any, mediaId: String) {
+        val members = presentationMembers ?: return
+        if (Looper.myLooper() != Looper.getMainLooper()) return
+        val state = synchronized(presentationStates) {
+            presentationStates[attributes] ?: members.method("createState")
+                .invoke(null, host.effectiveAlias(mediaId)).let(::checkNotNull).also { presentationStates[attributes] = it }
+        }
+        // Snapshot read observers subscribe the nearest row scope, even when MediaEntity.equals ignores its title.
+        members.method("readState").invoke(state)
+    }
+
+    private fun publishPresentation(attributes: Any, alias: AppleInternalCatalogResolver.Alias?) {
+        val members = presentationMembers ?: return
+        val state = presentationStates[attributes] ?: return
+        val work = {
+            if (presentationMembers === members && presentationStates[attributes] === state) {
+                members.method("writeState").invoke(state, alias)
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) work() else runtime.mainHandler.post(work)
     }
 
     private fun mediaApiAttributeOverride(
@@ -1205,7 +1358,8 @@ internal class AppleLibrarySurfaceHooks(
         if (hasMore) postVisibleResolution(state)
     }
 
-    private fun resolveVisibleMediaIds(mediaIds: Collection<String>) {
+    private fun resolveVisibleMediaIds(mediaIds: Collection<String>,
+        originalResolutionMode: InAppOriginalResolutionMode = InAppOriginalResolutionMode.AFTER_LOCALIZED) {
         val normalizedIds = host.normalizeMediaIds(mediaIds)
         if (normalizedIds.isEmpty()) return
         val aliasesBeforeEnrichment = normalizedIds.associateWith(host::effectiveAlias)
@@ -1220,6 +1374,7 @@ internal class AppleLibrarySurfaceHooks(
         host.scheduleMetadataResolution(
             mediaIds = normalizedIds,
             priority = AppleInternalCatalogResolver.RequestPriority.VISIBLE,
+            originalResolutionMode = originalResolutionMode,
         )
         if (BuildConfig.DEBUG) {
             ProviderLogger.info(

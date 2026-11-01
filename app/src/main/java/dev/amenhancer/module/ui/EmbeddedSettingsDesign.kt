@@ -1,6 +1,6 @@
 package dev.amenhancer.module.ui
 
-import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -12,11 +12,24 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
-import android.widget.ImageView
+import android.graphics.Outline
+import android.graphics.Rect
+import android.os.Build
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 internal enum class EmbeddedSettingsPage {
     MAIN,
     CUSTOM_LYRICS,
+    AUTOMATIC_LYRICS,
+    LYRICS_EFFECTS,
+    INTERFACE,
+    TITLE_REGION,
+    ADVANCED,
+    PLUGINS,
+    LLM_LYRICS,
+    BOTTOM_BAR_ANIMATION,
 }
 
 internal data class EmbeddedLyricsEditorAction(
@@ -25,20 +38,298 @@ internal data class EmbeddedLyricsEditorAction(
     val onClick: () -> Unit,
 )
 
+private const val EMBEDDED_G3_SEGMENTS = 32
 
 /**
- * Code-owned rendition of the actual AM++ application icon (`ic_module.xml`).
+ * Unit-speed corner with theta(s) = pi/2 * smootherstep(s). Both theta' and
+ * theta'' vanish at either end: curvature and its rate join the straight edge
+ * continuously (G3). Integrate once; Android renders the curve as short Hermite
+ * cubic spans, shared by fills, strokes, clips and transition silhouettes.
+ */
+private val embeddedG3Corner = FloatArray((EMBEDDED_G3_SEGMENTS + 1) * 4).apply {
+    fun angle(t: Double): Double = PI / 2.0 * t * t * t * (10.0 + t * (-15.0 + 6.0 * t))
+    val step = 1.0 / EMBEDDED_G3_SEGMENTS
+    var x = 0.0
+    var y = 0.0
+    this[2] = 1f
+    for (index in 1..EMBEDDED_G3_SEGMENTS) {
+        val start = angle((index - 1) * step)
+        val middle = angle((index - 0.5) * step)
+        val end = angle(index * step)
+        x += step / 6.0 * (cos(start) + 4.0 * cos(middle) + cos(end))
+        y += step / 6.0 * (sin(start) + 4.0 * sin(middle) + sin(end))
+        val offset = index * 4
+        this[offset] = x.toFloat()
+        this[offset + 1] = y.toFloat()
+        this[offset + 2] = cos(end).toFloat()
+        this[offset + 3] = sin(end).toFloat()
+    }
+    val extent = ((x + y) / 2.0).toFloat()
+    for (index in indices) this[index] /= extent
+    val last = EMBEDDED_G3_SEGMENTS * 4
+    this[last] = 1f
+    this[last + 1] = 1f
+    this[last + 2] = 0f
+}
+
+internal fun Path.setEmbeddedG3Rect(rect: RectF, cornerRadius: Float) {
+    rewind()
+    if (rect.isEmpty) return
+    val halfSide = minOf(rect.width(), rect.height()) / 2f
+    val radius = cornerRadius.coerceIn(0f, halfSide)
+    if (radius == 0f) {
+        addRect(rect, Path.Direction.CW)
+        return
+    }
+    // Actual circles and capsules retain their circular profile.
+    if (radius == halfSide) {
+        addRoundRect(rect, radius, radius, Path.Direction.CW)
+        return
+    }
+    val reach = minOf(radius * 1.5f, halfSide)
+    val handle = 1f / (3f * EMBEDDED_G3_SEGMENTS)
+    fun corner(originX: Float, originY: Float, xx: Float, xy: Float, yx: Float, yy: Float) {
+        for (index in 1..EMBEDDED_G3_SEGMENTS) {
+            val previous = (index - 1) * 4
+            val next = index * 4
+            val startX = embeddedG3Corner[previous]
+            val startY = embeddedG3Corner[previous + 1]
+            val e = embeddedG3Corner[next]
+            val f = embeddedG3Corner[next + 1]
+            // Keep tiny interpolation error at the almost-flat endpoints inside
+            // the corner, including for API 26 convex-path outlines.
+            val a = (startX + embeddedG3Corner[previous + 2] * handle).coerceIn(startX, e)
+            val b = (startY + embeddedG3Corner[previous + 3] * handle).coerceIn(startY, f)
+            val c = (e - embeddedG3Corner[next + 2] * handle).coerceIn(startX, e)
+            val d = (f - embeddedG3Corner[next + 3] * handle).coerceIn(startY, f)
+            cubicTo(
+                originX + reach * (xx * a + yx * b), originY + reach * (xy * a + yy * b),
+                originX + reach * (xx * c + yx * d), originY + reach * (xy * c + yy * d),
+                originX + reach * (xx * e + yx * f), originY + reach * (xy * e + yy * f),
+            )
+        }
+    }
+    moveTo(rect.left + reach, rect.top)
+    lineTo(rect.right - reach, rect.top)
+    corner(rect.right - reach, rect.top, 1f, 0f, 0f, 1f)
+    lineTo(rect.right, rect.bottom - reach)
+    corner(rect.right, rect.bottom - reach, 0f, 1f, -1f, 0f)
+    lineTo(rect.left + reach, rect.bottom)
+    corner(rect.left + reach, rect.bottom, -1f, 0f, 0f, -1f)
+    lineTo(rect.left, rect.top + reach)
+    corner(rect.left, rect.top + reach, 0f, -1f, 1f, 0f)
+    close()
+}
+
+/** Soft contact shadow outside the same G3 outline used by the moving panel. */
+internal class EmbeddedPanelShadow(private val density: Float) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK
+        style = Paint.Style.STROKE
+    }
+    private val path = Path()
+    private val localBounds = RectF()
+    private var cachedRadius = -1f
+    private var tile: Bitmap? = null
+    private var tileRadius = -1f
+    private var tileCorner = 0
+    /** Pixel inset required by [draw]: 4dp of AO plus one guard pixel. */
+    internal val outsetPx = kotlin.math.ceil(4f * density).toInt() + 1
+    private val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val sourceStops = IntArray(4)
+    private val targetX = FloatArray(4)
+    private val targetY = FloatArray(4)
+    private val sourceRect = Rect()
+    private val targetRect = RectF()
+    private val layerAlphas = IntArray(16) { index ->
+        fun opacity(progress: Float): Float {
+            val remaining = 1f - progress
+            return 0.24f * remaining * remaining * remaining
+        }
+        val near = opacity(index / 16f)
+        val far = opacity((index + 1) / 16f)
+        ((near - far) / (1f - far) * 255f + 0.5f).toInt()
+    }
+
+    /** Prepare the fixed-radius shadow before an entrance animation starts. */
+    fun prepare(radius: Float) {
+        if (tile != null || radius <= 0f) return
+        val corner = kotlin.math.ceil(radius * 1.5f).toInt()
+        val edge = outsetPx + corner
+        val size = edge * 2 + 1
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        drawVector(Canvas(bitmap), RectF(
+            outsetPx.toFloat(), outsetPx.toFloat(),
+            (size - outsetPx).toFloat(), (size - outsetPx).toFloat(),
+        ), radius, 1f)
+        tileRadius = radius
+        tileCorner = corner
+        sourceStops[1] = edge
+        sourceStops[2] = edge + 1
+        sourceStops[3] = size
+        bitmap.prepareToDraw()
+        tile = bitmap
+    }
+
+    fun draw(canvas: Canvas, bounds: RectF, radius: Float, opacity: Float = 1f) {
+        if (bounds.isEmpty || opacity <= 0f) return
+        val corner = kotlin.math.ceil(radius * 1.5f).toInt()
+        // Fixed-radius panels change height during navigation. Rasterize the
+        // existing shadow once; stretch only its straight edges, never corners.
+        // Shrinking return targets retain the exact vector contour below.
+        if (radius > 0f && bounds.width() > corner * 2 && bounds.height() > corner * 2 &&
+            (tile == null || tileRadius == radius)
+        ) {
+            prepare(radius)
+            targetX[0] = bounds.left - outsetPx
+            targetX[1] = bounds.left + tileCorner
+            targetX[2] = bounds.right - tileCorner
+            targetX[3] = bounds.right + outsetPx
+            targetY[0] = bounds.top - outsetPx
+            targetY[1] = bounds.top + tileCorner
+            targetY[2] = bounds.bottom - tileCorner
+            targetY[3] = bounds.bottom + outsetPx
+            tilePaint.alpha = (255f * opacity.coerceIn(0f, 1f)).toInt()
+            val bitmap = requireNotNull(tile)
+            for (row in 0..2) for (column in 0..2) {
+                if (row == 1 && column == 1) continue
+                sourceRect.set(sourceStops[column], sourceStops[row], sourceStops[column + 1], sourceStops[row + 1])
+                targetRect.set(targetX[column], targetY[row], targetX[column + 1], targetY[row + 1])
+                canvas.drawBitmap(bitmap, sourceRect, targetRect, tilePaint)
+            }
+            return
+        }
+        drawVector(canvas, bounds, radius, opacity)
+    }
+
+    private fun drawVector(canvas: Canvas, bounds: RectF, radius: Float, opacity: Float) {
+        if (localBounds.width() != bounds.width() || localBounds.height() != bounds.height() || cachedRadius != radius) {
+            localBounds.set(0f, 0f, bounds.width(), bounds.height())
+            cachedRadius = radius
+            path.setEmbeddedG3Rect(localBounds, radius)
+        }
+        val save = canvas.save()
+        canvas.translate(bounds.left, bounds.top)
+        // Keep the shadow outside even while a translucent panel is animating.
+        canvas.clipOutPath(path)
+        for (index in layerAlphas.indices.reversed()) {
+            paint.alpha = (layerAlphas[index] * opacity.coerceIn(0f, 1f)).toInt()
+            if (paint.alpha == 0) continue
+            paint.strokeWidth = (index + 1) * density * 0.5f
+            canvas.drawPath(path, paint)
+        }
+        canvas.restoreToCount(save)
+    }
+}
+
+/** Solid native View surface; geometry is cached until its bounds or radius change. */
+internal class EmbeddedG3Drawable : Drawable() {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val fillPath = Path()
+    private val strokePath = Path()
+    private val shapeBounds = RectF()
+    private var dirty = true
+    private var fillColor = Color.TRANSPARENT
+    private var strokeColor = Color.TRANSPARENT
+    private var strokeWidth = 0f
+    private var drawableAlpha = 255
+    private var filter: ColorFilter? = null
+
+    var cornerRadius: Float = 0f
+        set(value) {
+            field = value
+            dirty = true
+            invalidateSelf()
+        }
+
+    fun setColor(color: Int) {
+        fillColor = color
+        invalidateSelf()
+    }
+
+    fun setStroke(width: Int, color: Int) {
+        strokeWidth = width.coerceAtLeast(0).toFloat()
+        strokeColor = color
+        dirty = true
+        invalidateSelf()
+    }
+
+    override fun onBoundsChange(bounds: Rect) {
+        dirty = true
+    }
+
+    private fun updatePaths() {
+        if (!dirty) return
+        shapeBounds.set(bounds)
+        fillPath.setEmbeddedG3Rect(shapeBounds, cornerRadius)
+        shapeBounds.inset(strokeWidth / 2f, strokeWidth / 2f)
+        strokePath.setEmbeddedG3Rect(shapeBounds, (cornerRadius - strokeWidth / 2f).coerceAtLeast(0f))
+        dirty = false
+    }
+
+    override fun draw(canvas: Canvas) {
+        updatePaths()
+        paint.colorFilter = filter
+        paint.style = Paint.Style.FILL
+        paint.color = fillColor
+        paint.alpha = Color.alpha(fillColor) * drawableAlpha / 255
+        if (paint.alpha > 0) canvas.drawPath(fillPath, paint)
+        if (strokeWidth > 0f) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = strokeWidth
+            paint.color = strokeColor
+            paint.alpha = Color.alpha(strokeColor) * drawableAlpha / 255
+            if (paint.alpha > 0) canvas.drawPath(strokePath, paint)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun getOutline(outline: Outline) {
+        updatePaths()
+        if (fillPath.isEmpty) {
+            outline.setEmpty()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 30) outline.setPath(fillPath) else outline.setConvexPath(fillPath)
+        outline.alpha = Color.alpha(fillColor) / 255f * drawableAlpha / 255f
+    }
+
+    override fun setAlpha(alpha: Int) {
+        drawableAlpha = alpha.coerceIn(0, 255)
+        invalidateSelf()
+    }
+
+    override fun getAlpha(): Int = drawableAlpha
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        filter = colorFilter
+        invalidateSelf()
+    }
+
+    @Suppress("DEPRECATION")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+
+/**
+ * Code-owned rendition of the actual AM++ application icon (ic_module.xml).
  *
  * It intentionally avoids loading the module drawable through Apple Music's
  * package Context, which is subject to package-visibility failures in the
- * injected process. The paths and gradients below mirror the source icon.
+ * injected process. The mark and gradients mirror the source icon; the tile
+ * radius follows the settings UI rather than the launcher artwork.
  */
-internal class EmbeddedAmppBrandDrawable : android.graphics.drawable.Drawable() {
+internal class EmbeddedAmppBrandDrawable(
+    private val cornerRadiusPx: Float,
+) : android.graphics.drawable.Drawable() {
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val primaryPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var alphaValue = 255
     private var colorFilterValue: ColorFilter? = null
+    private val tilePath = Path()
+    private val tileBounds = RectF(0f, 0f, VIEWPORT, VIEWPORT)
+    private var tileRadius = Float.NaN
 
     private val aPath = Path().apply {
         moveTo(407f, 326f)
@@ -112,7 +403,12 @@ internal class EmbeddedAmppBrandDrawable : android.graphics.drawable.Drawable() 
         canvas.save()
         canvas.translate(left, top)
         canvas.scale(scale, scale)
-        canvas.drawRoundRect(RectF(0f, 0f, VIEWPORT, VIEWPORT), 282f, 282f, backgroundPaint)
+        val radius = (cornerRadiusPx / scale).coerceIn(0f, VIEWPORT / 2f)
+        if (tileRadius != radius) {
+            tilePath.setEmbeddedG3Rect(tileBounds, radius)
+            tileRadius = radius
+        }
+        canvas.drawPath(tilePath, backgroundPaint)
         canvas.drawPath(aPath, primaryPaint)
         canvas.drawPath(notePath, primaryPaint)
         canvas.drawPath(mPath, accentPaint)
@@ -165,7 +461,12 @@ internal class EmbeddedAmppBrandDrawable : android.graphics.drawable.Drawable() 
     }
 }
 
-/** Compact red music mark used by the current-song row in the reference UI. */
+/**
+ * Apple Music application mark used by the current-song row.
+ *
+ * This is an application identity, like [EmbeddedAmppBrandDrawable], and keeps
+ * its original red-tile composition rather than using the functional SVG set.
+ */
 internal class EmbeddedMusicStatusDrawable : android.graphics.drawable.Drawable(), EmbeddedPaletteDrawable {
     private var colors = EmbeddedSettingsPalette.Light
 
@@ -241,415 +542,30 @@ internal enum class EmbeddedGlyphKind {
     MoreVertical,
 }
 
-/** Small host-independent glyphs for the reference actions and empty state. */
+/**
+ * Compatibility entry point for existing call sites. Every functional glyph is
+ * now rendered from the shared SVG catalogue instead of hand-authored Canvas
+ * geometry.
+ */
 internal class EmbeddedGlyphDrawable(
-    private val kind: EmbeddedGlyphKind,
-    private val tint: Int,
-    private val strokeWidthFraction: Float = 0.08f,
-) : android.graphics.drawable.Drawable(), EmbeddedPaletteDrawable {
-    private var colors = EmbeddedSettingsPalette.Light
+    kind: EmbeddedGlyphKind,
+    tint: Int,
+) : Drawable(), EmbeddedPaletteDrawable {
+    private val delegate = EmbeddedSettingsSvgAssets.glyphDrawable(kind.toSvgIcon(), tint)
+    private var alphaValue = 255
+    private var colorFilterValue: ColorFilter? = null
 
     override fun applyPalette(colors: EmbeddedSettingsColors) {
-        this.colors = colors
+        (delegate as? EmbeddedPaletteDrawable)?.applyPalette(colors)
         invalidateSelf()
     }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
-    }
-    private var alphaValue = 255
 
     override fun draw(canvas: Canvas) {
-        val box = bounds
-        if (box.width() <= 0 || box.height() <= 0) return
-        val size = minOf(box.width(), box.height()).toFloat()
-        // Keep glyph geometry centered when an ImageView uses a rectangular
-        // touch target (the overflow icon is 32/40×44dp).
-        val left = box.left + (box.width() - size) / 2f
-        val top = box.top + (box.height() - size) / 2f
-        val cx = left + size / 2f
-        val cy = top + size / 2f
-        fill.color = colors.iconColor(tint)
-        fill.alpha = alphaValue
-        stroke.color = colors.iconColor(tint)
-        stroke.alpha = alphaValue
-        stroke.strokeWidth = size * strokeWidthFraction
-        when (kind) {
-            EmbeddedGlyphKind.Music -> {
-                canvas.drawLine(cx + size * 0.1f, top + size * 0.2f, cx + size * 0.1f, top + size * 0.68f, stroke)
-                canvas.drawLine(cx + size * 0.1f, top + size * 0.2f, cx + size * 0.34f, top + size * 0.15f, stroke)
-                canvas.drawCircle(cx - size * 0.03f, top + size * 0.73f, size * 0.15f, fill)
-            }
-            EmbeddedGlyphKind.Exchange -> {
-                val y1 = cy - size * 0.15f
-                val y2 = cy + size * 0.15f
-                canvas.drawLine(left + size * 0.22f, y1, left + size * 0.72f, y1, stroke)
-                canvas.drawLine(left + size * 0.28f, y2, left + size * 0.78f, y2, stroke)
-                canvas.drawLine(left + size * 0.72f, y1, left + size * 0.56f, y1 - size * 0.14f, stroke)
-                canvas.drawLine(left + size * 0.72f, y1, left + size * 0.56f, y1 + size * 0.14f, stroke)
-                canvas.drawLine(left + size * 0.28f, y2, left + size * 0.44f, y2 - size * 0.14f, stroke)
-                canvas.drawLine(left + size * 0.28f, y2, left + size * 0.44f, y2 + size * 0.14f, stroke)
-            }
-            EmbeddedGlyphKind.Github -> {
-                // Match the reference's Octocat silhouette rather than the
-                // previous generic cat face. The even-odd face opening keeps
-                // the mark legible on the pale action surface at small sizes.
-                val octocat = Path().apply {
-                    fillType = Path.FillType.EVEN_ODD
-                    moveTo(cx, top + size * 0.16f)
-                    cubicTo(
-                        cx - size * 0.13f, top + size * 0.16f,
-                        cx - size * 0.24f, top + size * 0.19f,
-                        cx - size * 0.31f, top + size * 0.26f,
-                    )
-                    lineTo(cx - size * 0.4f, top + size * 0.17f)
-                    lineTo(cx - size * 0.35f, top + size * 0.39f)
-                    cubicTo(
-                        cx - size * 0.4f, top + size * 0.48f,
-                        cx - size * 0.38f, top + size * 0.61f,
-                        cx - size * 0.3f, top + size * 0.7f,
-                    )
-                    cubicTo(
-                        cx - size * 0.24f, top + size * 0.78f,
-                        cx - size * 0.15f, top + size * 0.82f,
-                        cx - size * 0.07f, top + size * 0.83f,
-                    )
-                    lineTo(cx - size * 0.07f, top + size * 0.68f)
-                    cubicTo(
-                        cx - size * 0.13f, top + size * 0.69f,
-                        cx - size * 0.16f, top + size * 0.66f,
-                        cx - size * 0.16f, top + size * 0.61f,
-                    )
-                    lineTo(cx - size * 0.12f, top + size * 0.59f)
-                    cubicTo(
-                        cx - size * 0.1f, top + size * 0.64f,
-                        cx - size * 0.06f, top + size * 0.67f,
-                        cx - size * 0.02f, top + size * 0.67f,
-                    )
-                    lineTo(cx - size * 0.02f, top + size * 0.85f)
-                    lineTo(cx + size * 0.02f, top + size * 0.85f)
-                    lineTo(cx + size * 0.02f, top + size * 0.67f)
-                    cubicTo(
-                        cx + size * 0.06f, top + size * 0.67f,
-                        cx + size * 0.1f, top + size * 0.64f,
-                        cx + size * 0.12f, top + size * 0.59f,
-                    )
-                    lineTo(cx + size * 0.16f, top + size * 0.61f)
-                    cubicTo(
-                        cx + size * 0.16f, top + size * 0.66f,
-                        cx + size * 0.13f, top + size * 0.69f,
-                        cx + size * 0.07f, top + size * 0.68f,
-                    )
-                    lineTo(cx + size * 0.07f, top + size * 0.83f)
-                    cubicTo(
-                        cx + size * 0.15f, top + size * 0.82f,
-                        cx + size * 0.24f, top + size * 0.78f,
-                        cx + size * 0.3f, top + size * 0.7f,
-                    )
-                    cubicTo(
-                        cx + size * 0.38f, top + size * 0.61f,
-                        cx + size * 0.4f, top + size * 0.48f,
-                        cx + size * 0.35f, top + size * 0.39f,
-                    )
-                    lineTo(cx + size * 0.4f, top + size * 0.17f)
-                    lineTo(cx + size * 0.31f, top + size * 0.26f)
-                    cubicTo(
-                        cx + size * 0.24f, top + size * 0.19f,
-                        cx + size * 0.13f, top + size * 0.16f,
-                        cx, top + size * 0.16f,
-                    )
-                    close()
-                    moveTo(cx - size * 0.2f, top + size * 0.34f)
-                    cubicTo(
-                        cx - size * 0.12f, top + size * 0.29f,
-                        cx + size * 0.12f, top + size * 0.29f,
-                        cx + size * 0.2f, top + size * 0.34f,
-                    )
-                    cubicTo(
-                        cx + size * 0.24f, top + size * 0.42f,
-                        cx + size * 0.22f, top + size * 0.51f,
-                        cx + size * 0.17f, top + size * 0.58f,
-                    )
-                    cubicTo(
-                        cx + size * 0.12f, top + size * 0.64f,
-                        cx + size * 0.06f, top + size * 0.66f,
-                        cx, top + size * 0.66f,
-                    )
-                    cubicTo(
-                        cx - size * 0.06f, top + size * 0.66f,
-                        cx - size * 0.12f, top + size * 0.64f,
-                        cx - size * 0.17f, top + size * 0.58f,
-                    )
-                    cubicTo(
-                        cx - size * 0.22f, top + size * 0.51f,
-                        cx - size * 0.24f, top + size * 0.42f,
-                        cx - size * 0.2f, top + size * 0.34f,
-                    )
-                    close()
-                }
-                canvas.drawPath(octocat, fill)
-            }
-            EmbeddedGlyphKind.CloudBackup -> {
-                val cloud = Path().apply {
-                    moveTo(left + size * 0.2f, top + size * 0.72f)
-                    cubicTo(
-                        left + size * 0.13f,
-                        top + size * 0.69f,
-                        left + size * 0.12f,
-                        top + size * 0.57f,
-                        left + size * 0.2f,
-                        top + size * 0.5f,
-                    )
-                    cubicTo(
-                        left + size * 0.24f,
-                        top + size * 0.34f,
-                        left + size * 0.4f,
-                        top + size * 0.27f,
-                        left + size * 0.53f,
-                        top + size * 0.31f,
-                    )
-                    cubicTo(
-                        left + size * 0.64f,
-                        top + size * 0.34f,
-                        left + size * 0.71f,
-                        top + size * 0.42f,
-                        left + size * 0.73f,
-                        top + size * 0.51f,
-                    )
-                    cubicTo(
-                        left + size * 0.84f,
-                        top + size * 0.51f,
-                        left + size * 0.89f,
-                        top + size * 0.58f,
-                        left + size * 0.89f,
-                        top + size * 0.65f,
-                    )
-                    cubicTo(
-                        left + size * 0.89f,
-                        top + size * 0.75f,
-                        left + size * 0.81f,
-                        top + size * 0.8f,
-                        left + size * 0.7f,
-                        top + size * 0.8f,
-                    )
-                    lineTo(left + size * 0.24f, top + size * 0.8f)
-                }
-                canvas.drawPath(cloud, stroke)
-                canvas.drawLine(cx - size * 0.12f, top + size * 0.62f, cx + size * 0.12f, top + size * 0.62f, stroke)
-                canvas.drawLine(cx, top + size * 0.5f, cx, top + size * 0.74f, stroke)
-            }
-            EmbeddedGlyphKind.DocumentSearch -> {
-                val document = RectF(
-                    left + size * 0.22f,
-                    top + size * 0.14f,
-                    left + size * 0.64f,
-                    top + size * 0.78f,
-                )
-                canvas.drawRoundRect(document, size * 0.04f, size * 0.04f, stroke)
-                canvas.drawLine(left + size * 0.48f, top + size * 0.14f, left + size * 0.64f, top + size * 0.3f, stroke)
-                canvas.drawCircle(left + size * 0.67f, top + size * 0.67f, size * 0.17f, stroke)
-                canvas.drawLine(left + size * 0.79f, top + size * 0.79f, left + size * 0.9f, top + size * 0.9f, stroke)
-            }
-            EmbeddedGlyphKind.TabletDualPane -> {
-                val device = RectF(
-                    left + size * 0.18f,
-                    top + size * 0.2f,
-                    left + size * 0.82f,
-                    top + size * 0.8f,
-                )
-                canvas.drawRoundRect(device, size * 0.06f, size * 0.06f, stroke)
-                canvas.drawLine(left + size * 0.61f, device.top, left + size * 0.61f, device.bottom, stroke)
-                canvas.drawCircle(left + size * 0.71f, top + size * 0.36f, size * 0.045f, fill)
-                canvas.drawLine(left + size * 0.71f, top + size * 0.47f, left + size * 0.71f, top + size * 0.64f, stroke)
-            }
-            EmbeddedGlyphKind.BottomBar -> {
-                val bulletX = left + size * 0.25f
-                val lineStart = left + size * 0.4f
-                val lineEnd = left + size * 0.78f
-                listOf(0.3f, 0.5f, 0.7f).forEach { fraction ->
-                    val y = top + size * fraction
-                    canvas.drawCircle(bulletX, y, size * 0.06f, fill)
-                    canvas.drawLine(lineStart, y, lineEnd, y, stroke)
-                }
-            }
-            EmbeddedGlyphKind.VideoDisplay -> {
-                val display = RectF(
-                    left + size * 0.16f,
-                    top + size * 0.22f,
-                    left + size * 0.84f,
-                    top + size * 0.68f,
-                )
-                canvas.drawRoundRect(display, size * 0.05f, size * 0.05f, stroke)
-                canvas.drawLine(left + size * 0.5f, display.bottom, left + size * 0.5f, top + size * 0.8f, stroke)
-                canvas.drawLine(left + size * 0.32f, top + size * 0.8f, left + size * 0.68f, top + size * 0.8f, stroke)
-                val play = Path().apply {
-                    moveTo(left + size * 0.45f, top + size * 0.33f)
-                    lineTo(left + size * 0.45f, top + size * 0.57f)
-                    lineTo(left + size * 0.66f, top + size * 0.45f)
-                    close()
-                }
-                canvas.drawPath(play, fill)
-            }
-            EmbeddedGlyphKind.Glass -> {
-                val bowl = Path().apply {
-                    moveTo(left + size * 0.26f, top + size * 0.2f)
-                    lineTo(left + size * 0.74f, top + size * 0.2f)
-                    lineTo(left + size * 0.66f, top + size * 0.51f)
-                    cubicTo(
-                        left + size * 0.62f,
-                        top + size * 0.63f,
-                        left + size * 0.38f,
-                        top + size * 0.63f,
-                        left + size * 0.34f,
-                        top + size * 0.51f,
-                    )
-                    close()
-                }
-                canvas.drawPath(bowl, stroke)
-                canvas.drawLine(left + size * 0.27f, top + size * 0.36f, left + size * 0.73f, top + size * 0.36f, stroke)
-                canvas.drawLine(cx, top + size * 0.62f, cx, top + size * 0.8f, stroke)
-                canvas.drawLine(left + size * 0.34f, top + size * 0.8f, left + size * 0.66f, top + size * 0.8f, stroke)
-            }
-            EmbeddedGlyphKind.LyricsBlur -> {
-                val document = RectF(
-                    left + size * 0.2f,
-                    top + size * 0.16f,
-                    left + size * 0.63f,
-                    top + size * 0.77f,
-                )
-                canvas.drawRoundRect(document, size * 0.04f, size * 0.04f, stroke)
-                canvas.drawLine(left + size * 0.48f, top + size * 0.16f, left + size * 0.63f, top + size * 0.31f, stroke)
-                canvas.drawLine(left + size * 0.3f, top + size * 0.39f, left + size * 0.53f, top + size * 0.39f, stroke)
-                canvas.drawLine(left + size * 0.3f, top + size * 0.51f, left + size * 0.48f, top + size * 0.51f, stroke)
-                canvas.drawCircle(left + size * 0.68f, top + size * 0.66f, size * 0.16f, stroke)
-                canvas.drawLine(left + size * 0.8f, top + size * 0.78f, left + size * 0.89f, top + size * 0.87f, stroke)
-            }
-            EmbeddedGlyphKind.Document -> {
-                val document = RectF(
-                    left + size * 0.23f,
-                    top + size * 0.14f,
-                    left + size * 0.7f,
-                    top + size * 0.82f,
-                )
-                canvas.drawRoundRect(document, size * 0.05f, size * 0.05f, stroke)
-                canvas.drawLine(left + size * 0.51f, top + size * 0.14f, left + size * 0.7f, top + size * 0.33f, stroke)
-                canvas.drawLine(left + size * 0.34f, top + size * 0.48f, left + size * 0.6f, top + size * 0.48f, stroke)
-                canvas.drawLine(left + size * 0.34f, top + size * 0.62f, left + size * 0.6f, top + size * 0.62f, stroke)
-            }
-            EmbeddedGlyphKind.Translate -> {
-                canvas.drawLine(left + size * 0.2f, top + size * 0.28f, left + size * 0.58f, top + size * 0.28f, stroke)
-                canvas.drawLine(left + size * 0.39f, top + size * 0.16f, left + size * 0.39f, top + size * 0.31f, stroke)
-                canvas.drawLine(left + size * 0.24f, top + size * 0.45f, left + size * 0.54f, top + size * 0.72f, stroke)
-                canvas.drawLine(left + size * 0.54f, top + size * 0.45f, left + size * 0.24f, top + size * 0.72f, stroke)
-                canvas.drawLine(left + size * 0.67f, top + size * 0.78f, left + size * 0.79f, top + size * 0.38f, stroke)
-                canvas.drawLine(left + size * 0.91f, top + size * 0.78f, left + size * 0.79f, top + size * 0.38f, stroke)
-                canvas.drawLine(left + size * 0.72f, top + size * 0.62f, left + size * 0.86f, top + size * 0.62f, stroke)
-            }
-            EmbeddedGlyphKind.Refresh -> {
-                val oval = RectF(
-                    left + size * 0.2f,
-                    top + size * 0.2f,
-                    left + size * 0.8f,
-                    top + size * 0.8f,
-                )
-                canvas.drawArc(oval, 35f, 205f, false, stroke)
-                canvas.drawArc(oval, 215f, 205f, false, stroke)
-                val upperArrow = Path().apply {
-                    moveTo(left + size * 0.68f, top + size * 0.17f)
-                    lineTo(left + size * 0.82f, top + size * 0.2f)
-                    lineTo(left + size * 0.75f, top + size * 0.32f)
-                    close()
-                }
-                val lowerArrow = Path().apply {
-                    moveTo(left + size * 0.32f, top + size * 0.83f)
-                    lineTo(left + size * 0.18f, top + size * 0.8f)
-                    lineTo(left + size * 0.25f, top + size * 0.68f)
-                    close()
-                }
-                canvas.drawPath(upperArrow, fill)
-                canvas.drawPath(lowerArrow, fill)
-            }
-            EmbeddedGlyphKind.AddCircle -> {
-                val actionCenterY = top + size * 0.555f
-                canvas.drawCircle(cx, actionCenterY, size * 0.3f, stroke)
-                canvas.drawLine(
-                    cx - size * 0.15f,
-                    actionCenterY,
-                    cx + size * 0.15f,
-                    actionCenterY,
-                    stroke,
-                )
-                canvas.drawLine(
-                    cx,
-                    actionCenterY - size * 0.15f,
-                    cx,
-                    actionCenterY + size * 0.15f,
-                    stroke,
-                )
-            }
-            EmbeddedGlyphKind.TtmlDocument -> {
-                val document = RectF(
-                    left + size * 0.22f,
-                    top + size * 0.24f,
-                    left + size * 0.74f,
-                    top + size * 0.9f,
-                )
-                canvas.drawRoundRect(document, size * 0.045f, size * 0.045f, stroke)
-                canvas.drawLine(left + size * 0.53f, top + size * 0.24f, left + size * 0.74f, top + size * 0.45f, stroke)
-                canvas.drawLine(left + size * 0.38f, top + size * 0.55f, left + size * 0.29f, top + size * 0.64f, stroke)
-                canvas.drawLine(left + size * 0.38f, top + size * 0.73f, left + size * 0.29f, top + size * 0.64f, stroke)
-                canvas.drawLine(left + size * 0.55f, top + size * 0.53f, left + size * 0.47f, top + size * 0.75f, stroke)
-                canvas.drawLine(left + size * 0.64f, top + size * 0.55f, left + size * 0.72f, top + size * 0.64f, stroke)
-                canvas.drawLine(left + size * 0.64f, top + size * 0.73f, left + size * 0.72f, top + size * 0.64f, stroke)
-            }
-            EmbeddedGlyphKind.Search -> {
-                canvas.drawCircle(left + size * 0.44f, top + size * 0.44f, size * 0.22f, stroke)
-                canvas.drawLine(left + size * 0.6f, top + size * 0.6f, left + size * 0.82f, top + size * 0.82f, stroke)
-            }
-            EmbeddedGlyphKind.Edit -> {
-                val pencil = Path().apply {
-                    moveTo(left + size * 0.25f, top + size * 0.69f)
-                    lineTo(left + size * 0.25f, top + size * 0.53f)
-                    lineTo(left + size * 0.67f, top + size * 0.21f)
-                    lineTo(left + size * 0.79f, top + size * 0.33f)
-                    lineTo(left + size * 0.47f, top + size * 0.75f)
-                    close()
-                }
-                canvas.drawPath(pencil, stroke)
-                canvas.drawLine(left + size * 0.61f, top + size * 0.27f, left + size * 0.73f, top + size * 0.39f, stroke)
-            }
-            EmbeddedGlyphKind.Delete -> {
-                val trash = RectF(
-                    left + size * 0.3f,
-                    top + size * 0.32f,
-                    left + size * 0.7f,
-                    top + size * 0.78f,
-                )
-                canvas.drawRoundRect(trash, size * 0.03f, size * 0.03f, stroke)
-                canvas.drawLine(left + size * 0.24f, top + size * 0.25f, left + size * 0.76f, top + size * 0.25f, stroke)
-                canvas.drawLine(left + size * 0.43f, top + size * 0.18f, left + size * 0.57f, top + size * 0.18f, stroke)
-                canvas.drawLine(left + size * 0.43f, top + size * 0.42f, left + size * 0.43f, top + size * 0.68f, stroke)
-                canvas.drawLine(left + size * 0.57f, top + size * 0.42f, left + size * 0.57f, top + size * 0.68f, stroke)
-            }
-            EmbeddedGlyphKind.BackArrow -> {
-                val tipX = left + size * 0.3f
-                val endX = left + size * 0.7f
-                canvas.drawLine(endX, cy, tipX, cy, stroke)
-                canvas.drawLine(tipX, cy, left + size * 0.49f, top + size * 0.31f, stroke)
-                canvas.drawLine(tipX, cy, left + size * 0.49f, top + size * 0.69f, stroke)
-            }
-            EmbeddedGlyphKind.ChevronRight -> {
-                canvas.drawLine(left + size * 0.4f, top + size * 0.24f, left + size * 0.62f, top + size * 0.5f, stroke)
-                canvas.drawLine(left + size * 0.62f, top + size * 0.5f, left + size * 0.4f, top + size * 0.76f, stroke)
-            }
-            EmbeddedGlyphKind.MoreVertical -> {
-                listOf(0.28f, 0.5f, 0.72f).forEach { fraction ->
-                    canvas.drawCircle(cx, top + size * fraction, size * 0.06f, fill)
-                }
-            }
-        }
+        val icon = delegate ?: return
+        icon.setBounds(bounds)
+        icon.alpha = alphaValue
+        icon.colorFilter = colorFilterValue
+        icon.draw(canvas)
     }
 
     override fun setAlpha(alpha: Int) {
@@ -658,48 +574,9 @@ internal class EmbeddedGlyphDrawable(
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
-        fill.colorFilter = colorFilter
-        stroke.colorFilter = colorFilter
+        colorFilterValue = colorFilter
         invalidateSelf()
     }
 
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
-
-internal class EmbeddedArrowFallbackDrawable : android.graphics.drawable.Drawable(), EmbeddedPaletteDrawable {
-    override fun applyPalette(colors: EmbeddedSettingsColors) {
-        paint.color = colors.primary
-        invalidateSelf()
-    }
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.SQUARE
-        strokeJoin = Paint.Join.MITER
-        strokeWidth = 4f
-        color = EmbeddedSettingsPalette.Light.primary
-    }
-
-    override fun draw(canvas: Canvas) {
-        val box = bounds
-        val left = box.left + box.width() * 0.28f
-        val right = box.left + box.width() * 0.72f
-        val center = box.top + box.height() * 0.5f
-        val tip = box.left + box.width() * 0.28f
-        canvas.drawLine(right, center, tip, center, paint)
-        canvas.drawLine(tip, center, box.left + box.width() * 0.48f, box.top + box.height() * 0.28f, paint)
-        canvas.drawLine(tip, center, box.left + box.width() * 0.48f, box.bottom - box.height() * 0.28f, paint)
-    }
-
-    override fun setAlpha(alpha: Int) {
-        paint.alpha = alpha.coerceIn(0, 255)
-        invalidateSelf()
-    }
-
-    override fun setColorFilter(colorFilter: ColorFilter?) {
-        paint.colorFilter = colorFilter
-        invalidateSelf()
-    }
-
-    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-}
-

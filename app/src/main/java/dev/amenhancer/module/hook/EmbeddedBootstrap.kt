@@ -1,6 +1,5 @@
 package dev.amenhancer.module.hook
 
-import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.config.ConfigurationReader
 import android.os.ParcelFileDescriptor
 import java.io.InputStream
@@ -18,9 +17,10 @@ internal class EmbeddedBootstrap {
         packageName: String,
         processName: String,
         isFirstPackage: Boolean,
+        mainProcessName: String = packageName,
     ): Boolean {
-        if (packageName != ModuleConstants.TARGET_PACKAGE) return false
-        if (processName.isNotBlank() && processName != ModuleConstants.TARGET_PACKAGE) return false
+        if (packageName.isBlank()) return false
+        if (processName.isNotBlank() && processName != mainProcessName) return false
         if (!isFirstPackage) return false
         return prepared.compareAndSet(false, true)
     }

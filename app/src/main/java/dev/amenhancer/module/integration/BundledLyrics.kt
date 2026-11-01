@@ -16,7 +16,7 @@ import java.util.zip.ZipFile
 /** Install the owned plugin before the SDK loads it; preserve newer/disabled/deleted installations. */
 internal object BundledLyrics {
     const val ID = "com.tcrrry.lyrics"
-    const val VERSION = 53L
+    const val VERSION = 71L
     const val TRANSLATION_ID = "com.tcrrry.translation"
     const val TRANSLATION_VERSION = 3L
     fun updateAsset(id: String, path: String): java.io.InputStream? {
@@ -25,13 +25,9 @@ internal object BundledLyrics {
             .put("version", dev.amenhancer.module.BuildConfig.VERSION_NAME.substringBefore('-'))
             .put("label", "AM++ Lyrics 主程序").toString().byteInputStream()
     }
-    fun builtinReader(reader: ConfigurationReader): ConfigurationReader = object : ConfigurationReader by reader {
-        override fun values(): Map<String, *> = reader.values().toMutableMap().apply {
-            // Leave stored preferences intact; only the competing built-in matching path is masked.
-            put("custom_lyrics_enabled", false)
-            put("automatic_lyrics_enabled", false)
-        }
-    }
+    // Keep the user's host-side manual lyrics and automatic completion settings.
+    // The plugin and host retain independent submission paths and coordination.
+    fun builtinReader(reader: ConfigurationReader): ConfigurationReader = reader
 
     fun install(application: Application, store: PluginStore) {
         // Each bundle has an independent install marker: deleting or disabling

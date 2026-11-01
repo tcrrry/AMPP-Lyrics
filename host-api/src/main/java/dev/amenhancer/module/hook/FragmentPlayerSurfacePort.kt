@@ -44,7 +44,22 @@ interface FragmentPlayerSurfaceObserver {
     fun onPreparing(root: ViewGroup) = Unit
     fun onCreated(surface: FragmentPlayerSurfacePort)
     fun onDestroyed(identity: Any)
-    /** Observation only: native dispatch, every mini control, and player drag continue unchanged. */
-    fun onMiniTouch(identity: Any, event: MotionEvent)
+    /**
+     * The mini panel's touches.
+     *
+     * The current phone session observes only and returns null, preserving native mini controls
+     * and player drag. The phone dispatch hook claims an event only for an explicit true result;
+     * null or false leaves native dispatch untouched. Tablet activity touches are observation only.
+     */
+    fun onMiniTouch(identity: Any, event: MotionEvent): Boolean? = null
+    /**
+     * The page's gestures, from the content root rather than the mini panel.
+     *
+     * Observed once before native child dispatch, including gestures handled internally by Compose
+     * without native scroll events. Current scroll-collapse sessions return null: page gestures
+     * and native mini controls retain their own dispatch. The root dispatch hook claims an event
+     * only for an explicit true result; null or false leaves native dispatch untouched.
+     */
+    fun onContentTouch(identity: Any, event: MotionEvent): Boolean? = null
     fun onFailure(identity: Any?, error: Throwable)
 }

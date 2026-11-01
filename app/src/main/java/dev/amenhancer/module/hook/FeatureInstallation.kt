@@ -255,6 +255,7 @@ private fun productionFeatureInstallationModule(
             ),
             FeatureInstallationPlan(feature = EditorialVideoFeature()),
             FeatureInstallationPlan(feature = CellularDataEntryFeature()),
+            FeatureInstallationPlan(feature = StartupPagePrewarmFeature()),
             FeatureInstallationPlan(
                 feature = PhoneLiquidGlassFeature(),
                 registerResources = PhoneLiquidGlassResourceHook::install,
@@ -264,12 +265,15 @@ private fun productionFeatureInstallationModule(
                 registerResources = { AppleMusicHostFactory.registerLyricAuxiliaryResources() },
             ),
             FeatureInstallationPlan(feature = CjkKaraokeAnimationFeature()),
+            FeatureInstallationPlan(feature = LyricWrapSweepFeature()),
+            FeatureInstallationPlan(feature = LyricBackgroundHighlightFeature()),
             FeatureInstallationPlan(
                 feature = LyricsTypefaceFeature(),
                 registerResources = lyricsTypefaceSession::registerResources,
             ),
             FeatureInstallationPlan(feature = CurrentSongIdentityFeature()),
             FeatureInstallationPlan(feature = TitleCorrectionFeature()),
+            FeatureInstallationPlan(feature = LyricsParserFeature()),
             FeatureInstallationPlan(feature = CustomLyricsFeature()),
             // The actual resource hook is installed during the Application
             // before-hook; this plan records its final health alongside the

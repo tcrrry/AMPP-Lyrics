@@ -384,6 +384,6 @@ adb logcat -s AppleMusicEnhancer
 
 发布前实际验证：独立构建、首次导入、启用重启、目标回调、设置打开/关闭、更新保留配置、停用、删除，以及与 AM++ 原有功能和常用插件的组合。歌词/网络插件另外检查快速切歌、请求失败和过期结果。
 
-AM++ 的 SDK 和样例已完成自动构建与导入验证；LSPosed、嵌入版以及 Android 14+ 的实际加载/Hook/页面验收仍需设备完成。插件作者自己的功能也必须另行验证。
+构建与导入检查不能替代 LSPosed、嵌入版以及 Android 14+ 的实际加载/Hook/页面验收。作者需要记录自己的功能、宿主和设备范围，不能从 SDK 或样例的结果推断插件功能通过。
 
 API 与包格式参考见 [SDK 说明](plugin-development.md)，完整可构建样例见 [basic-plugin](../examples/basic-plugin/README.md)。

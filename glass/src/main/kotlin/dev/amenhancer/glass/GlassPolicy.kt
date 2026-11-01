@@ -49,13 +49,31 @@ object GlassPolicy {
 
     fun selectedIndex(ids: List<Int>, selectedId: Int): Int? = ids.indexOf(selectedId).takeIf { it >= 0 }
 
-    /** [bottomGapDp] is the lift under the capsule: how far the bar sits above the screen edge. */
+    /**
+     * [bottomGapDp] is the lift under the capsule: how far the bar sits above the screen edge.
+     *
+     * [collapse] interpolates the bar's stack between its expanded and collapsed heights, where
+     * the stack is the mini player, the gap and the capsule measured from the top of the mini
+     * player down to the bottom of the capsule. Because the peek height *is* that stack, driving
+     * it with the collapse progress is what makes the mini player descend into the collapsed row
+     * without any separate lift term.
+     */
     fun occupiedHeight(
         density: Float,
         bottomInset: Int,
         miniVisible: Boolean,
         bottomGapDp: Int = BOTTOM_DP,
         geometry: GlassGeometry = GlassGeometry.Phone,
-    ): Int =
-        ((geometry.navHeightDp + bottomGapDp + if (miniVisible && !geometry.sideBySide) geometry.miniHeightDp + geometry.gapDp else 0) * density).toInt() + bottomInset
+        collapse: Float = 0f,
+    ): Int {
+        val expandedStackDp = geometry.navHeightDp +
+            if (miniVisible && !geometry.sideBySide) geometry.miniHeightDp + geometry.gapDp else 0
+        // Collapsed, the mini player shares the capsule's row instead of stacking above it.
+        val stackDp = GlassBarCollapsePolicy.lerp(
+            expandedStackDp.toFloat(),
+            GlassBarCollapsePolicy.ROW_DP.toFloat(),
+            GlassBarCollapsePolicy.progress(collapse),
+        )
+        return ((stackDp + bottomGapDp) * density).toInt() + bottomInset
+    }
 }

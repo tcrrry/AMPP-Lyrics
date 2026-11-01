@@ -4,6 +4,7 @@ import android.app.Activity
 import android.view.Menu
 import android.view.View
 import dev.amenhancer.host.applemusic.AppleMusicHostProfiles
+import dev.amenhancer.module.ModuleConstants
 import java.lang.reflect.Method
 import java.util.IdentityHashMap
 
@@ -19,7 +20,7 @@ internal class LegacyChromeHostBinding(private val activity: Activity) : ChromeH
         .document.getJSONObject("chrome")
     private val ids = ChromeResource.entries.associateWith { role ->
         val resource = profile.getJSONObject("resources").getJSONObject(role.name)
-        activity.resources.getIdentifier(resource.getString("name"),resource.getString("type"),build.packageName)
+        activity.resources.getIdentifier(resource.getString("name"),resource.getString("type"),ModuleConstants.TARGET_PACKAGE)
     }
     private val views = HashMap<ChromeResource, View?>()
     private var configuration = android.content.res.Configuration(activity.resources.configuration)

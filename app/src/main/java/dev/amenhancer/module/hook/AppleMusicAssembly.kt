@@ -15,7 +15,7 @@ internal fun assembleAppleMusicTarget(
         val suppressed = runCatching { config.customLyricsManifest().entries
             .filterNot { it.enabled }.mapTo(mutableSetOf(), CustomLyricsEntry::appleMusicId)
         }.getOrDefault(emptySet())
-        createAutoLyricsRuntime(application, suppressed)
+        createAutoLyricsRuntime(application, suppressed, config::settings)
     } else null
     return AppleMusicHostFactory.appleMusic(config, application, classLoader, lyricsTypefaceSession, currentSong, automatic)
 }

@@ -38,6 +38,18 @@ data class TargetAdaptation(
     val playerRecovery: PlayerRecoveryTarget = PlayerRecoveryTarget {
         TargetCapabilityInstall.Unsupported("Native player recovery is not available for this host")
     },
+    val lyricWrapSweep: LyricWrapSweepTarget = LyricWrapSweepTarget {
+        TargetCapabilityInstall.Unsupported("Wrapped lyric sweep has no exact host contract")
+    },
+    val lyricBackgroundHighlight: LyricBackgroundHighlightTarget = LyricBackgroundHighlightTarget {
+        TargetCapabilityInstall.Unsupported("Native lyric background highlighting has no exact host contract")
+    },
+    val startupPagePrewarm: StartupPagePrewarmTarget = StartupPagePrewarmTarget {
+        TargetCapabilityInstall.Unsupported("Startup page prewarming has no exact host contract")
+    },
+    val lyricsParser: LyricsParserTarget = LyricsParserTarget {
+        TargetCapabilityInstall.Unsupported("Native lyric parser repair has no exact host contract")
+    },
 ) {
 }
 
@@ -57,11 +69,23 @@ fun interface CjkKaraokeAnimationTarget {
     fun install(): TargetCapabilityInstall
 }
 
+fun interface LyricWrapSweepTarget {
+    fun install(): TargetCapabilityInstall
+}
+
+fun interface LyricBackgroundHighlightTarget {
+    fun install(): TargetCapabilityInstall
+}
+
 fun interface LyricsTypefaceTarget {
     fun install(): TargetCapabilityInstall
 }
 
 fun interface CustomLyricsTarget {
+    fun install(): TargetCapabilityInstall
+}
+
+fun interface LyricsParserTarget {
     fun install(): TargetCapabilityInstall
 }
 
@@ -78,6 +102,10 @@ fun interface CellularDataEntryTarget {
 }
 
 fun interface PlayerRecoveryTarget {
+    fun install(): TargetCapabilityInstall
+}
+
+fun interface StartupPagePrewarmTarget {
     fun install(): TargetCapabilityInstall
 }
 

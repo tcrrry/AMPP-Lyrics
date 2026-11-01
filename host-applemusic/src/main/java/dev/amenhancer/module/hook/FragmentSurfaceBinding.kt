@@ -2,9 +2,12 @@ package dev.amenhancer.module.hook
 
 import android.app.Activity
 import android.graphics.Rect
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.host.OwnedHostProperty
 import java.util.IdentityHashMap
 
@@ -18,7 +21,7 @@ internal class FragmentSurfaceBinding(
 ) : FragmentPlayerSurfacePort, ViewTreeObserver.OnPreDrawListener {
     private val ids = HashMap<String, Int>()
     private fun id(role: String) = ids.getOrPut(role) {
-        root.resources.getIdentifier(contract.resources.getString(role), "id", activity.packageName)
+        root.resources.getIdentifier(contract.resources.getString(role), "id", ModuleConstants.TARGET_PACKAGE)
             .also { check(it != 0) { "Missing Fragment chrome resource $role" } }
     }
     private fun find(role: String): View? = root.findViewById(id(role))
@@ -37,7 +40,7 @@ internal class FragmentSurfaceBinding(
     private var playerBackground: View? = null
     private var playerMotion: View? = null
     private var playerOutline: OwnedHostProperty<Boolean>? = null
-    private val accentId = root.resources.getIdentifier(contract.names.getString("accentColor"), "color", activity.packageName)
+    private val accentId = root.resources.getIdentifier(contract.names.getString("accentColor"), "color", ModuleConstants.TARGET_PACKAGE)
     private val observers = LinkedHashSet<(FragmentPlayerSurfaceSnapshot) -> Unit>()
     override val navigation = FragmentChromeNavigation(owner, nav, placement, contract, callbacks)
     override val pageFamily = HostPageFamily.FRAGMENT_VIEW
@@ -55,8 +58,7 @@ internal class FragmentSurfaceBinding(
     private var writing = false
     private val tree = root.viewTreeObserver
     private val layout = ViewTreeObserver.OnGlobalLayoutListener { resolveMini() }
-    private val miniStartup = if (placement == NavigationPlacement.TOP && miniBlur != null)
-        FragmentTabletMiniStartup(owner, root, miniBlur, contract) else null
+    private val miniStartup = miniBlur?.let { FragmentMiniStartup(owner, root, it, contract) }
     override val tabletChrome: FragmentTabletChromeBinding? by lazy {
         if (placement != NavigationPlacement.TOP) null else FragmentTabletChromeBinding(root, { region ->
             when (region) {
@@ -138,6 +140,17 @@ internal class FragmentSurfaceBinding(
         root.invalidate()
     }
     fun isMiniTouchPanel(view: View): Boolean = miniTouch === view
+    private val isolatesNavigationTouch: Boolean
+        get() = placement == NavigationPlacement.BOTTOM && phoneChrome?.supportsScrollCollapse == true
+    /** Hide native navigation input with its replacement; empty glass space remains page input. */
+    fun blocksNavigationTouch(view: View): Boolean =
+        view === nav && !closed && navReady && isolatesNavigationTouch
+    /**
+     * The content root is the page's ancestor, so its dispatch observes every gesture in the page
+     * exactly once, before any child consumes it. That makes it the right place to watch a
+     * Compose page's scrolling, which never reaches a native scroll container.
+     */
+    fun isContentRoot(view: View): Boolean = root === view
     /** Called before View.setAlpha: remember even host writes equal to our hidden value. */
     fun nativeAlphaWrite(view: View, alpha: Float): Float? {
         if (closed || writing) return null
@@ -147,7 +160,17 @@ internal class FragmentSurfaceBinding(
         return lease.hostWrite(alpha)
     }
 
-    override fun setNavigationGlassReady(ready: Boolean) { navReady = ready; applyOwnership() }
+    override fun setNavigationGlassReady(ready: Boolean) {
+        if (!closed && ready && !navReady && isolatesNavigationTouch) {
+            // Cancel any native press before the dispatch gate closes. Otherwise a release of
+            // glass ownership could deliver an UP to a tab whose DOWN preceded the takeover.
+            val now = SystemClock.uptimeMillis()
+            val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+            try { nav.dispatchTouchEvent(cancel) } finally { cancel.recycle() }
+        }
+        navReady = ready
+        applyOwnership()
+    }
     override fun setMiniGlassReady(ready: Boolean) {
         miniReady = ready
         applyOwnership()

@@ -22,6 +22,37 @@ def main():
         assert profile['schemaVersion'] == 1
         assert profile['family'] in ('legacy-activity', 'fragment-content')
         assert profile['verification']['version_code'] == str(key[2])
+        if 'lyricWrapSweep' in profile:
+            wrap = profile['lyricWrapSweep']
+            assert wrap.get('contractVersion') == 1, f'missing wrap sweep contract: {filename}'
+            required_wrap = {
+                'methods': {'build', 'update', 'rushUpdate', 'fadeUpdate', 'staticMask', 'rebind', 'bind', 'recycle', 'document',
+                            'clearMasks', 'textView', 'maskUpdate', 'animationTag', 'mediaBrowser',
+                            'mediaPosition', 'seek', 'pause', 'pauseRequested', 'resume'},
+                'fields': {'topMasks', 'bottomMasks', 'maskFirst', 'maskLast', 'wordBegin', 'wordDuration',
+                           'bindingRoot', 'holderBinding', 'adapterCallback', 'callbackFragment', 'featherPixels',
+                           'listenerMask', 'listenerColors', 'listenerFeather', 'listenerRtl', 'wordText', 'wordAnimator',
+                           'words', 'backgroundWords', 'pronunciationWords', 'pronunciationBackgroundWords',
+                           'foregroundInactiveColors', 'backgroundInactiveColors', 'fadeMask'},
+            }
+            for group, roles in required_wrap.items():
+                assert roles <= wrap.get(group, {}).keys(), f'missing wrap sweep {group}: {filename}'
+            assert profile['productionEnabled'], f'wrap sweep must use an enabled exact profile: {filename}'
+        artist_targets = profile['hookTargets'].get('ARTIST_SURFACE_CLASSES', [])
+        artist_roles = [target['runtimeMemberNames'].get('ARTIST_RUNTIME_ROLE') for target in artist_targets]
+        compose_roles = {'compose_profile_view_model', 'compose_profile_success_state'}
+        if 'artistComposeProfile' in profile or compose_roles.intersection(artist_roles):
+            assert all(artist_roles.count(role) == 1 for role in compose_roles), f'incomplete Compose artist roles: {filename}'
+            contract = profile.get('artistComposeProfile', {})
+            assert contract.get('contractVersion') == 1, f'missing Compose artist contract: {filename}'
+            required = {
+                'methods': {'setUiState', 'headerData', 'shelves', 'entityType', 'entityTitle', 'entityViews', 'viewEntities'},
+                'fields': {'id', 'title', 'header', 'shelves', 'entity', 'revision'},
+                'constructors': {'success'},
+            }
+            for group, roles in required.items():
+                assert roles <= contract.get(group, {}).keys(), f'missing Compose artist {group}: {filename}'
+            assert contract.get('artistType') and contract.get('topSongsView'), f'missing Compose artist semantic keys: {filename}'
         if not profile['productionEnabled']:
             assert not any(profile['capabilities'].values())
         if profile['productionEnabled'] and profile['family'] == 'fragment-content':

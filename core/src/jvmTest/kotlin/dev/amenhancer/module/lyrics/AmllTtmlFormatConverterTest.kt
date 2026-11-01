@@ -7,6 +7,9 @@ import org.junit.Test
 
 class AmllTtmlFormatConverterTest {
 
+    private val backgroundSpan = "<span xmlns=\"http://www.w3.org/ns/ttml\" " +
+        "xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\" ttm:role=\"x-bg\">"
+
     /** The AMLL shape: empty namespace overrides plus inline auxiliary spans. */
     private val amllFormat = """
         <tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" xmlns:amll="http://www.example.com/ns/amll">
@@ -154,7 +157,7 @@ class AmllTtmlFormatConverterTest {
 
         assertTrue(
             result.ttml.contains(
-                "<text for=\"L1\">T1<span ttm:role=\"x-bg\">(BT1)</span></text>",
+                "<text for=\"L1\">T1${backgroundSpan}(BT1)</span></text>",
             ),
         )
         // The background vocal itself stays in the body, without its translation.
@@ -178,7 +181,7 @@ class AmllTtmlFormatConverterTest {
         val result = AmllTtmlFormatConverter.toAppleFormat(parenthesized)
 
         assertTrue(
-            result.ttml.contains("<span ttm:role=\"x-bg\">（已加括号）</span></text>"),
+            result.ttml.contains("${backgroundSpan}（已加括号）</span></text>"),
         )
     }
 
@@ -243,7 +246,7 @@ class AmllTtmlFormatConverterTest {
         // The space stands in for the main translation the line never had, so
         // Apple does not read the background one as belonging to the line.
         assertTrue(
-            result.ttml.contains("<text for=\"L9\"> <span ttm:role=\"x-bg\">(BT)</span></text>"),
+            result.ttml.contains("<text for=\"L9\"> ${backgroundSpan}(BT)</span></text>"),
         )
     }
 
@@ -354,7 +357,7 @@ class AmllTtmlFormatConverterTest {
 
         assertTrue(
             result.ttml.contains(
-                "<text for=\"L1\"> <span ttm:role=\"x-bg\">(BT)</span></text>" +
+                "<text for=\"L1\"> ${backgroundSpan}(BT)</span></text>" +
                     "<text for=\"L2\"> </text>",
             ),
         )

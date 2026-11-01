@@ -1,5 +1,6 @@
 package dev.amenhancer.module.hook
 
+import dev.amenhancer.module.ModuleConstants
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -93,13 +94,15 @@ class TabletLiquidGlassStructuralRegressionTest {
         val session = source("dev/amenhancer/module/hook/TabletDualPaneGlassSession.kt")
         val base = source("dev/amenhancer/module/hook/PhoneGlassSession.kt")
         // Nav pill left of one centered row, mini pill in the right slot, equal
-        // outer whitespace of frameWidth/6 ("留白长度一致"): the tablet override
+        // outer whitespace of frameWidth/6 ("留白长度一致): the tablet override
         // carves [W/6, 2W/5] for the nav and [19W/30, W/6] for the mini.
         assertTrue(session.contains("frameWidth * 19 / 30"))
         assertTrue(session.contains("frameWidth * 2 / 5"))
         // The native mini content and the morphing glass share the mini slot, and
         // the expand morph interpolates each edge from its own slot edge to zero.
-        assertTrue(base.contains("capsuleMarginsPx"))
+        // Shared layout starts from the form-owned slot before applying any supported collapse.
+        assertTrue(base.contains("val expandedMiniSlot = capsuleMarginsPx(frame.width, mini = true)"))
+        assertTrue(base.contains("barCollapse.miniMargins(expandedMiniSlot,"))
         assertTrue(base.contains("applySlot(miniContent, miniSlot)"))
     }
 
@@ -123,11 +126,16 @@ class TabletLiquidGlassStructuralRegressionTest {
 
     @Test
     fun `hides the compensation row while the glass toggle is on`() {
-        val settings = source("dev/amenhancer/module/ui/EmbeddedSettingsHost.kt")
+        val settings = source("dev/amenhancer/module/ui/EmbeddedSettingsPages.kt")
         // The compensation toggle is native-bar-only; showing it while glass
         // owns the geometry would read as a live switch that does nothing.
-        assertTrue(settings.contains("if (!settings.phoneLiquidGlassEnabled)"))
-        assertTrue(settings.contains("ModuleText.TABLET_BOTTOM_BAR_FIX"))
+        val glassGateAt = settings.indexOf("if (settings.phoneLiquidGlassEnabled)")
+        val disabledBranchAt = settings.indexOf("} else {", glassGateAt)
+        val compensationAt = settings.indexOf("ModuleText.TABLET_BOTTOM_BAR_FIX", disabledBranchAt)
+        assertTrue(
+            "the tablet compensation row must remain in the glass-disabled branch",
+            glassGateAt in 1 until disabledBranchAt && disabledBranchAt in 1 until compensationAt,
+        )
     }
 
     @Test
@@ -143,12 +151,11 @@ class TabletLiquidGlassStructuralRegressionTest {
     }
 
     @Test
-    fun `keeps the glass configuration keys under schema 15`() {
+    fun `keeps existing glass configuration keys across schema upgrades`() {
         val schema = source("dev/amenhancer/module/config/ModuleSettingsSchema.kt")
-        val constants = source("dev/amenhancer/module/ModuleConstants.kt")
 
-        // Exactly the three existing glass keys: the tablet form reuses the phone toggle,
-        // gap and blur, so no new key exists and no migration was added.
+        // Keep the serialized glass keys, including the inactive tablet-collapse compatibility key.
+        // Tablet forms use the glass toggle, gap and blur but never opt into scroll collapse.
         val glassKeys = Regex("\"(phone_liquid_glass[a-z_]*)\"").findAll(schema)
             .map { it.groupValues[1] }.toSet()
         assertEquals(
@@ -156,10 +163,16 @@ class TabletLiquidGlassStructuralRegressionTest {
                 "phone_liquid_glass_enabled",
                 "phone_liquid_glass_bottom_gap_dp",
                 "phone_liquid_glass_panel_blur_dp",
+                "phone_liquid_glass_collapse_enabled",
+                "phone_liquid_glass_tablet_collapse_enabled",
+                "phone_liquid_glass_collapse_rebound_percent",
+                "phone_liquid_glass_expand_rebound_percent",
+                "phone_liquid_glass_mini_rebound_percent",
+                "phone_liquid_glass_mini_sink_bounce_dp",
             ),
             glassKeys,
         )
-        // Schema 15 adds the independent cellular setting; glass still reuses its original keys.
-        assertTrue(constants.contains("const val CONFIG_SCHEMA_VERSION = 15"))
+        // Schema 18 is the compatibility baseline; later settings may advance it without changing glass keys.
+        assertTrue(ModuleConstants.CONFIG_SCHEMA_VERSION >= 18)
     }
 }

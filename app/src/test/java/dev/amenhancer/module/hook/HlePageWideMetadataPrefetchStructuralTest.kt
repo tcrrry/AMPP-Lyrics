@@ -31,7 +31,8 @@ class HlePageWideMetadataPrefetchStructuralTest {
         )
 
         assertTrue(artist.contains("requestPageOriginalMetadata"))
-        assertTrue(artist.contains("topSongRetryIds.addAll"))
+        assertTrue(artist.contains("topSongRetryIds.add(it) || host.shouldRequestOverride(it)"))
+        assertTrue(artist.contains("mediaIds = requestIds"))
         assertTrue(artist.contains("RequestPriority.ACTIVE_PAGE"))
     }
 }

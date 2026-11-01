@@ -20,12 +20,14 @@ class LyricBlurRadiusOffsetStructuralRegressionTest {
     @Test
     fun `target setting is applied to directional focus blur before tablet edge blur`() {
         val target = source("AppleMusicBidirectionalLyricBlurTarget.kt")
-        val runtime = source("OpenSourceLyricBlurPort.kt").replace(Regex("\\s+"), " ")
+        val policy = source("LyricBlurState.kt").replace(Regex("\\s+"), " ")
+        val renderer = source("LyricBlurViewRenderer.kt").replace(Regex("\\s+"), " ")
 
         assertTrue(target.contains("TargetConfigClient.currentSettings().lyricBlurRadiusOffsetPx"))
-        assertTrue(runtime.contains("BidirectionalBlurPolicy.applyRadiusOffset("))
-        assertTrue(runtime.contains("TabletLyricVisualPolicy.mergeBlurRadius("))
-        assertTrue(runtime.contains("isHighlighted = includeFocus && adapterPos in effectiveIds"))
-        assertTrue(runtime.contains("applyBlur(includeFocus = false, immediate = true)"))
+        assertTrue(renderer.contains("LyricBlurPolicy.targets(state, all.values.toList(), offsetPx)"))
+        assertTrue(policy.contains("return LyricBlurTarget(BidirectionalBlurPolicy.applyRadiusOffset(focus, offsetPx), 1f)"))
+        assertTrue(renderer.contains("max(animation.focus.value(nowMs), edge * animation.edgeWeight.value(nowMs))"))
+        assertTrue(policy.contains("if (protected) return LyricBlurTarget(0f, 0f)"))
+        assertTrue(policy.contains("if (state.interaction == LyricBlurInteraction.BROWSING) return LyricBlurTarget(0f, 1f)"))
     }
 }

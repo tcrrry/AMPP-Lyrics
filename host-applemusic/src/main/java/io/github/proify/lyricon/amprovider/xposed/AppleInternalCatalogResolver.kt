@@ -11,6 +11,7 @@ import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.lang.reflect.Proxy
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
@@ -72,14 +73,23 @@ internal class AppleInternalCatalogResolver(
     internal val inFlight = mutableMapOf<String, MutableList<(OriginalResolution) -> Unit>>()
     internal val originalCandidateCallbacks =
         mutableMapOf<String, MutableList<(Alias) -> Unit>>()
-    internal val catalogIdentityCache = ConcurrentHashMap<String, CatalogIdentity>()
+    internal val catalogIdentityCache = Collections.synchronizedMap(
+        object : LinkedHashMap<String, CatalogIdentity>(256, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CatalogIdentity>?): Boolean = size > 4_096
+        })
     internal val catalogIdentityInFlight =
         mutableMapOf<String, MutableList<(CatalogIdentity) -> Unit>>()
+    internal val catalogIdentityPending = linkedMapOf<String, () -> Unit>()
+    internal val catalogIdentityRunning = mutableMapOf<String, RequestPriority>()
+    internal var catalogIdentityDrainScheduled = false
     /**
      * Artist-region evidence is shared only after a confirmed song resolution.
      * Storefront-localized artist display names are not original-region evidence.
      */
-    internal val originalArtistLanguageCache = ConcurrentHashMap<String, String>()
+    internal val originalArtistLanguageCache = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(128, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 2_048
+        })
     internal val originalEntityPending = LinkedHashMap<String, OriginalEntityRequest>()
     internal var originalEntityBatchScheduled = false
     internal var originalEntityBatchesRunning = 0
@@ -600,6 +610,7 @@ internal class AppleInternalCatalogResolver(
                 scopedPriorities = scopedPriorities,
                 onlyMediaIds = normalizedIds,
             )
+            scheduleCatalogIdentityDrain()
             return
         }
         if (priority == RequestPriority.BACKGROUND) return
@@ -632,6 +643,7 @@ internal class AppleInternalCatalogResolver(
         }
         scheduleLocalizedBatchIfCapacity()
         scheduleOriginalEntityBatchIfCapacity()
+        scheduleCatalogIdentityDrain()
     }
 
     fun updateRequestScope(
@@ -665,6 +677,7 @@ internal class AppleInternalCatalogResolver(
         }
         scheduleLocalizedBatchIfCapacity()
         scheduleOriginalEntityBatchIfCapacity()
+        scheduleCatalogIdentityDrain()
     }
 
     internal data class CatalogAccess(

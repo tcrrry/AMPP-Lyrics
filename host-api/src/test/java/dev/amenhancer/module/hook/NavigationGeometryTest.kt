@@ -61,6 +61,49 @@ class NavigationGeometryTest {
         assertFalse(menu.copy(selectedId = 0).renderable)
     }
 
+    @Test fun searchDetachesOnlyFromTheLastTabAndOnlyWhenIdentified() {
+        // The collapsed row keeps the expanded order, so a search tab in the middle must not
+        // detach: doing so would silently reorder the visible destinations.
+        val middle = NavigationSnapshot(listOf(
+            NavigationItem(1, "Home", null, true),
+            NavigationItem(2, "Search", null, true, isSearch = true),
+            NavigationItem(3, "Library", null, true),
+        ), 1, NavigationPlacement.BOTTOM, 1, true)
+        assertNull(middle.searchTab)
+
+        // An unresolved search (legacy hosts report false) must also stay in the capsule.
+        val unresolved = NavigationSnapshot(listOf(
+            NavigationItem(1, "Home", null, true),
+            NavigationItem(2, "New", null, true),
+            NavigationItem(3, "Search", null, true),
+        ), 1, NavigationPlacement.BOTTOM, 1, true)
+        assertNull(unresolved.searchTab)
+
+        // The supported shape: search last, and enough tabs left for a real tab strip.
+        val detachable = NavigationSnapshot(listOf(
+            NavigationItem(1, "Home", null, true),
+            NavigationItem(2, "New", null, true),
+            NavigationItem(3, "Radio", null, true),
+            NavigationItem(4, "Library", null, true),
+            NavigationItem(5, "Search", null, true, isSearch = true),
+        ), 1, NavigationPlacement.BOTTOM, 1, true)
+        assertEquals(5, detachable.searchTab?.id)
+        // Detaching must leave at least two cells, the minimum the tab strip can normalize
+        // against, so a two-tab menu keeps its single capsule.
+        val tooFew = NavigationSnapshot(listOf(
+            NavigationItem(4, "Library", null, true),
+            NavigationItem(5, "Search", null, true, isSearch = true),
+        ), 4, NavigationPlacement.BOTTOM, 1, true)
+        assertNull(tooFew.searchTab)
+        // Three tabs are enough: two remain in the capsule.
+        val threeTabs = NavigationSnapshot(listOf(
+            NavigationItem(3, "Radio", null, true),
+            NavigationItem(4, "Library", null, true),
+            NavigationItem(5, "Search", null, true, isSearch = true),
+        ), 3, NavigationPlacement.BOTTOM, 1, true)
+        assertEquals(5, threeTabs.searchTab?.id)
+    }
+
     @Test fun pageSelectionKeepsDrawnGlassAcrossConsecutiveNativeRevisions() {
         val gate = NavigationRenderGate()
         val menu = NavigationSnapshot(listOf(NavigationItem(1, "Home", null, true), NavigationItem(2, "New", null, true)),

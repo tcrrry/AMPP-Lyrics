@@ -140,4 +140,23 @@ class CustomLyricsOnlineImporterTest {
             result,
         )
     }
+
+    @Test
+    fun `amll import formats chronology and merges equal begins before returning the payload`() {
+        val raw = """
+            <tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal">
+            <head><metadata/></head><body><div>
+            <p begin="5s" end="6s" itunes:key="late"><span begin="5s" end="6s">late</span><span ttm:role="x-translation">Later</span></p>
+            <p begin="1s" end="2s" itunes:key="one"><span begin="1s" end="2s">one</span><span ttm:role="x-translation">One</span></p>
+            <p begin="00:01.000" end="3s" itunes:key="two"><span begin="00:01.000" end="3s">two</span><span ttm:role="x-translation">Two</span></p>
+            </div></body></tt>
+        """.trimIndent()
+        val imported = CustomLyricsOnlineImporter({ raw }, { null }, { null }).importAmll(42L)
+            as CustomLyricsOnlineImportResult.Imported
+        val body = imported.ttml.substringAfter("<body")
+        assertTrue(body.indexOf("itunes:key=\"one\"") < body.indexOf("itunes:key=\"late\""))
+        assertTrue(imported.ttml.contains("<text for=\"one\">One\nTwo</text><text for=\"two\"> </text>"))
+        assertTrue(imported.reformatted)
+        assertEquals(CustomLyricsSources.AMLL, imported.source)
+    }
 }

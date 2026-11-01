@@ -2,6 +2,7 @@ package dev.amenhancer.module.hook
 
 import android.view.View
 import android.view.ViewGroup
+import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.host.OwnedHostProperty
 import java.lang.reflect.Field
 
@@ -18,12 +19,12 @@ internal class FragmentTabletSongLayoutSession(
     private var controlsRoot: View? = null
     private var closed = false
     private val ids = native.resources.mapValues { (role, name) ->
-        container.resources.getIdentifier(name, "id", container.context.packageName).also {
+        container.resources.getIdentifier(name, "id", ModuleConstants.TARGET_PACKAGE).also {
             check(it != 0) { "songLayout.resources.$role: id/$name missing" }
         }
     }
     private val dimensions = native.dimensions.mapValues { (role, name) ->
-        val id = container.resources.getIdentifier(name, "dimen", container.context.packageName)
+        val id = container.resources.getIdentifier(name, "dimen", ModuleConstants.TARGET_PACKAGE)
         check(id != 0) { "songLayout.dimensions.$role: dimen/$name missing" }
         container.resources.getDimensionPixelSize(id)
     }

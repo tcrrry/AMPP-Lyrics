@@ -2,8 +2,8 @@
  * Derived from AndroidLiquidGlass / Backdrop 2.0.1
  * (https://github.com/Kyant0/AndroidLiquidGlass), commit
  * 65ab177e90e5c1d8c62e70cf7755841982da65f6, Apache License 2.0.
- * Changed by AM++: allow the tablet mini-player to use automatic clip compositing
- * while existing callers keep the original offscreen compositing strategy.
+ * Changed by AM++: optional clip compositing, minimum layer size and CPU trace markers.
+ * Existing callers keep offscreen clipping and layers sized to their current bounds.
  * See backdrop/UPSTREAM.md and THIRD_PARTY_NOTICES.md.
  */
 
@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -37,6 +38,7 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.toSize
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightElement
@@ -46,6 +48,7 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.InnerShadowElement
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.backdrop.shadow.ShadowElement
+import dev.amenhancer.backdrop.traceBackdrop
 
 private val DefaultHighlight = { Highlight.Default }
 private val DefaultShadow = { Shadow.Default }
@@ -57,6 +60,8 @@ fun Modifier.drawPlainBackdrop(
     effects: BackdropEffectScope.() -> Unit,
     layerBlock: (GraphicsLayerScope.() -> Unit)? = null,
     exportedBackdrop: LayerBackdrop? = null,
+    // Backing size only, including effect padding. Logical geometry and shader size stay live.
+    minLayerSize: IntSize = IntSize.Zero,
     onDrawBehind: (DrawScope.() -> Unit)? = null,
     onDrawBackdrop: DrawScope.(drawBackdrop: DrawScope.() -> Unit) -> Unit = DefaultOnDrawBackdrop,
     onDrawSurface: (DrawScope.() -> Unit)? = null,
@@ -77,6 +82,7 @@ fun Modifier.drawPlainBackdrop(
                 shapeProvider = shapeProvider,
                 effects = effects,
                 layerBlock = layerBlock,
+                minLayerSize = minLayerSize,
                 exportedBackdrop = exportedBackdrop,
                 onDrawBehind = onDrawBehind,
                 onDrawBackdrop = onDrawBackdrop,
@@ -94,9 +100,11 @@ fun Modifier.drawBackdrop(
     shadow: (() -> Shadow?)? = DefaultShadow,
     innerShadow: (() -> InnerShadow?)? = null,
     layerBlock: (GraphicsLayerScope.() -> Unit)? = null,
-    // Existing callers retain the offscreen clip; the large tablet mini surface can opt into Auto.
+    // Existing callers retain the offscreen clip; selected surfaces can opt into Auto.
     clipCompositingStrategy: androidx.compose.ui.graphics.CompositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen,
     exportedBackdrop: LayerBackdrop? = null,
+    // A bounded expanded size avoids resizing the effect layer throughout a collapse animation.
+    minLayerSize: IntSize = IntSize.Zero,
     onDrawBehind: (DrawScope.() -> Unit)? = null,
     onDrawBackdrop: DrawScope.(drawBackdrop: DrawScope.() -> Unit) -> Unit = DefaultOnDrawBackdrop,
     onDrawSurface: (DrawScope.() -> Unit)? = null,
@@ -148,6 +156,7 @@ fun Modifier.drawBackdrop(
                 effects = effects,
                 layerBlock = layerBlock,
                 clipCompositingStrategy = clipCompositingStrategy,
+                minLayerSize = minLayerSize,
                 exportedBackdrop = exportedBackdrop,
                 onDrawBehind = onDrawBehind,
                 onDrawBackdrop = onDrawBackdrop,
@@ -163,6 +172,7 @@ private class DrawBackdropElement(
     val effects: BackdropEffectScope.() -> Unit,
     val layerBlock: (GraphicsLayerScope.() -> Unit)?,
     val clipCompositingStrategy: androidx.compose.ui.graphics.CompositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen,
+    val minLayerSize: IntSize,
     val exportedBackdrop: LayerBackdrop?,
     val onDrawBehind: (DrawScope.() -> Unit)?,
     val onDrawBackdrop: DrawScope.(drawBackdrop: DrawScope.() -> Unit) -> Unit,
@@ -177,6 +187,7 @@ private class DrawBackdropElement(
             effects = effects,
             layerBlock = layerBlock,
             clipCompositingStrategy = clipCompositingStrategy,
+            minLayerSize = minLayerSize,
             exportedBackdrop = exportedBackdrop,
             onDrawBehind = onDrawBehind,
             onDrawBackdrop = onDrawBackdrop,
@@ -191,6 +202,7 @@ private class DrawBackdropElement(
         node.effects = effects
         node.layerBlock = layerBlock
         node.clipCompositingStrategy = clipCompositingStrategy
+        node.minLayerSize = minLayerSize
         if (node.exportedBackdrop != exportedBackdrop) {
             node.exportedBackdrop?.layerCoordinates = null
             node.exportedBackdrop = exportedBackdrop
@@ -209,6 +221,7 @@ private class DrawBackdropElement(
         properties["effects"] = effects
         properties["layerBlock"] = layerBlock
         properties["clipCompositingStrategy"] = clipCompositingStrategy
+        properties["minLayerSize"] = minLayerSize
         properties["exportedBackdrop"] = exportedBackdrop
         properties["onDrawBehind"] = onDrawBehind
         properties["onDrawBackdrop"] = onDrawBackdrop
@@ -225,6 +238,7 @@ private class DrawBackdropElement(
         if (effects != other.effects) return false
         if (layerBlock != other.layerBlock) return false
         if (clipCompositingStrategy != other.clipCompositingStrategy) return false
+        if (minLayerSize != other.minLayerSize) return false
         if (exportedBackdrop != other.exportedBackdrop) return false
         if (onDrawBehind != other.onDrawBehind) return false
         if (onDrawBackdrop != other.onDrawBackdrop) return false
@@ -240,6 +254,7 @@ private class DrawBackdropElement(
         result = 31 * result + effects.hashCode()
         result = 31 * result + (layerBlock?.hashCode() ?: 0)
         result = 31 * result + clipCompositingStrategy.hashCode()
+        result = 31 * result + minLayerSize.hashCode()
         result = 31 * result + (exportedBackdrop?.hashCode() ?: 0)
         result = 31 * result + (onDrawBehind?.hashCode() ?: 0)
         result = 31 * result + onDrawBackdrop.hashCode()
@@ -255,6 +270,7 @@ private class DrawBackdropNode(
     var effects: BackdropEffectScope.() -> Unit,
     var layerBlock: (GraphicsLayerScope.() -> Unit)?,
     var clipCompositingStrategy: androidx.compose.ui.graphics.CompositingStrategy,
+    var minLayerSize: IntSize,
     var exportedBackdrop: LayerBackdrop?,
     var onDrawBehind: (DrawScope.() -> Unit)?,
     var onDrawBackdrop: DrawScope.(drawBackdrop: DrawScope.() -> Unit) -> Unit,
@@ -283,21 +299,29 @@ private class DrawBackdropNode(
     private val recordBackdropBlock: (DrawScope.() -> Unit) = {
         val canvas = drawContext.canvas
         val padding = padding
-
-        if (padding != 0f) {
-            canvas.translate(padding, padding)
+        val backingSize = drawContext.size
+        // record() receives the backing size. Callbacks must still see the same logical size
+        // (including padding) they would have seen without the minimum allocation.
+        if (minLayerSize != IntSize.Zero) {
+            drawContext.size = IntSize(
+                effectScope.size.width.toInt() + padding.toInt() * 2,
+                effectScope.size.height.toInt() + padding.toInt() * 2
+            ).toSize()
         }
-        onDrawBackdrop {
-            with(backdrop) {
-                drawBackdrop(
-                    density = effectScope,
-                    coordinates = layoutCoordinates,
-                    layerBlock = layerBlock
-                )
+        if (padding != 0f) canvas.translate(padding, padding)
+        try {
+            onDrawBackdrop {
+                with(backdrop) {
+                    drawBackdrop(
+                        density = effectScope,
+                        coordinates = layoutCoordinates,
+                        layerBlock = layerBlock
+                    )
+                }
             }
-        }
-        if (padding != 0f) {
-            canvas.translate(-padding, -padding)
+        } finally {
+            if (padding != 0f) canvas.translate(-padding, -padding)
+            drawContext.size = backingSize
         }
     }
 
@@ -306,19 +330,27 @@ private class DrawBackdropNode(
         if (layer != null) {
             val padding = padding
 
-            recordLayer(
-                layer,
-                size = IntSize(
-                    size.width.toInt() + padding.toInt() * 2,
-                    size.height.toInt() + padding.toInt() * 2
-                ),
-                block = recordBackdropBlock
-            )
+            traceBackdrop("AM++/backdrop/record") {
+                recordLayer(
+                    layer,
+                    size = IntSize(
+                        maxOf(size.width.toInt() + padding.toInt() * 2, minLayerSize.width),
+                        maxOf(size.height.toInt() + padding.toInt() * 2, minLayerSize.height)
+                    ),
+                    block = recordBackdropBlock
+                )
+            }
 
             layer.topLeft =
                 if (padding != 0f) IntOffset(-padding.toInt(), -padding.toInt())
                 else IntOffset.Zero
-            drawLayer(layer)
+            if (minLayerSize != IntSize.Zero) {
+                // A larger backing must not expose pixels beyond the original padded bounds.
+                val inset = padding.toInt().toFloat()
+                clipRect(-inset, -inset, size.width.toInt() + inset, size.height.toInt() + inset) {
+                    drawLayer(layer)
+                }
+            } else drawLayer(layer)
         }
     }
 
@@ -381,14 +413,16 @@ private class DrawBackdropNode(
     private fun updateEffects() {
         if (!isRenderEffectSupported()) return
 
-        effectScope.apply(effects)
-        graphicsLayer?.renderEffect = effectScope.renderEffect
-        padding = effectScope.padding
+        traceBackdrop("AM++/effects/update") {
+            effectScope.apply(effects)
+            graphicsLayer?.renderEffect = effectScope.renderEffect
+            padding = effectScope.padding
+        }
     }
 
     override fun onAttach() {
         val graphicsContext = requireGraphicsContext()
-        graphicsLayer = graphicsContext.createGraphicsLayer()
+        graphicsLayer = traceBackdrop("AM++/backdrop/createLayer") { graphicsContext.createGraphicsLayer() }
 
         observeEffects()
     }

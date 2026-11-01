@@ -23,41 +23,42 @@ class EmbeddedBootstrapTest {
     }
 
     @Test
-    fun `only the target main process first package prepares once`() {
+    fun `only the current host main process first package prepares once`() {
         val bootstrap = EmbeddedBootstrap()
+        val packageName = "com.apple.android.music.clone"
 
         assertFalse(
             bootstrap.prepare(
-                packageName = ModuleConstants.TARGET_PACKAGE,
-                processName = "${ModuleConstants.TARGET_PACKAGE}:service",
+                packageName = packageName,
+                processName = "$packageName:service",
                 isFirstPackage = true,
             ),
         )
         assertFalse(
             bootstrap.prepare(
                 packageName = "other.package",
-                processName = "other.package",
+                processName = packageName,
                 isFirstPackage = true,
             ),
         )
         assertFalse(
             bootstrap.prepare(
-                packageName = ModuleConstants.TARGET_PACKAGE,
-                processName = ModuleConstants.TARGET_PACKAGE,
+                packageName = packageName,
+                processName = packageName,
                 isFirstPackage = false,
             ),
         )
         assertTrue(
             bootstrap.prepare(
-                packageName = ModuleConstants.TARGET_PACKAGE,
-                processName = ModuleConstants.TARGET_PACKAGE,
+                packageName = packageName,
+                processName = packageName,
                 isFirstPackage = true,
             ),
         )
         assertFalse(
             bootstrap.prepare(
-                packageName = ModuleConstants.TARGET_PACKAGE,
-                processName = ModuleConstants.TARGET_PACKAGE,
+                packageName = packageName,
+                processName = packageName,
                 isFirstPackage = true,
             ),
         )
@@ -66,6 +67,7 @@ class EmbeddedBootstrapTest {
     @Test
     fun `only supported exact builds bind one host reader`() {
         val bootstrap = EmbeddedBootstrap()
+        val packageName = "com.tcrrry.ampplyrics.coexist"
         val reader = reader(mapOf("dual_pane_enabled" to false))
 
         assertFalse(
@@ -76,8 +78,8 @@ class EmbeddedBootstrapTest {
         )
         assertTrue(
             bootstrap.prepare(
-                ModuleConstants.TARGET_PACKAGE,
-                ModuleConstants.TARGET_PACKAGE,
+                packageName,
+                packageName,
                 true,
             ),
         )
@@ -90,14 +92,14 @@ class EmbeddedBootstrapTest {
         )
         assertTrue(
             bootstrap.bind(
-                TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.1", 1583L),
+                TargetBuild(packageName, "6.5.1", 1583L),
                 reader,
             ),
         )
         assertEquals(false, bootstrap.reader.values()["dual_pane_enabled"])
         assertFalse(
             bootstrap.bind(
-                TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.1", 1583L),
+                TargetBuild(packageName, "6.5.1", 1583L),
                 reader(emptyMap()),
             ),
         )

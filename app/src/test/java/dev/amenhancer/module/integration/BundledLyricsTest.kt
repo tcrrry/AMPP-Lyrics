@@ -10,7 +10,9 @@ class BundledLyricsTest {
         assertTrue(BundledLyrics.shouldInstall(null, false, BundledLyrics.TRANSLATION_VERSION))
         assertFalse(BundledLyrics.shouldInstall(null, true, BundledLyrics.TRANSLATION_VERSION))
         assertTrue(BundledLyrics.shouldInstall(36L, true, BundledLyrics.VERSION))
-        assertFalse(BundledLyrics.shouldInstall(54L, true, BundledLyrics.VERSION))
+        assertTrue(BundledLyrics.shouldInstall(70L, true, BundledLyrics.VERSION))
+        assertFalse(BundledLyrics.shouldInstall(71L, true, BundledLyrics.VERSION))
+        assertFalse(BundledLyrics.shouldInstall(72L, true, BundledLyrics.VERSION))
         assertFalse(BundledLyrics.shouldInstall(3L, true, BundledLyrics.TRANSLATION_VERSION))
     }
     @Test fun onlyOurUpdateChannelIsOverriddenAndAllOtherAssetsStayOwnedByThePlugin() {
@@ -20,14 +22,15 @@ class BundledLyricsTest {
         assertEquals("tcrrry/AMPP-Lyrics", json.getString("repository"))
         assertEquals(dev.amenhancer.module.BuildConfig.VERSION_NAME.substringBefore('-'), json.getString("version"))
     }
-    @Test fun builtinMaskDoesNotResetTheSavedPluginSettings() {
+    @Test fun bundledPluginKeepsHostLyricsSettings() {
         val saved = mapOf("custom_lyrics_enabled" to true, "automatic_lyrics_enabled" to true, "other" to 123)
         val reader = object : ConfigurationReader {
             override fun values() = saved
             override fun openFile(name: String): java.io.InputStream? = null
         }
         val masked = BundledLyrics.builtinReader(reader).values()
-        assertEquals(false, masked["custom_lyrics_enabled"])
+        assertEquals(true, masked["custom_lyrics_enabled"])
+        assertEquals(true, masked["automatic_lyrics_enabled"])
         assertEquals(123, masked["other"])
         assertEquals(true, saved["custom_lyrics_enabled"])
     }

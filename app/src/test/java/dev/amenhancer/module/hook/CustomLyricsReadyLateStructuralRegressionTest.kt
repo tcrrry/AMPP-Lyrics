@@ -13,32 +13,35 @@ class CustomLyricsReadyLateStructuralRegressionTest {
         ?: error("$relativePath was not found from the unit-test working directory")
 
     @Test
-    fun `i2 records a ready late miss without io or native parse on the hook path`() {
+    fun `i2 no longer records a ready late miss and the hook path avoids io and native parse`() {
         val target = projectFile(
             "host-applemusic/src/main/java/dev/amenhancer/module/hook/AppleMusicCustomLyricsTarget.kt",
         )
-        val hookBody = target.substringAfter(
-            "override fun beforeHookedMethod(param: MethodHookParam)",
-        ).substringBefore("override fun afterHookedMethod(param: MethodHookParam)")
+        val installHook = target.substringAfter("val hooked = hook(installMethod")
+            .substringBefore("val availabilityResolution")
 
-        assertTrue(hookBody.contains("shouldRecordReadyLateMiss(original, replacement)"))
-        assertTrue(hookBody.contains("session.isTracking(adamId)"))
-        assertTrue(hookBody.contains("readyReapply.recordMiss(it, adamId)"))
-        assertTrue(hookBody.contains("readyReapply.dismiss(it)"))
-        assertFalse(hookBody.contains("openRemoteFile"))
-        assertFalse(hookBody.contains("readTtml"))
-        assertFalse(hookBody.contains("parseTtml"))
+        assertTrue(installHook.contains("resultBridge.attach("))
+        assertTrue(installHook.contains("param.thisObject"))
+        assertFalse(installHook.contains("shouldRecordReadyLateMiss"))
+        assertFalse(installHook.contains("session.isTracking"))
+        assertFalse(installHook.contains("readyReapply"))
+        assertFalse(installHook.contains("openRemoteFile"))
+        assertFalse(installHook.contains("readTtml"))
+        assertFalse(installHook.contains("parseTtml"))
+        assertFalse(target.contains("CustomLyricsReadyReapply("))
+        assertFalse(target.contains("installMethod.invoke"))
     }
 
     @Test
-    fun `ready late callbacks hop to the main thread before re-entering i2`() {
+    fun `ready late publication hops to the main thread before reaching the result bridge`() {
         val target = projectFile(
             "host-applemusic/src/main/java/dev/amenhancer/module/hook/AppleMusicCustomLyricsTarget.kt",
         )
 
         assertTrue(target.contains("Handler(Looper.getMainLooper())"))
-        assertTrue(target.contains("readyReapply.onReplacementPublished(appleMusicId)"))
-        assertTrue(target.contains("CustomLyricsReadyReapply("))
+        assertTrue(target.contains("mainHandler.post {"))
+        assertTrue(target.contains("resultBridge.onReplacementPublished(appleMusicId)"))
+        assertTrue(target.contains("LyricsResultSubmissionBridge.create("))
         assertTrue(target.contains("currentSong.addListener"))
         assertTrue(target.contains("current?.details?.appleMusicId"))
         assertTrue(target.contains("session::ensureRequested"))

@@ -3,6 +3,7 @@ package dev.amenhancer.module.hook
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
+import dev.amenhancer.module.ModuleConstants
 
 /** Reaches Apple's static-mode compositor after an Editorial listener has been cleared. */
 internal class FragmentTabletVideoHandoff(private val native: FragmentTabletVideoContract) {
@@ -26,7 +27,7 @@ internal class FragmentTabletVideoHandoff(private val native: FragmentTabletVide
         getParent.invoke(fragment)?.let(FragmentTabletDualPaneCoordinator::activeController) == true
 
     private fun surface(view: View): TextureView? = view.resources.getIdentifier(
-        surfaceName, "id", view.context.packageName).takeIf { it != 0 }?.let { view.findViewById(it) }
+        surfaceName, "id", ModuleConstants.TARGET_PACKAGE).takeIf { it != 0 }?.let { view.findViewById(it) }
 
     fun install(scope: HookRegistrationScope) {
         fun hook(method: java.lang.reflect.Method, callback: ModernMethodHook) {
@@ -66,7 +67,7 @@ internal class FragmentTabletVideoHandoff(private val native: FragmentTabletVide
                     if (getView.invoke(fragment) !== view || !active(fragment)) return@post
                     runCatching {
                         val texture = surface(view) ?: return@runCatching
-                        val imageId = view.resources.getIdentifier(imageName, "id", view.context.packageName)
+                        val imageId = view.resources.getIdentifier(imageName, "id", ModuleConstants.TARGET_PACKAGE)
                         val image = view.findViewById<View>(imageId) ?: return@runCatching
                         if (texture.surfaceTextureListener != null || !texture.isAvailable ||
                             texture.alpha < .99f || image.alpha > .01f) return@runCatching

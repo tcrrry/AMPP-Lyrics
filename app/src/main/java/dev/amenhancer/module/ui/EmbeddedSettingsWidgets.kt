@@ -5,26 +5,41 @@ import dev.amenhancer.module.i18n.ModuleText
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.res.ColorStateList
+import android.content.res.Configuration
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
+import android.graphics.drawable.RippleDrawable
+import android.text.InputFilter
 import android.text.InputType
+import android.text.Layout
+import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.BaseAdapter
+import android.widget.AbsListView
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.PopupMenu
+import android.widget.ListPopupWindow
+import android.widget.PopupWindow
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
-import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.config.TitleCorrectionMode
 import dev.amenhancer.module.CurrentSongDetails
+import dev.amenhancer.module.R
 import dev.amenhancer.module.model.ModuleSettings
 
 internal fun EmbeddedSettingsHost.embeddedStatusCard(activity: Activity, song: CurrentSongDetails?): View =
@@ -32,9 +47,6 @@ internal fun EmbeddedSettingsHost.embeddedStatusCard(activity: Activity, song: C
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = dp(activity, if (isEmbeddedPhone(activity)) 84 else 64)
-            val horizontalPadding = dp(activity, if (isEmbeddedPhone(activity)) 16 else 12)
-            val verticalPadding = dp(activity, if (isEmbeddedPhone(activity)) 12 else 8)
-            setPadding(horizontalPadding, verticalPadding, dp(activity, if (isEmbeddedPhone(activity)) 12 else 8), verticalPadding)
             addView(embeddedMusicIcon(activity), LinearLayout.LayoutParams(
                 dp(activity, if (isEmbeddedPhone(activity)) 48 else 38),
                 dp(activity, if (isEmbeddedPhone(activity)) 48 else 38),
@@ -45,16 +57,16 @@ internal fun EmbeddedSettingsHost.embeddedStatusCard(activity: Activity, song: C
                     text = song?.let {
                         localizedText(ModuleText.CURRENT_SONG_TITLE, it.title.orEmpty().ifBlank { localizedText(ModuleText.UNKNOWN_TITLE) })
                     } ?: localizedText(ModuleText.CURRENT_SONG_NOT_CAPTURED)
-                    textSize = embeddedTextSize(activity, 16f, 14f)
-                    setEmbeddedTextColor(activity) { colors -> colors.onSurface }
-                    setTypeface(typeface, Typeface.BOLD)
+                    textSize = embeddedTextSize(activity, 16f, 16f)
+                    setEmbeddedTextColor(activity) { colors -> colors.text }
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                     setSingleLine(false)
                     maxLines = 2
                 }, matchWidthWrapContent())
                 addView(TextView(activity).apply {
                     text = song?.let { "Apple Music ID：${it.appleMusicId}" } ?: localizedText(ModuleText.MUSIC_ID_PLAY_HINT)
-                    textSize = embeddedTextSize(activity, 13f, 12f)
-                    setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
+                    textSize = embeddedTextSize(activity, 12f, 12f)
+                    setEmbeddedTextColor(activity) { colors -> colors.secondary }
                     setSingleLine(false)
                     setPadding(0, dp(activity, 2), 0, 0)
                 }, matchWidthWrapContent())
@@ -89,14 +101,15 @@ internal fun EmbeddedSettingsHost.embeddedFontCard(
         onChooseFont: () -> Unit,
         onClearFont: () -> Unit,
     ): View = embeddedCard(activity, localizedText(ModuleText.LYRICS_FONT)) {
+        setPaddingRelative(dp(activity, 20), paddingTop, dp(activity, 16), paddingBottom)
         addView(TextView(activity).apply {
             text = if (manifest.enabled) manifest.displayName else localizedText(ModuleText.ORIGINAL_FONT)
-            textSize = embeddedTextSize(activity, 16f, 17f)
-            setEmbeddedTextColor(activity) { colors -> colors.onSurface }
-            setTypeface(typeface, Typeface.BOLD)
+            textSize = embeddedTextSize(activity, 16f, 16f)
+            setEmbeddedTextColor(activity) { colors -> colors.text }
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setSingleLine(false)
             maxLines = 2
-            setPadding(dp(activity, 16), dp(activity, 4), dp(activity, 16), 0)
+            setPadding(0, 0, 0, dp(activity, 4))
         }, matchWidthWrapContent())
         addView(TextView(activity).apply {
             text = if (manifest.enabled) {
@@ -104,14 +117,14 @@ internal fun EmbeddedSettingsHost.embeddedFontCard(
             } else {
                 localizedText(ModuleText.LYRICS_FONT_IMPORT_SUMMARY)
             }
-            textSize = embeddedTextSize(activity, 12.5f, 13.5f)
-            setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
+            textSize = embeddedTextSize(activity, 12f, 12f)
+            setEmbeddedTextColor(activity) { colors -> colors.secondary }
             setSingleLine(false)
-            setPadding(dp(activity, 16), dp(activity, 4), dp(activity, 16), dp(activity, 12))
+            setPadding(0, 0, 0, dp(activity, 12))
         }, matchWidthWrapContent())
         val actions = LinearLayout(activity).apply {
             orientation = embeddedActionOrientation(activity)
-            setPadding(dp(activity, 12), 0, dp(activity, 12), dp(activity, 12))
+            setPadding(0, 0, 0, 0)
             addView(embeddedActionButton(activity, localizedText(ModuleText.CHOOSE_FONT), onClick = onChooseFont),
                 embeddedActionButtonParams(activity))
             addView(embeddedActionSpacer(activity))
@@ -129,9 +142,10 @@ internal fun EmbeddedSettingsHost.embeddedCard(
         content: LinearLayout.() -> Unit,
     ): LinearLayout = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
+        setPadding(dp(activity, 18), dp(activity, 18), dp(activity, 18), dp(activity, 18))
         bindEmbeddedTheme(activity) { colors ->
-            background = GradientDrawable().apply {
-                setColor(if (outlined) colors.surface else Color.TRANSPARENT)
+            background = EmbeddedG3Drawable().apply {
+                setColor(colors.surface)
                 if (outlined) setStroke(dp(activity, 1), colors.outline)
                 cornerRadius = embeddedCardCornerRadius(activity)
             }
@@ -146,16 +160,10 @@ internal fun EmbeddedSettingsHost.embeddedSectionLabel(activity: Activity, text:
         TextView(activity).apply {
             this.text = text
             textSize = embeddedTextSize(activity, 14f, 14f)
-            setEmbeddedTextColor(activity) { colors -> colors.accent }
-            setTypeface(typeface, Typeface.BOLD)
+            setEmbeddedTextColor(activity) { colors -> colors.text }
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setSingleLine(false)
-            val horizontalPadding = dp(activity, if (isEmbeddedPhone(activity)) 12 else 6)
-            setPadding(
-                horizontalPadding,
-                dp(activity, if (isEmbeddedPhone(activity)) 10 else 8),
-                horizontalPadding,
-                dp(activity, if (isEmbeddedPhone(activity)) 4 else 6),
-            )
+            setPadding(0, 0, 0, dp(activity, 8))
         }
 
 
@@ -166,17 +174,16 @@ internal fun EmbeddedSettingsHost.embeddedInfoCard(
     ): View = embeddedCard(activity, null) {
             addView(TextView(activity).apply {
                 this.text = text
-                textSize = embeddedTextSize(activity, 12.5f, 13.5f)
-                setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
+                textSize = embeddedTextSize(activity, 12f, 12f)
+                setEmbeddedTextColor(activity) { colors -> colors.secondary }
                 setSingleLine(false)
-                val horizontalPadding = dp(activity, if (isEmbeddedPhone(activity)) 12 else 16)
-                val verticalPadding = dp(activity, if (isEmbeddedPhone(activity)) 8 else 12)
-                setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding)
+                setPadding(0, 0, 0, 0)
             }, matchWidthWrapContent())
             onClick?.let { click ->
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { click() }
+                bindEmbeddedClickFeedback(activity, cornerRadiusDp = 18)
+                setOnClickListener { fromEmbeddedSettingsView(this) { click() } }
             }
         }
 
@@ -200,9 +207,6 @@ internal fun EmbeddedSettingsHost.embeddedSettingRow(
         checked: Boolean,
         badge: String? = null,
         badgeAtToggle: Boolean = false,
-        iconRes: Int? = null,
-        iconTint: Int = EmbeddedSettingsPalette.Light.accent,
-        iconDrawable: Drawable? = null,
         compactWidePadding: Boolean = false,
         enabled: Boolean = true,
         onEnableConfirmation: ((onConfirmed: () -> Unit) -> Unit)? = null,
@@ -210,7 +214,7 @@ internal fun EmbeddedSettingsHost.embeddedSettingRow(
     ): View = LinearLayout(activity).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = embeddedSettingRowHeight(activity, compactWidePadding)
+        minimumHeight = embeddedSettingRowHeight(activity)
         isEnabled = enabled
         alpha = if (enabled) 1f else 0.58f
         val horizontalPadding = when {
@@ -218,18 +222,12 @@ internal fun EmbeddedSettingsHost.embeddedSettingRow(
             compactWidePadding -> 8
             else -> 12
         }
-        setPadding(
+        setPaddingRelative(
             dp(activity, horizontalPadding),
             dp(activity, if (isEmbeddedPhone(activity)) 6 else 4),
             dp(activity, if (isEmbeddedPhone(activity)) 8 else 8),
             dp(activity, if (isEmbeddedPhone(activity)) 6 else 4),
         )
-        val resolvedIcon = iconDrawable
-            ?: iconRes?.let { activity.getDrawable(it) }
-            ?: EmbeddedGlyphDrawable(EmbeddedGlyphKind.Document, iconTint)
-        addView(embeddedFeatureIcon(activity, resolvedIcon, iconTint), LinearLayout.LayoutParams(embeddedFeatureIconSize(activity), embeddedFeatureIconSize(activity)).apply {
-            marginEnd = dp(activity, if (isEmbeddedPhone(activity)) 8 else 12)
-        })
         val labels = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             addView(LinearLayout(activity).apply {
@@ -237,8 +235,8 @@ internal fun EmbeddedSettingsHost.embeddedSettingRow(
                 gravity = Gravity.CENTER_VERTICAL
                 addView(TextView(activity).apply {
                     text = title
-                    textSize = embeddedTextSize(activity, 16f, 14f)
-                    setEmbeddedTextColor(activity) { colors -> colors.onSurface }
+                    textSize = embeddedTextSize(activity, 15f, 15f)
+                    setEmbeddedTextColor(activity) { colors -> colors.text }
                     setTypeface(typeface, Typeface.NORMAL)
                     setSingleLine(false)
                     maxLines = 2
@@ -247,22 +245,23 @@ internal fun EmbeddedSettingsHost.embeddedSettingRow(
                     addView(embeddedBadge(activity, badgeText))
                 }
             }, matchWidthWrapContent())
-            addView(TextView(activity).apply {
-                text = summary
-                textSize = embeddedTextSize(activity, 13f, 12f)
-                setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
-                setSingleLine(false)
-                maxLines = 4
-                if (isEmbeddedPhone(activity)) {
+            if (summary.isNotBlank()) {
+                addView(TextView(activity).apply {
+                    text = summary
+                    textSize = embeddedTextSize(activity, 12f, 12f)
+                    setEmbeddedTextColor(activity) { colors -> colors.secondary }
+                    setSingleLine(false)
+                    maxLines = 2
                     ellipsize = android.text.TextUtils.TruncateAt.END
-                }
-                setPadding(0, dp(activity, 2), 0, 0)
-            }, matchWidthWrapContent())
+                    setPadding(0, dp(activity, 2), 0, 0)
+                }, matchWidthWrapContent())
+            }
         }
         addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val toggle = Switch(activity).apply {
             isChecked = checked
             isEnabled = enabled
+            textSize = 15f
             minimumWidth = dp(activity, 44)
             minimumHeight = dp(activity, 44)
             bindEmbeddedSwitchTheme(activity)
@@ -305,7 +304,10 @@ internal fun EmbeddedSettingsHost.embeddedSettingRow(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             dp(activity, if (isEmbeddedPhone(activity)) 44 else 44),
         ))
-        setOnClickListener { toggle.isChecked = !toggle.isChecked }
+        bindEmbeddedClickFeedback(activity, cornerRadiusDp = 12)
+        setOnClickListener {
+            fromEmbeddedSettingsView(this) { toggle.isChecked = !toggle.isChecked }
+        }
     }
 
 
@@ -313,11 +315,11 @@ internal fun EmbeddedSettingsHost.embeddedBadge(activity: Activity, text: String
         this.text = text
         textSize = embeddedTextSize(activity, 12f, 11f)
         gravity = Gravity.CENTER
-        setEmbeddedTextColor(activity) { colors -> colors.accent }
+        setEmbeddedTextColor(activity) { colors -> colors.primary }
         setPadding(dp(activity, 6), dp(activity, 2), dp(activity, 6), dp(activity, 2))
         bindEmbeddedTheme(activity) { colors ->
             background = GradientDrawable().apply {
-                setColor(colors.softSurface)
+                setColor(colors.selected)
                 cornerRadius = dp(activity, 99).toFloat()
             }
         }
@@ -339,10 +341,9 @@ internal fun EmbeddedSettingsHost.embeddedFeatureIcon(activity: Activity, iconRe
 internal fun EmbeddedSettingsHost.embeddedFeatureIcon(activity: Activity, icon: Drawable?, iconTint: Int): View =
         FrameLayout(activity).apply {
             bindEmbeddedTheme(activity) { colors ->
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    setColor(colors.softSurface)
-                    cornerRadius = dp(activity, 8).toFloat()
+                background = EmbeddedG3Drawable().apply {
+                    setColor(colors.raised)
+                    cornerRadius = dp(activity, 12).toFloat()
                 }
             }
             addView(ImageView(activity).apply {
@@ -358,28 +359,41 @@ internal fun EmbeddedSettingsHost.embeddedFeatureIcon(activity: Activity, icon: 
         }
 
 
+private fun EmbeddedSettingsHost.embeddedInlineSvgIcon(
+        activity: Activity,
+        icon: EmbeddedSvgIcon,
+): ImageView = ImageView(activity).apply {
+        setEmbeddedImageDrawable(activity, embeddedSvgDrawable(icon, activity))
+        scaleType = ImageView.ScaleType.CENTER_INSIDE
+        contentDescription = null
+        setPadding(0, 0, 0, 0)
+    }
+
+
 internal fun EmbeddedSettingsHost.embeddedBlurRadiusRow(
         activity: Activity,
         value: Int,
         onChanged: (Int) -> Unit,
     ): View = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
-        val horizontalPadding = dp(activity, if (isEmbeddedPhone(activity)) 12 else 16)
-        setPadding(
-            horizontalPadding,
+        clipToPadding = false
+        setPaddingRelative(
+            dp(activity, 12),
             dp(activity, if (isEmbeddedPhone(activity)) 8 else 10),
-            horizontalPadding,
+            dp(activity, 8),
             dp(activity, if (isEmbeddedPhone(activity)) 6 else 8),
         )
         val title = localizedText(ModuleText.LYRIC_BLUR_OFFSET)
         val label = TextView(activity).apply {
             text = localizedText(ModuleText.SETTING_VALUE, title, value, "px")
-            textSize = embeddedTextSize(activity, 14f, 15f)
-            setEmbeddedTextColor(activity) { colors -> colors.onSurface }
+            textSize = embeddedTextSize(activity, 15f, 15f)
+            setEmbeddedTextColor(activity) { colors -> colors.text }
         }
         addView(label, matchWidthWrapContent())
-        addView(SeekBar(activity).apply {
+        val seekBar = SeekBar(activity).apply {
             bindEmbeddedSeekBarTheme(activity)
+            minimumHeight = dp(activity, if (isEmbeddedPhone(activity)) 32 else 36)
+            contentDescription = title
             max = ModuleSettings.MAX_LYRIC_BLUR_RADIUS_OFFSET_PX -
                 ModuleSettings.MIN_LYRIC_BLUR_RADIUS_OFFSET_PX
             progress = value - ModuleSettings.MIN_LYRIC_BLUR_RADIUS_OFFSET_PX
@@ -406,70 +420,94 @@ internal fun EmbeddedSettingsHost.embeddedBlurRadiusRow(
                     }
                 }
             })
-        }, matchWidthWrapContent())
+        }
+        addView(seekBar, matchWidthWrapContent().apply {
+            marginStart = -seekBar.paddingStart
+            marginEnd = -seekBar.paddingEnd
+        })
     }
 
     /** SeekBar row for the gated liquid-glass extras, with a per-row one-tap default restore. */
 
-internal fun EmbeddedSettingsHost.embeddedGlassRangeRow(
-        activity: Activity,
-        title: String,
-        value: Int,
-        defaultValue: Int,
-        rangeMin: Int,
-        rangeMax: Int,
-        suffix: String,
-        onChanged: (Int) -> Unit,
+    internal fun EmbeddedSettingsHost.embeddedGlassRangeRow(
+            activity: Activity,
+            title: String,
+            value: Int,
+            defaultValue: Int,
+            rangeMin: Int,
+            rangeMax: Int,
+            suffix: String,
+            unit: String = "dp",
+            icon: EmbeddedSvgIcon? = null,
+            onChanged: (Int) -> Unit,
     ): View = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
-        val horizontalPadding = dp(activity, if (isEmbeddedPhone(activity)) 12 else 16)
-        setPadding(
-            horizontalPadding,
-            dp(activity, if (isEmbeddedPhone(activity)) 8 else 10),
-            horizontalPadding,
-            dp(activity, if (isEmbeddedPhone(activity)) 6 else 8),
-        )
-        val label = TextView(activity).apply {
-            text = localizedText(ModuleText.SETTING_VALUE, title, value, "dp")
-            textSize = embeddedTextSize(activity, 14f, 15f)
-            setEmbeddedTextColor(activity) { colors -> colors.onSurface }
+        clipToPadding = false
+        setPaddingRelative(dp(activity, 12), 0, dp(activity, 8), 0)
+        val titleLabel = TextView(activity).apply {
+            text = title
+            textSize = embeddedTextSize(activity, 15f, 15f)
+            setEmbeddedTextColor(activity) { colors -> colors.text }
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setSingleLine(false)
+            maxLines = 2
         }
-        // Small one-tap restore at the row's top-right corner.
+        val valueLabel = TextView(activity).apply {
+            text = "$value$unit"
+            textSize = embeddedTextSize(activity, 13f, 13f)
+            setEmbeddedTextColor(activity) { colors -> colors.primary }
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+        // Keep the 44dp touch target transparent while centering a light 18dp glyph.
         val reset = ImageView(activity).apply {
-            setEmbeddedImageDrawable(activity,
-                embeddedSvgDrawable(EmbeddedSvgIcon.RestoreDefault, activity) ?: EmbeddedGlyphDrawable(
-                    EmbeddedGlyphKind.Refresh,
-                    EmbeddedSettingsPalette.Light.accent,
-                ),
-            )
+            setEmbeddedImageDrawable(activity, embeddedSvgDrawable(EmbeddedSvgIcon.RestoreDefault, activity))
             scaleType = ImageView.ScaleType.CENTER_INSIDE
-            contentDescription = localizedText(ModuleText.RESET_DEFAULT)
+            contentDescription = "$title，${localizedText(ModuleText.RESET_DEFAULT)}"
             isClickable = true
             isFocusable = true
-            setPadding(dp(activity, 6), dp(activity, 4), 0, dp(activity, 4))
+            setPadding(dp(activity, 13), dp(activity, 13), dp(activity, 13), dp(activity, 13))
+            bindEmbeddedClickFeedback(activity, cornerRadiusDp = 22)
         }
         addView(LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(label, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(reset, LinearLayout.LayoutParams(dp(activity, 28), dp(activity, 28)))
+            icon?.let {
+                addView(embeddedInlineSvgIcon(activity, it), LinearLayout.LayoutParams(
+                    dp(activity, 20),
+                    dp(activity, 20),
+                ).apply { marginEnd = dp(activity, 8) })
+            }
+            addView(titleLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(valueLabel, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ))
+                addView(reset, LinearLayout.LayoutParams(dp(activity, 44), dp(activity, 44)))
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginStart = dp(activity, 8) })
         }, matchWidthWrapContent())
         addView(TextView(activity).apply {
             text = suffix
-            textSize = embeddedTextSize(activity, 13f, 12f)
-            setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
+            textSize = embeddedTextSize(activity, 12f, 12f)
+            setEmbeddedTextColor(activity) { colors -> colors.secondary }
             setSingleLine(false)
-            maxLines = 2
-            setPadding(0, dp(activity, 2), 0, 0)
+            maxLines = 3
+            setPadding(0, dp(activity, 4), 0, 0)
         }, matchWidthWrapContent())
         val seekBar = SeekBar(activity).apply {
             bindEmbeddedSeekBarTheme(activity)
+            minimumHeight = dp(activity, if (isEmbeddedPhone(activity)) 32 else 36)
+            contentDescription = title
             max = rangeMax - rangeMin
             progress = value - rangeMin
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    label.text = localizedText(ModuleText.SETTING_VALUE, title,
-                        (progress + rangeMin).coerceIn(rangeMin, rangeMax), "dp")
+                    valueLabel.text = "${(progress + rangeMin).coerceIn(rangeMin, rangeMax)}$unit"
                 }
 
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
@@ -481,9 +519,13 @@ internal fun EmbeddedSettingsHost.embeddedGlassRangeRow(
                 }
             })
         }
-        addView(seekBar, matchWidthWrapContent())
+        addView(seekBar, matchWidthWrapContent().apply {
+            topMargin = dp(activity, 8)
+            marginStart = -seekBar.paddingStart
+            marginEnd = -seekBar.paddingEnd
+        })
         reset.setOnClickListener {
-            label.text = localizedText(ModuleText.SETTING_VALUE, title, defaultValue, "dp")
+            valueLabel.text = "$defaultValue$unit"
             seekBar.progress = defaultValue - rangeMin
             onChanged(defaultValue)
         }
@@ -498,14 +540,10 @@ internal fun EmbeddedSettingsHost.embeddedDpiOverrideRow(
         activity = activity,
         title = localizedText(ModuleText.MUSIC_DPI),
         summary = if (value == ModuleSettings.FOLLOW_SYSTEM_APPLE_MUSIC_DPI) {
-            localizedText(ModuleText.MUSIC_DPI_DEFAULT_SUMMARY)
+            localizedText(ModuleText.MUSIC_DPI_DEFAULT_SUMMARY).substringBefore(" ·")
         } else {
-            localizedText(ModuleText.MUSIC_DPI_VALUE_SUMMARY, value)
+            localizedText(ModuleText.MUSIC_DPI_VALUE_SUMMARY, value).substringBefore(" ·")
         },
-        iconDrawable = EmbeddedGlyphDrawable(
-            EmbeddedGlyphKind.VideoDisplay,
-            EmbeddedSettingsPalette.Light.accent,
-        ),
         inlineSummary = true,
         onClick = { showEmbeddedDpiOverrideDialog(activity, value, onChanged) },
     )
@@ -525,10 +563,10 @@ internal fun EmbeddedSettingsHost.showEmbeddedDpiOverrideDialog(
         val content = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(
-                dp(activity, if (isEmbeddedPhone(activity)) 4 else 8),
-                0,
-                dp(activity, if (isEmbeddedPhone(activity)) 4 else 8),
-                0,
+                dp(activity, 24),
+                dp(activity, 8),
+                dp(activity, 24),
+                dp(activity, 8),
             )
             addView(input, matchWidthWrapContent())
         }
@@ -576,17 +614,18 @@ internal fun EmbeddedSettingsHost.embeddedNavigationRow(
         activity: Activity,
         title: String,
         summary: String,
-        iconRes: Int? = null,
-        iconTint: Int = EmbeddedSettingsPalette.Light.accent,
-        iconDrawable: Drawable? = null,
+        icon: EmbeddedSvgIcon? = null,
         clickable: Boolean = true,
         inlineSummary: Boolean = false,
         compactWidePadding: Boolean = false,
+        chevronTint: Int = EmbeddedSettingsPalette.Light.muted,
+        summaryMaxLines: Int = 2,
         onClick: () -> Unit,
     ): View = LinearLayout(activity).apply {
+        val showIcon = icon != null
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = embeddedNavigationRowHeight(activity, compactWidePadding)
+        minimumHeight = embeddedNavigationRowHeight(activity, showIcon)
         val horizontalPadding = when {
             isEmbeddedPhone(activity) -> 12
             compactWidePadding -> 8
@@ -594,49 +633,66 @@ internal fun EmbeddedSettingsHost.embeddedNavigationRow(
         }
         isClickable = clickable
         isFocusable = clickable
-        contentDescription = title
-        setPadding(
+        contentDescription = listOf(title, summary)
+            .filter { it.isNotBlank() }
+            .joinToString(", ")
+        setPaddingRelative(
             dp(activity, horizontalPadding),
             dp(activity, if (isEmbeddedPhone(activity)) 6 else 4),
             dp(activity, if (isEmbeddedPhone(activity)) 8 else 8),
             dp(activity, if (isEmbeddedPhone(activity)) 6 else 4),
         )
-        if (clickable) setOnClickListener { onClick() }
-        val resolvedIcon = iconDrawable
-            ?: iconRes?.let { activity.getDrawable(it) }
-            ?: EmbeddedGlyphDrawable(EmbeddedGlyphKind.Document, iconTint)
-        addView(embeddedFeatureIcon(activity, resolvedIcon, iconTint), LinearLayout.LayoutParams(embeddedFeatureIconSize(activity), embeddedFeatureIconSize(activity)).apply {
-            marginEnd = dp(activity, if (isEmbeddedPhone(activity)) 8 else 12)
-        })
+        if (clickable) {
+            stateListAnimator = null
+            bindEmbeddedTheme(activity) { colors ->
+                foreground = RippleDrawable(
+                    ColorStateList.valueOf(colors.selected),
+                    null,
+                    EmbeddedG3Drawable().apply {
+                        setColor(Color.WHITE)
+                        cornerRadius = dp(activity, 8).toFloat()
+                    },
+                )
+            }
+            setOnClickListener { fromEmbeddedSettingsView(this) { onClick() } }
+        }
+        if (icon != null) {
+            addView(embeddedFeatureIcon(activity, embeddedSvgDrawable(icon, activity), EmbeddedSettingsPalette.Light.accent), LinearLayout.LayoutParams(embeddedFeatureIconSize(activity), embeddedFeatureIconSize(activity)).apply {
+                marginEnd = dp(activity, if (isEmbeddedPhone(activity)) 8 else 12)
+            })
+        }
         addView(LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             addView(TextView(activity).apply {
                 text = title
-                textSize = embeddedTextSize(activity, 16f, 14f)
-                setEmbeddedTextColor(activity) { colors -> colors.onSurface }
-                setTypeface(typeface, Typeface.NORMAL)
+                textSize = embeddedTextSize(activity, if (showIcon) 16f else 15f, if (showIcon) 16f else 15f)
+                setEmbeddedTextColor(activity) { colors -> colors.text }
+                typeface = Typeface.create(
+                    if (showIcon) "sans-serif-medium" else "sans-serif",
+                    Typeface.NORMAL,
+                )
                 setSingleLine(false)
                 maxLines = 2
             }, matchWidthWrapContent())
-            if (!inlineSummary) {
+            if (!inlineSummary && summary.isNotBlank()) {
                 addView(TextView(activity).apply {
                     text = summary
-                    textSize = embeddedTextSize(activity, 13f, 12f)
-                    setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
+                    textSize = embeddedTextSize(activity, 12f, 12f)
+                    setEmbeddedTextColor(activity) { colors -> colors.secondary }
                     setSingleLine(false)
-                    maxLines = if (isEmbeddedPhone(activity)) 2 else 2
-                    if (isEmbeddedPhone(activity)) {
+                    maxLines = summaryMaxLines
+                    if (isEmbeddedPhone(activity) || summaryMaxLines == 1) {
                         ellipsize = android.text.TextUtils.TruncateAt.END
                     }
-                    setPadding(0, dp(activity, 2), 0, 0)
+                    setPadding(0, dp(activity, 3), 0, 0)
                 }, matchWidthWrapContent())
             }
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (inlineSummary) {
+        if (inlineSummary && summary.isNotBlank()) {
             addView(TextView(activity).apply {
                 text = summary
-                textSize = embeddedTextSize(activity, 13f, 12f)
-                setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
+                textSize = embeddedTextSize(activity, 12f, 12f)
+                setEmbeddedTextColor(activity) { colors -> colors.secondary }
                 gravity = Gravity.CENTER_VERTICAL or Gravity.END
                 setSingleLine(true)
                 ellipsize = android.text.TextUtils.TruncateAt.END
@@ -649,14 +705,14 @@ internal fun EmbeddedSettingsHost.embeddedNavigationRow(
             setEmbeddedImageDrawable(activity,
                 EmbeddedGlyphDrawable(
                     EmbeddedGlyphKind.ChevronRight,
-                    EmbeddedSettingsPalette.Light.onSurfaceVariant,
+                    chevronTint,
                 ),
             )
             scaleType = ImageView.ScaleType.CENTER
             contentDescription = null
             minimumHeight = dp(activity, 44)
-            setPadding(dp(activity, 8), dp(activity, 8), dp(activity, 8), dp(activity, 8))
-        }, LinearLayout.LayoutParams(dp(activity, if (isEmbeddedPhone(activity)) 44 else 40), dp(activity, 44)))
+            setPadding(dp(activity, 4), dp(activity, 4), dp(activity, 4), dp(activity, 4))
+        }, LinearLayout.LayoutParams(dp(activity, 28), dp(activity, 44)))
     }
 
 
@@ -669,18 +725,35 @@ internal fun EmbeddedSettingsHost.embeddedActionButton(
         bindEmbeddedButtonTheme(activity, tintBackground = false)
         text = label
         isAllCaps = false
+        textSize = 13f
+        letterSpacing = 0f
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        gravity = Gravity.CENTER
         isEnabled = enabled
         alpha = if (enabled) 1f else 0.55f
+        minWidth = 0
+        minimumWidth = 0
         minHeight = dp(activity, 48)
         minimumHeight = dp(activity, 48)
-        setEmbeddedTextColor(activity) { colors -> if (enabled) colors.accent else colors.disabledText }
+        elevation = 0f
+        setPadding(dp(activity, 12), dp(activity, 8), dp(activity, 12), dp(activity, 8))
+        setEmbeddedTextColor(activity) { colors -> if (enabled) colors.text else colors.disabledText }
         bindEmbeddedTheme(activity) { colors ->
-            background = GradientDrawable().apply {
-                setColor(if (enabled) colors.softSurface else colors.disabledSurface)
-                cornerRadius = dp(activity, 12).toFloat()
-            }
+            background = embeddedActionRipple(
+                activity = activity,
+                colors = colors,
+                content = EmbeddedG3Drawable().apply {
+                    setColor(if (enabled) colors.raised else colors.disabledSurface)
+                    setStroke(dp(activity, 1), if (enabled) colors.outline else colors.disabled)
+                    cornerRadius = dp(activity, 12).toFloat()
+                },
+            )
+            backgroundTintList = null
         }
-        setOnClickListener { if (enabled) onClick() }
+        stateListAnimator = null
+        setOnClickListener {
+            if (enabled) fromEmbeddedSettingsView(this) { onClick() }
+        }
     }
 
 
@@ -688,102 +761,82 @@ internal fun EmbeddedSettingsHost.embeddedLyricsEditorButton(
         activity: Activity,
         label: String,
         onClick: () -> Unit,
-        compact: Boolean = false,
     ): TextView = TextView(activity).apply {
         text = label
-        textSize = embeddedTextSize(activity, 14f, 13f)
+        textSize = embeddedTextSize(activity, 13f, 13f)
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         includeFontPadding = false
-        setEmbeddedTextColor(activity) { colors -> colors.accent }
-        val horizontalPadding = dp(activity, if (compact) 2 else 6)
+        setEmbeddedTextColor(activity) { colors -> colors.primary }
+        val horizontalPadding = dp(activity, 6)
         setPadding(horizontalPadding, 0, horizontalPadding, 0)
+        minWidth = 0
+        minimumWidth = 0
+        minimumHeight = dp(activity, 32)
         gravity = Gravity.CENTER
         isClickable = true
         isFocusable = true
-        setSingleLine(true)
-        if (compact) {
-            setAutoSizeTextTypeUniformWithConfiguration(
-                embeddedTextSize(activity, 10f, 10f).toInt(),
-                embeddedTextSize(activity, 14f, 13f).toInt(),
-                1,
-                android.util.TypedValue.COMPLEX_UNIT_SP,
-            )
-        }
-        setOnClickListener { onClick() }
-    }
-
-
-internal fun EmbeddedSettingsHost.embeddedLyricsEditorButtonRow(
-        activity: Activity,
-        actions: List<EmbeddedLyricsEditorAction>,
-        useCompactLabels: Boolean = false,
-    ): View = LinearLayout(activity).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER
-        setPadding(0, dp(activity, 2), 0, dp(activity, 2))
-        val compactRow = actions.size >= 3
-        actions.forEachIndexed { index, action ->
-            val renderedLabel = if (useCompactLabels) action.compactLabel else action.label
-            val button = embeddedLyricsEditorButton(
-                activity,
-                renderedLabel,
-                action.onClick,
-                compactRow,
-            ).apply { contentDescription = action.label }
-            addView(
-                button,
-                if (compactRow) {
-                    LinearLayout.LayoutParams(0, dp(activity, 32), 1f)
-                } else {
-                    LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        dp(activity, 32),
-                    )
-                },
-            )
-            if (index < actions.lastIndex) {
-                addView(TextView(activity).apply {
-                    text = "|"
-                    textSize = embeddedTextSize(activity, 14f, 13f)
-                    includeFontPadding = false
-                    gravity = Gravity.CENTER
-                    setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
-                    setPadding(dp(activity, 2), 0, dp(activity, 2), 0)
-                    isClickable = false
-                }, LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    dp(activity, 32),
-                ))
-            }
-        }
+        setSingleLine(false)
+        setHorizontallyScrolling(false)
+        ellipsize = null
+        bindEmbeddedClickFeedback(activity, cornerRadiusDp = 8)
+        setOnClickListener { fromEmbeddedSettingsView(this) { onClick() } }
     }
 
 
 internal fun EmbeddedSettingsHost.embeddedLyricsEditorActionRows(
         activity: Activity,
         actions: List<EmbeddedLyricsEditorAction>,
-    ): View = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL
-        val density = activity.resources.displayMetrics.density.coerceAtLeast(1f)
-        val fontScale = activity.resources.configuration.fontScale.coerceAtLeast(1f)
-        val dialogWidthDp = embeddedLyricsEditorDialogWidth(activity) / density
-        val horizontalInsetDp = if (isEmbeddedPhone(activity)) 40f else 48f
-        val usableWidthDp = (dialogWidthDp - horizontalInsetDp).coerceAtLeast(1f)
-        val rows = if (
-            actions.size <= 2 || usableWidthDp / fontScale >= 560f
-        ) {
-            listOf(actions)
-        } else {
-            listOf(actions.take(2), actions.drop(2))
+    ): View = object : LinearLayout(activity) {
+        private val buttons = actions.map { action ->
+            embeddedLyricsEditorButton(activity, action.compactLabel, action.onClick).apply {
+                contentDescription = action.label
+            }
         }
-        rows.forEachIndexed { rowIndex, rowActions ->
-            addView(
-                embeddedLyricsEditorButtonRow(
-                    activity = activity,
-                    actions = rowActions,
-                    useCompactLabels = rows.size > 1 && rowIndex == rows.lastIndex,
-                ),
-                matchWidthWrapContent(),
-            )
+        private var lastRowWidth = -1
+        private var lastLabelWidths = emptyList<Int>()
+
+        init {
+            orientation = VERTICAL
+        }
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val gap = dp(activity, 8)
+            val labelWidths = buttons.map { button ->
+                kotlin.math.ceil(Layout.getDesiredWidth(button.text, button.paint).toDouble()).toInt() +
+                    button.compoundPaddingLeft + button.compoundPaddingRight
+            }
+            val availableWidth = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) {
+                labelWidths.sum() + gap * (buttons.size - 1).coerceAtLeast(0)
+            } else {
+                MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
+            }.coerceAtLeast(1)
+            if (availableWidth != lastRowWidth || labelWidths != lastLabelWidths) {
+                // Reuse the themed buttons and callbacks when a viewport change reflows them.
+                buttons.forEach { button -> (button.parent as? ViewGroup)?.removeView(button) }
+                removeAllViews()
+                var row: LinearLayout? = null
+                var usedWidth = 0
+                buttons.forEachIndexed { index, button ->
+                    val buttonWidth = labelWidths[index].coerceAtMost(availableWidth)
+                    if (row == null || usedWidth + gap + buttonWidth > availableWidth) {
+                        row = LinearLayout(activity).apply {
+                            orientation = HORIZONTAL
+                            gravity = Gravity.CENTER
+                            setPadding(0, dp(activity, 2), 0, dp(activity, 2))
+                        }
+                        addView(row, matchWidthWrapContent())
+                        usedWidth = 0
+                    }
+                    row?.addView(button, LinearLayout.LayoutParams(
+                        buttonWidth,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).apply { if (usedWidth > 0) marginStart = gap })
+                    usedWidth += buttonWidth + if (usedWidth > 0) gap else 0
+                }
+                lastRowWidth = availableWidth
+                lastLabelWidths = labelWidths
+            }
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         }
     }
 
@@ -794,36 +847,184 @@ internal fun EmbeddedSettingsHost.embeddedLyricsEditorInput(
         initial: String = "",
         numeric: Boolean = false,
         multiline: Boolean = false,
-    ): EditText = EditText(activity).apply {
+        password: Boolean = false,
+        maxLength: Int = 0,
+    ): EditText = object : EditText(activity) {
+        private val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
+        private var touchStartY = 0f
+        private var draggingText = false
+        private var textOwnsDrag = false
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (!multiline) return super.onTouchEvent(event)
+
+            val deltaY = touchStartY - event.y
+            // Read the range before native scrolling reaches an edge on this move.
+            val canScrollInDirection = when {
+                deltaY > 0f -> canScrollVertically(1)
+                deltaY < 0f -> canScrollVertically(-1)
+                else -> canScrollVertically(-1) || canScrollVertically(1)
+            }
+            val handled = super.onTouchEvent(event)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchStartY = event.y
+                    draggingText = false
+                    textOwnsDrag = false
+                    parent?.requestDisallowInterceptTouchEvent(
+                        canScrollVertically(-1) || canScrollVertically(1),
+                    )
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!draggingText && kotlin.math.abs(deltaY) > touchSlop) {
+                        draggingText = true
+                        textOwnsDrag = canScrollInDirection
+                    }
+                    if (draggingText) {
+                        // Hand off a new outward drag at an edge. Keep an active text drag
+                        // stable so the outer ScrollView cannot jump by its accumulated delta.
+                        parent?.requestDisallowInterceptTouchEvent(textOwnsDrag || hasSelection())
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    draggingText = false
+                    textOwnsDrag = false
+                    parent?.requestDisallowInterceptTouchEvent(false)
+                }
+            }
+            return handled
+        }
+    }.apply {
         bindEmbeddedInputTheme(activity)
         this.hint = hint
         setText(initial)
-        textSize = embeddedTextSize(activity, 17f, 16f)
+        textSize = 14f
         includeFontPadding = false
-        setEmbeddedTextColor(activity) { colors -> colors.onSurface }
-        setEmbeddedHintColor(activity) { colors -> colors.onSurfaceVariant }
+        setEmbeddedTextColor(activity) { colors -> colors.text }
+        setEmbeddedHintColor(activity) { colors -> colors.muted }
+        bindEmbeddedTheme(activity) { colors ->
+            background = EmbeddedG3Drawable().apply {
+                setColor(colors.raised)
+                setStroke(dp(activity, 1), colors.outline)
+                cornerRadius = dp(activity, 12).toFloat()
+            }
+            backgroundTintList = null
+        }
 
         inputType = when {
             numeric -> InputType.TYPE_CLASS_NUMBER
+            password -> InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_VARIATION_PASSWORD or
+                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             multiline -> InputType.TYPE_CLASS_TEXT or
                 InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             else -> InputType.TYPE_CLASS_TEXT
         }
         if (multiline) {
-            minLines = if (isEmbeddedPhone(activity)) 9 else 11
-            maxLines = if (isEmbeddedPhone(activity)) 14 else 18
+            setLines(if (isEmbeddedPhone(activity)) 14 else 18)
             gravity = Gravity.TOP or Gravity.START
             typeface = Typeface.MONOSPACE
             isVerticalScrollBarEnabled = true
             scrollBarStyle = View.SCROLLBARS_INSIDE_INSET
             setHorizontallyScrolling(false)
-            setPadding(0, dp(activity, 8), 0, dp(activity, 8))
         } else {
             isSingleLine = true
-            minHeight = dp(activity, 56)
-            minimumHeight = dp(activity, 56)
-            setPadding(0, dp(activity, 4), 0, dp(activity, 2))
         }
+        setPadding(dp(activity, 14), dp(activity, 9), dp(activity, 14), dp(activity, 9))
+        if (maxLength > 0) {
+            filters = arrayOf(InputFilter.LengthFilter(maxLength))
+        }
+    }
+
+
+/**
+ * One editable text setting whose value opens a themed input dialog. Used by the
+ * OpenAI-compatible LLM lyrics fallback rows on the lyrics settings page.
+ */
+internal fun EmbeddedSettingsHost.embeddedTextValueRow(
+        activity: Activity,
+        title: String,
+        value: String,
+        emptySummary: String,
+        hint: String,
+        notice: String? = null,
+        password: Boolean = false,
+        masked: Boolean = false,
+        maxLength: Int = 0,
+        onChanged: (String) -> Unit,
+    ): View = embeddedNavigationRow(
+        activity = activity,
+        title = title,
+        summary = when {
+            value.isBlank() -> emptySummary
+            masked -> "••••••"
+            else -> value
+        },
+        // Long endpoint/model values must not consume the title's weighted width.
+        inlineSummary = false,
+        summaryMaxLines = 1,
+        onClick = {
+            showEmbeddedTextValueDialog(
+                activity = activity,
+                title = title,
+                notice = notice,
+                hint = hint,
+                initial = value,
+                password = password,
+                maxLength = maxLength,
+                onSelected = onChanged,
+            )
+        },
+    )
+
+
+/**
+ * Text input dialog shared by the OpenAI-compatible configuration rows.
+ *
+ * A password field renders without echoing the value and stays out of the IME
+ * suggestion pipeline; the value is never written to a log.
+ */
+internal fun EmbeddedSettingsHost.showEmbeddedTextValueDialog(
+        activity: Activity,
+        title: String,
+        notice: String?,
+        hint: String,
+        initial: String,
+        password: Boolean,
+        maxLength: Int = 0,
+        onSelected: (String) -> Unit,
+    ) {
+        val input = embeddedLyricsEditorInput(
+            activity = activity,
+            hint = hint,
+            initial = initial,
+            password = password,
+            maxLength = maxLength,
+        )
+        val content = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(
+                dp(activity, 24),
+                dp(activity, 8),
+                dp(activity, 24),
+                dp(activity, 8),
+            )
+            addView(input, matchWidthWrapContent())
+        }
+        val builder = embeddedDialogBuilder(activity).setTitle(title)
+        if (notice != null) builder.setMessage(notice)
+        val dialog = builder
+            .setView(content)
+            .setNegativeButton(localizedText(ModuleText.CANCEL), null)
+            .setPositiveButton(localizedText(ModuleText.SAVE), null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                onSelected(input.text?.toString()?.trim().orEmpty())
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
     }
 
 
@@ -849,13 +1050,10 @@ internal fun EmbeddedSettingsHost.embeddedCompactLyricsActionBar(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(activity, 3), dp(activity, 4), dp(activity, 3), dp(activity, 4))
             bindEmbeddedTheme(activity) { colors ->
-                background = GradientDrawable().apply {
-                    setColor(colors.softSurface)
-                    cornerRadius = dp(activity, 10).toFloat()
-                    setStroke(
-                        dp(activity, 1),
-                        colors.actionOutline,
-                    )
+                background = EmbeddedG3Drawable().apply {
+                    setColor(colors.raised)
+                    cornerRadius = dp(activity, 12).toFloat()
+                    setStroke(dp(activity, 1), colors.outline)
                 }
             }
             contentDescription = localizedText(ModuleText.LYRICS_ACTIONS)
@@ -874,7 +1072,9 @@ internal fun EmbeddedSettingsHost.embeddedCompactLyricsActionBar(
                 icon = icon,
                 onClick = onClick,
             )
-            container.addView(item, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            container.addView(item, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                if (container.childCount > 0) marginStart = dp(activity, 1)
+            })
         }
 
         addAction(
@@ -883,22 +1083,18 @@ internal fun EmbeddedSettingsHost.embeddedCompactLyricsActionBar(
             icon = embeddedSvgDrawable(EmbeddedSvgIcon.AddLyrics, activity) ?: EmbeddedGlyphDrawable(
                 EmbeddedGlyphKind.AddCircle,
                 EmbeddedSettingsPalette.Light.accent,
-                strokeWidthFraction = 0.055f,
             ),
             onClick = { onAdd() },
         )
-        container.addView(embeddedCompactLyricsActionDivider(activity))
         addAction(
             label = "TTML",
             description = localizedText(ModuleText.IMPORT_TTML),
             icon = embeddedSvgDrawable(EmbeddedSvgIcon.ImportTtml, activity) ?: EmbeddedGlyphDrawable(
                 EmbeddedGlyphKind.TtmlDocument,
                 EmbeddedSettingsPalette.Light.accent,
-                strokeWidthFraction = 0.055f,
             ),
             onClick = { onTtml() },
         )
-        container.addView(embeddedCompactLyricsActionDivider(activity))
         addAction(
             label = localizedText(ModuleText.UPDATE),
             description = localizedText(ModuleText.LYRICS_UPDATE),
@@ -908,14 +1104,12 @@ internal fun EmbeddedSettingsHost.embeddedCompactLyricsActionBar(
             ),
             onClick = { onUpdate() },
         )
-        container.addView(embeddedCompactLyricsActionDivider(activity))
         addAction(
             label = localizedText(ModuleText.BACKUP),
             description = localizedText(ModuleText.BACKUP_AND_RESTORE),
             icon = embeddedSvgDrawable(EmbeddedSvgIcon.BackupRestore, activity) ?: EmbeddedGlyphDrawable(
                 EmbeddedGlyphKind.CloudBackup,
                 EmbeddedSettingsPalette.Light.accent,
-                strokeWidthFraction = 0.055f,
             ),
             onClick = { anchor -> onBackup(anchor) },
         )
@@ -939,7 +1133,7 @@ internal fun EmbeddedSettingsHost.embeddedCompactLyricsActionItem(
         addView(ImageView(activity).apply {
             setEmbeddedImageDrawable(activity, icon)
             scaleType = ImageView.ScaleType.CENTER_INSIDE
-            bindEmbeddedIconTint(activity, EmbeddedSettingsPalette.Light.accent)
+            bindEmbeddedIconTint(activity, EmbeddedSettingsPalette.Light.primary)
             contentDescription = null
         }, LinearLayout.LayoutParams(glyphSize, glyphSize))
         addView(TextView(activity).apply {
@@ -947,22 +1141,16 @@ internal fun EmbeddedSettingsHost.embeddedCompactLyricsActionItem(
             textSize = embeddedTextSize(activity, 11.5f, 11f)
             includeFontPadding = false
             gravity = Gravity.CENTER
-            setEmbeddedTextColor(activity) { colors -> colors.accent }
+            setEmbeddedTextColor(activity) { colors -> colors.primary }
             setTypeface(typeface, Typeface.NORMAL)
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 20)))
-        setOnClickListener { onClick(this) }
-    }
-
-
-internal fun EmbeddedSettingsHost.embeddedCompactLyricsActionDivider(activity: Activity): View = View(activity).apply {
-        setEmbeddedBackgroundColor(activity) { it.actionDivider }
-        layoutParams = LinearLayout.LayoutParams(
-            dp(activity, 1),
-            dp(activity, 42),
-        ).apply { gravity = Gravity.CENTER_VERTICAL }
-        contentDescription = null
+        stateListAnimator = null
+        bindEmbeddedTheme(activity) { colors ->
+            foreground = embeddedActionRipple(activity, colors)
+        }
+        setOnClickListener { fromEmbeddedSettingsView(this) { onClick(this) } }
     }
 
 
@@ -979,15 +1167,21 @@ internal fun EmbeddedSettingsHost.embeddedIconActionButton(
         minimumHeight = dp(activity, if (isEmbeddedPhone(activity)) 64 else 56)
         contentDescription = label
         bindEmbeddedTheme(activity) { colors ->
-            background = GradientDrawable().apply {
-                setColor(colors.softSurface)
-                cornerRadius = dp(activity, if (isEmbeddedPhone(activity)) 8 else 7).toFloat()
-            }
+            background = embeddedActionRipple(
+                activity = activity,
+                colors = colors,
+                content = EmbeddedG3Drawable().apply {
+                    setColor(colors.raised)
+                    setStroke(dp(activity, 1), colors.outline)
+                    cornerRadius = dp(activity, 12).toFloat()
+                },
+            )
+            backgroundTintList = null
         }
         val glyphSize = embeddedActionGlyphSize(activity)
         addView(ImageView(activity).apply {
             setEmbeddedImageDrawable(activity, icon)
-            bindEmbeddedIconTint(activity, EmbeddedSettingsPalette.Light.accent)
+            bindEmbeddedIconTint(activity, EmbeddedSettingsPalette.Light.primary)
             contentDescription = null
             setPadding(dp(activity, 2), dp(activity, 2), dp(activity, 2), dp(activity, 2))
         }, LinearLayout.LayoutParams(
@@ -996,16 +1190,17 @@ internal fun EmbeddedSettingsHost.embeddedIconActionButton(
         ))
         addView(TextView(activity).apply {
             text = label
-            textSize = embeddedTextSize(activity, 14f, 12.25f)
+            textSize = embeddedTextSize(activity, 13f, 13f)
             gravity = Gravity.CENTER
-            setEmbeddedTextColor(activity) { colors -> colors.accent }
-            setTypeface(typeface, Typeface.NORMAL)
+            setEmbeddedTextColor(activity) { colors -> colors.text }
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setSingleLine(false)
             maxLines = 2
             setPadding(0, dp(activity, if (isEmbeddedPhone(activity)) 2 else 3), 0, 0)
             translationY = if (isEmbeddedPhone(activity)) 0f else -dp(activity, 3).toFloat()
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        setOnClickListener { onClick() }
+        stateListAnimator = null
+        setOnClickListener { fromEmbeddedSettingsView(this) { onClick() } }
     }
 
 
@@ -1022,10 +1217,16 @@ internal fun EmbeddedSettingsHost.embeddedEntryActionButton(
         isFocusable = true
         contentDescription = label
         bindEmbeddedTheme(activity) { colors ->
-            background = GradientDrawable().apply {
-                setColor(colors.softSurface)
-                cornerRadius = dp(activity, 8).toFloat()
-            }
+            background = embeddedActionRipple(
+                activity = activity,
+                colors = colors,
+                content = EmbeddedG3Drawable().apply {
+                    setColor(colors.raised)
+                    setStroke(dp(activity, 1), colors.outline)
+                    cornerRadius = dp(activity, 12).toFloat()
+                },
+            )
+            backgroundTintList = null
         }
         addView(ImageView(activity).apply {
             setEmbeddedImageDrawable(activity, icon)
@@ -1037,12 +1238,13 @@ internal fun EmbeddedSettingsHost.embeddedEntryActionButton(
         })
         addView(TextView(activity).apply {
             text = label
-            textSize = embeddedTextSize(activity, 14f, 13f)
+            textSize = embeddedTextSize(activity, 13f, 13f)
             setEmbeddedTextColor(activity) { it.iconColor(tint) }
-            setTypeface(typeface, Typeface.NORMAL)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             gravity = Gravity.CENTER_VERTICAL
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(activity, 48)))
-        setOnClickListener { onClick() }
+        stateListAnimator = null
+        setOnClickListener { fromEmbeddedSettingsView(this) { onClick() } }
     }
 
 
@@ -1061,28 +1263,150 @@ internal fun EmbeddedSettingsHost.embeddedActionGlyphSize(activity: Activity): I
         dp(activity, if (isEmbeddedPhone(activity)) 28 else 36)
 
 
-internal fun EmbeddedSettingsHost.showEmbeddedBackupRestoreMenu(activity: Activity, anchor: View) {
-        refreshEmbeddedTheme(activity)
-        PopupMenu(embeddedThemedContext(activity), anchor).apply {
-            menu.add(localizedText(ModuleText.BACKUP_LYRICS)).setOnMenuItemClickListener {
-                launchSafPicker(activity, EmbeddedSafOperation.Backup, "application/zip")
-                true
+internal fun EmbeddedSettingsHost.showEmbeddedActionMenu(
+        activity: Activity,
+        anchor: View,
+        actions: List<Pair<String, () -> Unit>>,
+        destructiveIndex: Int = -1,
+    ) {
+        if (!anchor.isAttachedToWindow || activity.isFinishing || activity.isDestroyed || actions.isEmpty()) return
+        val root = anchor.rootView
+        (root.getTag(R.id.ampp_embedded_popup_menu) as? ListPopupWindow)?.dismiss()
+        val shadow = EmbeddedPanelShadow(activity.resources.displayMetrics.density)
+        val shadowInset = shadow.outsetPx
+        val inset = dp(activity, 8) + shadowInset
+        val radius = dp(activity, 18).toFloat()
+        shadow.prepare(radius)
+        val surface = EmbeddedG3Drawable().apply { cornerRadius = radius }
+        val selection = EmbeddedG3Drawable().apply { cornerRadius = dp(activity, 12).toFloat() }
+        val menuBackground = object : InsetDrawable(surface, shadowInset) {
+            private val surfaceBounds = RectF()
+
+            override fun draw(canvas: Canvas) {
+                surfaceBounds.set(
+                    (bounds.left + shadowInset).toFloat(), (bounds.top + shadowInset).toFloat(),
+                    (bounds.right - shadowInset).toFloat(), (bounds.bottom - shadowInset).toFloat(),
+                )
+                shadow.draw(canvas, surfaceBounds, radius)
+                super.draw(canvas)
             }
-            menu.add(localizedText(ModuleText.RESTORE_BACKUP)).setOnMenuItemClickListener {
+
+            override fun getOutline(outline: Outline) {
+                // The cached contact shadow replaces the platform's broad elevation shadow.
+                outline.setEmpty()
+            }
+
+            override fun getPadding(padding: android.graphics.Rect): Boolean {
+                padding.set(inset, inset, inset, inset)
+                return true
+            }
+        }
+        fun applySurface(colors: EmbeddedSettingsColors) {
+            surface.setColor(colors.surface)
+            surface.setStroke(dp(activity, 1), colors.outline)
+            selection.setColor(colors.selected)
+        }
+        applySurface(embeddedPalette(activity))
+        val adapter = object : BaseAdapter() {
+            override fun getCount(): Int = actions.size
+            override fun getItem(position: Int): String = actions[position].first
+            override fun getItemId(position: Int): Long = position.toLong()
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                (convertView as? TextView ?: TextView(embeddedThemedContext(activity)).apply {
+                    textSize = 14f
+                    typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    includeFontPadding = false
+                    minHeight = dp(activity, 48)
+                    setPaddingRelative(dp(activity, 16), dp(activity, 12), dp(activity, 16), dp(activity, 12))
+                    layoutParams = AbsListView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                    bindEmbeddedClickFeedback(activity, cornerRadiusDp = 12)
+                    bindEmbeddedTheme(activity) { colors ->
+                        setTextColor(if (getTag(R.id.ampp_embedded_popup_menu) == true) colors.primary else colors.text)
+                    }
+                }).apply {
+                    text = getItem(position)
+                    val destructive = position == destructiveIndex
+                    setTag(R.id.ampp_embedded_popup_menu, destructive)
+                    val colors = embeddedPalette(activity)
+                    setTextColor(if (destructive) colors.primary else colors.text)
+                }
+        }
+        val visibleFrame = android.graphics.Rect()
+        anchor.getWindowVisibleDisplayFrame(visibleFrame)
+        val availableWidth = (if (visibleFrame.isEmpty) activity.resources.displayMetrics.widthPixels else visibleFrame.width())
+            .minus(dp(activity, 16)).coerceAtLeast(1)
+        val maxContentWidth = (availableWidth - inset * 2).coerceAtLeast(1)
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(maxContentWidth, View.MeasureSpec.AT_MOST)
+        val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        var contentWidth = minOf(dp(activity, 176), maxContentWidth)
+        val measuringParent = FrameLayout(activity)
+        for (index in actions.indices) {
+            val row = adapter.getView(index, null, measuringParent)
+            row.measure(widthSpec, heightSpec)
+            contentWidth = maxOf(contentWidth, row.measuredWidth)
+        }
+        // Use framework styling: module style resources cannot be resolved by the host context.
+        val popup = ListPopupWindow(embeddedThemedContext(activity)).apply {
+            anchorView = anchor
+            isModal = true
+            inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+            setDropDownGravity(Gravity.END)
+            verticalOffset = dp(activity, 4)
+            setBackgroundDrawable(menuBackground)
+            // Content width excludes the surface padding; set it after background.
+            setContentWidth(contentWidth)
+            setListSelector(selection)
+            animationStyle = android.R.style.Animation_Toast
+            setAdapter(adapter)
+        }
+        val anchorListener = object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) = Unit
+            override fun onViewDetachedFromWindow(view: View) = popup.dismiss()
+        }
+        popup.setOnDismissListener {
+            anchor.removeOnAttachStateChangeListener(anchorListener)
+            if (root.getTag(R.id.ampp_embedded_popup_menu) === popup) {
+                root.setTag(R.id.ampp_embedded_popup_menu, null)
+            }
+        }
+        popup.setOnItemClickListener { _, _, position, _ ->
+            popup.dismiss()
+            fromEmbeddedSettingsView(anchor) { actions[position].second() }
+        }
+        root.setTag(R.id.ampp_embedded_popup_menu, popup)
+        anchor.addOnAttachStateChangeListener(anchorListener)
+        try {
+            popup.show()
+            popup.listView?.apply {
+                divider = null
+                bindEmbeddedTheme(activity) { colors ->
+                    applySurface(colors)
+                }
+            }
+        } catch (error: RuntimeException) {
+            if (popup.isShowing) popup.dismiss()
+            anchor.removeOnAttachStateChangeListener(anchorListener)
+            if (root.getTag(R.id.ampp_embedded_popup_menu) === popup) root.setTag(R.id.ampp_embedded_popup_menu, null)
+            throw error
+        }
+    }
+
+
+internal fun EmbeddedSettingsHost.showEmbeddedBackupRestoreMenu(activity: Activity, anchor: View) {
+        showEmbeddedActionMenu(activity, anchor, listOf(
+            localizedText(ModuleText.BACKUP_LYRICS) to {
+                launchSafPicker(activity, EmbeddedSafOperation.Backup, "application/zip")
+            },
+            localizedText(ModuleText.RESTORE_BACKUP) to {
                 launchSafPicker(
                     activity,
                     EmbeddedSafOperation.RestoreOverwrite,
                     "*/*",
-                    arrayOf(
-                        "application/zip",
-                        "application/x-zip-compressed",
-                        "application/octet-stream",
-                    ),
+                    arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"),
                 )
-                true
-            }
-            show()
-        }
+            },
+        ))
     }
 
 
@@ -1100,32 +1424,6 @@ internal fun EmbeddedSettingsHost.embeddedSpacer(activity: Activity, height: Int
     }
 
 
-internal fun EmbeddedSettingsHost.embeddedDivider(activity: Activity): View = View(activity).apply {
-        setEmbeddedBackgroundColor(activity) { colors -> colors.divider }
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(activity, 1),
-        ).apply {
-            marginStart = dp(activity, 16)
-            marginEnd = dp(activity, 16)
-        }
-    }
-
-    /** Divider for the compact lyrics header: aligns to the reference row edge. */
-
-internal fun EmbeddedSettingsHost.embeddedCustomLyricsDivider(activity: Activity): View = View(activity).apply {
-        setEmbeddedBackgroundColor(activity) { colors -> colors.divider }
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(activity, 1),
-        ).apply {
-            val inset = dp(activity, if (isEmbeddedPhone(activity)) 16 else 6)
-            marginStart = inset
-            marginEnd = inset
-        }
-    }
-
-
 internal fun EmbeddedSettingsHost.addSwitch(
         parent: LinearLayout,
         activity: Activity,
@@ -1133,6 +1431,7 @@ internal fun EmbeddedSettingsHost.addSwitch(
         checked: Boolean,
     ): Switch = Switch(activity).apply {
         text = label
+        textSize = 15f
         isChecked = checked
         minimumHeight = dp(activity, 48)
         bindEmbeddedSwitchTheme(activity)
@@ -1152,16 +1451,31 @@ internal fun EmbeddedSettingsHost.addFileButton(
             bindEmbeddedButtonTheme(activity, tintBackground = false)
             text = label
             isAllCaps = false
+            textSize = 13f
+            letterSpacing = 0f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            minWidth = 0
+            minimumWidth = 0
             minHeight = dp(activity, 48)
             minimumHeight = dp(activity, 48)
-            setEmbeddedTextColor(activity) { colors -> colors.accent }
+            elevation = 0f
+            setEmbeddedTextColor(activity) { colors -> colors.text }
             bindEmbeddedTheme(activity) { colors ->
-                background = GradientDrawable().apply {
-                    setColor(colors.softSurface)
-                    cornerRadius = dp(activity, 12).toFloat()
-                }
+                background = embeddedActionRipple(
+                    activity = activity,
+                    colors = colors,
+                    content = EmbeddedG3Drawable().apply {
+                        setColor(colors.raised)
+                        setStroke(dp(activity, 1), colors.outline)
+                        cornerRadius = dp(activity, 12).toFloat()
+                    },
+                )
+                backgroundTintList = null
             }
-            setOnClickListener { launchSafPicker(activity, operation, mimeType) }
+            stateListAnimator = null
+            setOnClickListener {
+                fromEmbeddedSettingsView(this) { launchSafPicker(activity, operation, mimeType) }
+            }
             parent.addView(this, matchWidthWrapContent())
         }
     }
@@ -1175,31 +1489,29 @@ internal fun EmbeddedSettingsHost.addLyricsManagement(
         parent.addView(TextView(activity).apply {
             text = localizedText(ModuleText.CUSTOM_LYRICS_MANAGEMENT)
             textSize = embeddedTextSize(activity, 18f, 17f)
-            setEmbeddedTextColor(activity) { colors -> colors.onSurface }
+            setEmbeddedTextColor(activity) { colors -> colors.text }
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setSingleLine(false)
             setPadding(0, dp(activity, 18), 0, dp(activity, 6))
         }, matchWidthWrapContent())
 
-        Button(activity).apply {
-
-            bindEmbeddedButtonTheme(activity)
-            text = localizedText(ModuleText.ADD_LYRICS_MANUALLY)
-            setOnClickListener { showLyricsEditor(activity, null as CustomLyricsUiGroup?, song) }
-            parent.addView(this, matchWidthWrapContent())
-        }
+        parent.addView(
+            embeddedActionButton(activity, localizedText(ModuleText.ADD_LYRICS_MANUALLY)) {
+                showLyricsEditor(activity, null as CustomLyricsUiGroup?, song)
+            },
+            matchWidthWrapContent(),
+        )
         if (song != null) {
             val onlineRow = LinearLayout(activity).apply {
                 orientation = embeddedActionOrientation(activity)
             }
             listOf(
                 "AMLL" to EmbeddedOnlineSource.AMLL,
-                "AM Lyrics" to EmbeddedOnlineSource.AM_LYRICS,
+                "AM-Lyrics" to EmbeddedOnlineSource.AM_LYRICS,
                 "Lunabeat" to EmbeddedOnlineSource.LUNABEAT,
             ).forEach { (label, source) ->
-                onlineRow.addView(Button(activity).apply {
-                    bindEmbeddedButtonTheme(activity)
-                    text = label
-                    setOnClickListener {
+                onlineRow.addView(
+                    embeddedActionButton(activity, label) {
                         runAsync(activity) {
                             controller.importOnlineLyrics(
                                 source,
@@ -1207,8 +1519,9 @@ internal fun EmbeddedSettingsHost.addLyricsManagement(
                                 song.title.orEmpty().ifBlank { song.appleMusicId.toString() },
                             )
                         }
-                    }
-                }, embeddedActionButtonParams(activity))
+                    },
+                    embeddedActionButtonParams(activity),
+                )
             }
             parent.addView(onlineRow, matchWidthWrapContent())
         }
@@ -1217,7 +1530,7 @@ internal fun EmbeddedSettingsHost.addLyricsManagement(
         if (entries.isEmpty()) {
             parent.addView(TextView(activity).apply {
                 text = localizedText(ModuleText.NO_CUSTOM_LYRICS)
-                setEmbeddedTextColor(activity) { colors -> colors.onSurfaceVariant }
+                setEmbeddedTextColor(activity) { colors -> colors.secondary }
             }, matchWidthWrapContent())
         }
         entries.forEach { entry ->
@@ -1227,31 +1540,29 @@ internal fun EmbeddedSettingsHost.addLyricsManagement(
             }
             row.addView(TextView(activity).apply {
                 text = "${entry.displayName.ifBlank { entry.appleMusicId.toString() }}  ·  ${entry.appleMusicId}"
-                setEmbeddedTextColor(activity) { colors -> colors.onSurface }
+                setEmbeddedTextColor(activity) { colors -> colors.text }
                 setSingleLine(false)
             }, matchWidthWrapContent())
             val actions = LinearLayout(activity).apply {
                 orientation = embeddedActionOrientation(activity)
             }
-            actions.addView(Button(activity).apply {
-                bindEmbeddedButtonTheme(activity)
-                text = localizedText(ModuleText.EDIT)
-                minHeight = dp(activity, 48)
-                setOnClickListener { showLyricsEditor(activity, entry, song) }
-            }, embeddedActionButtonParams(activity))
-            actions.addView(Button(activity).apply {
-                bindEmbeddedButtonTheme(activity)
-                text = if (entry.enabled) localizedText(ModuleText.DISABLE) else localizedText(ModuleText.ENABLE)
-                minHeight = dp(activity, 48)
-                setOnClickListener {
+            actions.addView(
+                embeddedActionButton(activity, localizedText(ModuleText.EDIT)) {
+                    showLyricsEditor(activity, entry, song)
+                },
+                embeddedActionButtonParams(activity),
+            )
+            actions.addView(
+                embeddedActionButton(
+                    activity,
+                    if (entry.enabled) localizedText(ModuleText.DISABLE) else localizedText(ModuleText.ENABLE),
+                ) {
                     runAsync(activity) { controller.setLyricsEnabled(entry.appleMusicId, !entry.enabled) }
-                }
-            }, embeddedActionButtonParams(activity))
-            actions.addView(Button(activity).apply {
-                bindEmbeddedButtonTheme(activity)
-                text = localizedText(ModuleText.DELETE)
-                minHeight = dp(activity, 48)
-                setOnClickListener {
+                },
+                embeddedActionButtonParams(activity),
+            )
+            actions.addView(
+                embeddedActionButton(activity, localizedText(ModuleText.DELETE)) {
                     embeddedDialogBuilder(activity)
                         .setMessage(localizedText(ModuleText.DELETE_NAMED_ITEM, entry.displayName.ifBlank { entry.appleMusicId.toString() }))
                         .setNegativeButton(localizedText(ModuleText.CANCEL), null)
@@ -1259,8 +1570,9 @@ internal fun EmbeddedSettingsHost.addLyricsManagement(
                             runAsync(activity) { controller.deleteLyrics(entry.appleMusicId) }
                         }
                         .show()
-                }
-            }, embeddedActionButtonParams(activity))
+                },
+                embeddedActionButtonParams(activity),
+            )
             row.addView(actions, matchWidthWrapContent())
             parent.addView(row, matchWidthWrapContent())
         }
@@ -1268,26 +1580,12 @@ internal fun EmbeddedSettingsHost.addLyricsManagement(
 
 
 internal fun EmbeddedSettingsHost.embeddedSvgDrawable(icon: EmbeddedSvgIcon, activity: Activity): Drawable? {
-    val colors = embeddedPalette(activity)
-    return EmbeddedSettingsSvgAssets.drawable(icon, if (colors.isDark) embeddedSvgColor(icon, colors) else null)
+    return EmbeddedSettingsSvgAssets.drawable(icon, followsPalette = true)
 }
 
 
-internal fun EmbeddedSettingsHost.loadEmbeddedArrowIcon(context: Context): Drawable = sequenceOf(
-        ModuleConstants.MODULE_PACKAGE,
-        "${ModuleConstants.MODULE_PACKAGE}.debug",
-    ).mapNotNull { packageName ->
-        runCatching {
-            val moduleContext = context.createPackageContext(
-                packageName,
-                Context.CONTEXT_IGNORE_SECURITY,
-            )
-            moduleContext.resources.getDrawable(
-                dev.amenhancer.module.R.drawable.ic_arrow_back,
-                moduleContext.theme,
-            )
-        }.getOrNull()
-    }.firstOrNull() ?: EmbeddedArrowFallbackDrawable()
+internal fun EmbeddedSettingsHost.loadEmbeddedArrowIcon(context: Context): Drawable =
+        EmbeddedSettingsSvgAssets.drawable(EmbeddedSvgIcon.Back) ?: GradientDrawable()
 
 
 internal fun EmbeddedSettingsHost.embeddedWidthDp(activity: Activity): Float {
@@ -1314,15 +1612,64 @@ internal fun EmbeddedSettingsHost.embeddedDialogWidth(activity: Activity, page: 
         if (isEmbeddedPhone(activity)) return null
         // AlertDialog applies a 16dp inset on each side. These fractions target
         // the visible white panel after that inset, not the outer window.
-        val fraction = if (page == EmbeddedSettingsPage.CUSTOM_LYRICS) 0.418f else 0.514f
+        val fraction = when (page) {
+            EmbeddedSettingsPage.CUSTOM_LYRICS,
+            EmbeddedSettingsPage.AUTOMATIC_LYRICS,
+            EmbeddedSettingsPage.LLM_LYRICS -> 0.418f
+            else -> 0.514f
+        }
         return (activity.resources.displayMetrics.widthPixels * fraction).toInt()
+    }
+
+
+/**
+ * Resolves the visible panel width inside the stable full-screen dialog stage.
+ * Tablet pages keep the reference composition widths; phones use the platform
+ * dialog minimum width. The available window always keeps an 8dp side inset.
+ */
+internal fun EmbeddedSettingsHost.embeddedPanelWidth(
+        activity: Activity,
+        page: EmbeddedSettingsPage,
+        availableWidth: Int,
+): Int {
+        val safeAvailableWidth = availableWidth.coerceAtLeast(0)
+        val maxPanelWidth = (safeAvailableWidth - dp(activity, 8) * 2).coerceAtLeast(0)
+        val preferredWidth = embeddedDialogWidth(activity, page) ?: run {
+            val widthAttribute = if (
+                activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            ) {
+                android.R.attr.windowMinWidthMajor
+            } else {
+                android.R.attr.windowMinWidthMinor
+            }
+            val value = TypedValue()
+            val resolved = embeddedThemedContext(activity, dialog = true).theme
+                .resolveAttribute(widthAttribute, value, true)
+            when {
+                !resolved -> (safeAvailableWidth * 0.95f).toInt()
+                value.type == TypedValue.TYPE_FRACTION ->
+                    (safeAvailableWidth * TypedValue.complexToFloat(value.data)).toInt()
+                value.type == TypedValue.TYPE_DIMENSION ->
+                    TypedValue.complexToDimensionPixelSize(
+                        value.data,
+                        activity.resources.displayMetrics,
+                    )
+                else -> (safeAvailableWidth * 0.95f).toInt()
+            }
+        }
+        return preferredWidth.coerceIn(0, maxPanelWidth)
     }
 
 
 internal fun EmbeddedSettingsHost.embeddedDialogContentHeight(activity: Activity, page: EmbeddedSettingsPage): Int {
         val height = activity.resources.displayMetrics.heightPixels
         if (isEmbeddedPhone(activity)) return (height * 0.70f).toInt()
-        val fraction = if (page == EmbeddedSettingsPage.CUSTOM_LYRICS) 0.888f else 0.837f
+        val fraction = when (page) {
+            EmbeddedSettingsPage.CUSTOM_LYRICS,
+            EmbeddedSettingsPage.AUTOMATIC_LYRICS,
+            EmbeddedSettingsPage.LLM_LYRICS -> 0.888f
+            else -> 0.837f
+        }
         return (height * fraction).toInt()
     }
 
@@ -1350,12 +1697,21 @@ internal fun EmbeddedSettingsHost.embeddedFeatureIconSize(activity: Activity): I
         dp(activity, if (isEmbeddedPhone(activity)) 40 else 36)
 
 
-internal fun EmbeddedSettingsHost.embeddedSettingRowHeight(activity: Activity, compactWide: Boolean = false): Int =
-        dp(activity, if (isEmbeddedPhone(activity)) 72 else if (compactWide) 68 else 56)
+internal fun EmbeddedSettingsHost.embeddedSettingRowHeight(activity: Activity): Int =
+        dp(activity, if (isEmbeddedPhone(activity)) 64 else 56)
 
 
-internal fun EmbeddedSettingsHost.embeddedNavigationRowHeight(activity: Activity, compactWide: Boolean = false): Int =
-        dp(activity, if (isEmbeddedPhone(activity)) 72 else if (compactWide) 60 else 52)
+internal fun EmbeddedSettingsHost.embeddedNavigationRowHeight(
+        activity: Activity,
+        showIcon: Boolean = false,
+): Int = dp(
+        activity,
+        if (showIcon) {
+            68
+        } else {
+            if (isEmbeddedPhone(activity)) 56 else 52
+        },
+)
 
 
 internal fun EmbeddedSettingsHost.embeddedSearchFieldHeight(activity: Activity): Int =
@@ -1383,7 +1739,21 @@ internal fun EmbeddedSettingsHost.dp(activity: Activity, value: Int): Int =
 
 
 internal fun EmbeddedSettingsHost.embeddedCardCornerRadius(activity: Activity): Float =
-        dp(activity, 8).toFloat()
+        dp(activity, 18).toFloat()
+
+
+private fun EmbeddedSettingsHost.embeddedActionRipple(
+        activity: Activity,
+        colors: EmbeddedSettingsColors,
+        content: Drawable? = null,
+): RippleDrawable = RippleDrawable(
+        ColorStateList.valueOf((colors.primary and 0x00FFFFFF) or 0x24000000),
+        content,
+        EmbeddedG3Drawable().apply {
+            setColor(Color.WHITE)
+            cornerRadius = dp(activity, 12).toFloat()
+        },
+    )
 
 
 internal fun EmbeddedSettingsHost.matchWidthWrapContent(): LinearLayout.LayoutParams =

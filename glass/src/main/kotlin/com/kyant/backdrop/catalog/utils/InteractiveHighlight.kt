@@ -18,7 +18,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.util.fastCoerceIn
 import com.kyant.backdrop.RuntimeShader
@@ -29,7 +34,17 @@ import kotlinx.coroutines.launch
 
 class InteractiveHighlight(
     val animationScope: CoroutineScope,
-    val position: (size: Size, offset: Offset) -> Offset = { _, offset -> offset }
+    val position: (size: Size, offset: Offset) -> Offset = { _, offset -> offset },
+    /**
+     * Clips the light to the control's own silhouette.
+     *
+     * AM++: the additive pass below is a `drawRect` over the **whole node**, so on a wide bar its
+     * corners are outside the capsule by only a few dp and nobody notices. Once the bar withdraws
+     * into a 43dp circle the same rect is a full square around it, and the light bleeding into the
+     * four corners reads as a *square shadow* behind a round button. Clipping to the same shape the
+     * glass uses removes it at every size, and is a no-op for the wide bar.
+     */
+    val shape: Shape? = null,
 ) {
 
     private val pressProgressAnimationSpec =
@@ -90,41 +105,54 @@ half4 main(float2 coord) {
         Modifier.drawWithContent {
             val progress = pressProgressAnimation.value
             if (progress > 0f) {
-                if (shader != null) {
-                    drawRect(
-                        Color.White.copy(0.08f * progress),
-                        blendMode = BlendMode.Plus
-                    )
-                    shader.apply {
-                        val position = position(size, positionAnimation.value)
-                        setFloatUniform("size", size.width, size.height)
-                        setColorUniform("color", Color.White.copy(0.15f * progress))
-                        // The reference falloff, shared by every panel that draws a highlight:
-                        // the light dies out 1.5 panel heights from the finger. Lifting the
-                        // coefficient toward size.width washes the whole strip instead of
-                        // lighting the spot under the finger.
-                        val falloff = size.minDimension * 1.5f
-                        setFloatUniform("radius", falloff)
-                        setFloatUniform(
-                            "position",
-                            position.x.fastCoerceIn(0f, size.width),
-                            position.y.fastCoerceIn(0f, size.height)
-                        )
-                    }
-                    drawRect(
-                        ShaderBrush(shader.asComposeShader()),
-                        blendMode = BlendMode.Plus
-                    )
+                // The additive passes below are rectangles spanning the whole node, so they are
+                // clipped to the control's own silhouette. Only the light is clipped, never the
+                // children: the tab glyphs must stay unclipped so a capsule narrower than its
+                // content cannot shave them.
+                if (shape != null) {
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    clipPath(Path().apply { addOutline(outline) }) { drawHighlight(progress) }
                 } else {
-                    drawRect(
-                        Color.White.copy(0.25f * progress),
-                        blendMode = BlendMode.Plus
-                    )
+                    drawHighlight(progress)
                 }
             }
-
             drawContent()
         }
+
+    /** The two additive passes, drawn in whatever clip the caller established. */
+    private fun DrawScope.drawHighlight(progress: Float) {
+        if (shader != null) {
+            drawRect(
+                Color.White.copy(0.08f * progress),
+                blendMode = BlendMode.Plus
+            )
+            shader.apply {
+                val position = position(size, positionAnimation.value)
+                setFloatUniform("size", size.width, size.height)
+                setColorUniform("color", Color.White.copy(0.15f * progress))
+                // The reference falloff, shared by every panel that draws a highlight:
+                // the light dies out 1.5 panel heights from the finger. Lifting the
+                // coefficient toward size.width washes the whole strip instead of
+                // lighting the spot under the finger.
+                val falloff = size.minDimension * 1.5f
+                setFloatUniform("radius", falloff)
+                setFloatUniform(
+                    "position",
+                    position.x.fastCoerceIn(0f, size.width),
+                    position.y.fastCoerceIn(0f, size.height)
+                )
+            }
+            drawRect(
+                ShaderBrush(shader.asComposeShader()),
+                blendMode = BlendMode.Plus
+            )
+        } else {
+            drawRect(
+                Color.White.copy(0.25f * progress),
+                blendMode = BlendMode.Plus
+            )
+        }
+    }
 
     val gestureModifier: Modifier =
         Modifier.pointerInput(animationScope) {

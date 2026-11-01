@@ -11,7 +11,7 @@ class FragmentSettingsRuntimeTest {
     @Test
     fun `native getter compose view lifecycle and inherited SAF bridge commit together`() {
         val hooks = RecordingHooks()
-        val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), hooks)
+        val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), HOST_PACKAGE, hooks)
         val result = runtime.install(NO_UI_OBSERVER)
         assertTrue(result.message, result is TargetCapabilityInstall.Active)
         assertEquals(listOf("getPreferenceItems", "r1", "onViewCreated", "onResume", "onDestroyView", "onActivityResult"), hooks.methods.map { it.name })
@@ -35,7 +35,7 @@ class FragmentSettingsRuntimeTest {
     fun `every partial registration failure leaves stored callbacks dormant`() {
         for (failureAt in 1..6) {
             val hooks = RecordingHooks(failureAt)
-            val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), hooks)
+            val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), HOST_PACKAGE, hooks)
             val result = runtime.install(NO_UI_OBSERVER)
             assertTrue(result is TargetCapabilityInstall.Degraded)
             assertEquals(failureAt, hooks.methods.size)
@@ -58,7 +58,7 @@ class FragmentSettingsRuntimeTest {
             SettingsContractLoader() to names.copy(composeMethod = "wrong"),
         ).forEach { (loader, contract) ->
             val hooks = RecordingHooks()
-            val result = FragmentSettingsRuntime(loader, contract, hooks).install(NO_UI_OBSERVER)
+            val result = FragmentSettingsRuntime(loader, contract, HOST_PACKAGE, hooks).install(NO_UI_OBSERVER)
             assertTrue(result is TargetCapabilityInstall.Degraded)
             assertTrue(hooks.methods.isEmpty())
         }
@@ -67,7 +67,7 @@ class FragmentSettingsRuntimeTest {
     @Test
     fun `inherited SAF callback leaves unrelated receiver and original result unchanged`() {
         val hooks = RecordingHooks()
-        val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), hooks)
+        val runtime = FragmentSettingsRuntime(SettingsContractLoader(), FragmentSettingsContract(), HOST_PACKAGE, hooks)
         assertTrue(runtime.install(NO_UI_OBSERVER) is TargetCapabilityInstall.Active)
         val original = Any()
         assertSame(original, hooks.after("onActivityResult", Any(), original))
@@ -76,10 +76,10 @@ class FragmentSettingsRuntimeTest {
 
     @Test
     fun `main class matcher uses exact ancestor and rejects lookalikes`() {
-        val matcher = FragmentSettingsActivityMatcher(SettingsHostActivityBase::class.java.name)
+        val matcher = FragmentSettingsActivityMatcher(SettingsHostActivityBase::class.java.name, HOST_PACKAGE)
         assertTrue(matcher.isMainClass(SettingsHostMainActivity::class.java))
         assertFalse(matcher.isMainClass(SettingsHostFragment::class.java))
-        assertFalse(FragmentSettingsActivityMatcher("unverified.MainActivity").isMainClass(SettingsHostMainActivity::class.java))
+        assertFalse(FragmentSettingsActivityMatcher("unverified.MainActivity", HOST_PACKAGE).isMainClass(SettingsHostMainActivity::class.java))
     }
 
     private class RecordingHooks(private val failureAt: Int? = null) : FragmentSettingsHookInstaller {
@@ -103,6 +103,7 @@ class FragmentSettingsRuntimeTest {
     }
 
     companion object {
+        private const val HOST_PACKAGE = "com.apple.android.music.clone"
         private val NO_UI_OBSERVER = object : SettingsEntryObserver {
             override fun onSettingsPreferencesReady(fragment: Any, activity: Activity) = error("unexpected Activity")
             override fun onSettingsFragmentViewCreated(fragment: Any, activity: Activity, view: View?) = error("unexpected Activity")

@@ -32,6 +32,11 @@ internal class WeakIdentityMap<K : Any, V> {
         }
     }
 
+    fun keys(): List<K> = synchronized(values) {
+        removeCollectedKeys()
+        values.keys.mapNotNull { it.get() }
+    }
+
     fun clear() {
         synchronized(values) {
             values.clear()

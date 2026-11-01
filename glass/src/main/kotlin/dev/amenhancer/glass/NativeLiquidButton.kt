@@ -12,6 +12,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.util.fastCoerceAtMost
 import androidx.compose.ui.util.lerp
 import com.kyant.backdrop.Backdrop
@@ -22,7 +24,9 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.shapes.Capsule
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import dev.amenhancer.backdrop.VibrantBlur
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -41,15 +45,22 @@ fun NativeLiquidButton(
     input: NativeButtonInput,
     expansion: Float = 0f,
     panelBlur: Dp = GlassPolicy.PANEL_BLUR_DP.dp,
-    /** Let Compose choose the compositing path for the tablet mini surface. */
+    /** Let an opted-in host avoid a second offscreen layer just for clipping. */
     autoClip: Boolean = false,
     miniHeightDp: Int = GlassPolicy.MINI_HEIGHT_DP,
+    /** Expanded material bounds for a size-animating host; native content keeps its own size. */
+    minLayerSize: IntSize = IntSize.Zero,
+    capsuleShape: Shape = Capsule(),
     transformContent: (Float, Float, Float, Float) -> Unit,
 ) {
     val containerColor = if (isSystemInDarkTheme()) Color(0xFF121212).copy(alpha = 0.4f)
         else Color(0xFFFAFAFA).copy(alpha = 0.4f)
     val scope = rememberCoroutineScope()
     val highlight = remember(scope) { InteractiveHighlight(scope) }
+    val material = if (minLayerSize != IntSize.Zero) {
+        val radiusPx = with(LocalDensity.current) { panelBlur.toPx() }
+        remember(radiusPx) { VibrantBlur(radiusPx) }
+    } else null
     DisposableEffect(input, highlight) {
         input.receiver = { action, x, y ->
             when (action) {
@@ -63,12 +74,15 @@ fun NativeLiquidButton(
     Box(
         Modifier.fillMaxSize().drawBackdrop(
             backdrop = backdrop,
+            minLayerSize = material?.paddedSize(minLayerSize) ?: IntSize.Zero,
             clipCompositingStrategy = if (autoClip) androidx.compose.ui.graphics.CompositingStrategy.Auto
                 else androidx.compose.ui.graphics.CompositingStrategy.Offscreen,
-            shape = { if (expansion == 0f) Capsule() else RoundedCornerShape(lerp(miniHeightDp / 2f, 24f, expansion).dp) },
+            shape = { if (expansion == 0f) capsuleShape else RoundedCornerShape(lerp(miniHeightDp / 2f, 24f, expansion).dp) },
             effects = {
-                vibrancy()
-                blur(panelBlur.toPx())
+                if (material == null) {
+                    vibrancy()
+                    blur(panelBlur.toPx())
+                } else material.applyTo(this)
                 // Keep the capsule center outside refraction, including compact layouts.
                 val refraction = minOf(24f.dp.toPx(), size.minDimension * 0.375f)
                 lens(refraction, refraction)

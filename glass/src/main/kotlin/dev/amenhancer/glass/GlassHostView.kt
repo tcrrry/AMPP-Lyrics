@@ -1,6 +1,7 @@
 package dev.amenhancer.glass
 
 import android.content.Context
+import android.graphics.Canvas
 import android.view.View
 import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
@@ -26,9 +27,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import dev.amenhancer.backdrop.traceBackdrop
 
 /** Owns only module AndroidX objects. Never reads the host application's AndroidX owners. */
-class GlassHostView(context: Context, bleedDp: Int = 32) : FrameLayout(context) {
+class GlassHostView(context: Context, bleedDp: Int = 32, traceName: String? = null) : FrameLayout(context) {
+    private val measureTrace = traceName?.let { "$it/measure" }
+    private val layoutTrace = traceName?.let { "$it/layout" }
+    private val drawTrace = traceName?.let { "$it/recordView" }
     // Keep layout/hit bounds unchanged while giving Compose's RenderNode room for
     // the reference lens expansion and its shadow on every side.
     private val bleed = (bleedDp * resources.displayMetrics.density).roundToInt()
@@ -63,7 +68,7 @@ class GlassHostView(context: Context, bleedDp: Int = 32) : FrameLayout(context) 
         }
     }
 
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) = traceBackdrop(measureTrace) {
         // Measure the composition once at the final bleed size. FrameLayout's first pass at
         // the unpadded size followed by a second pass made pressed controls alternate constraints.
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec))
@@ -73,9 +78,11 @@ class GlassHostView(context: Context, bleedDp: Int = 32) : FrameLayout(context) 
         )
     }
 
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) = traceBackdrop(layoutTrace) {
         compose.layout(-bleed, -bleed, width + bleed, height + bleed)
     }
+
+    override fun dispatchDraw(canvas: Canvas) = traceBackdrop(drawTrace) { super.dispatchDraw(canvas) }
 
     private fun bindOwners() {
         setViewTreeLifecycleOwner(owner)

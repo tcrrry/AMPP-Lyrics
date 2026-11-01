@@ -555,10 +555,62 @@ internal fun AppleInternalCatalogResolver.resolveCatalogIdentity(
         }
         if (!ownsRequest) return
 
+        synchronized(catalogIdentityPending) {
+            catalogIdentityPending[mediaId] = { queryCatalogIdentity(mediaId, languages) }
+        }
+        scheduleCatalogIdentityDrain()
+    }
+
+/** Bound the identity stage as well as the later 50-ID original entity batches. */
+internal fun AppleInternalCatalogResolver.scheduleCatalogIdentityDrain() {
+    val shouldPost = synchronized(catalogIdentityPending) {
+        if (catalogIdentityDrainScheduled || catalogIdentityPending.isEmpty()) false else {
+            catalogIdentityDrainScheduled = true
+            true
+        }
+    }
+    if (!shouldPost) return
+    mainHandler.post {
+        synchronized(catalogIdentityPending) { catalogIdentityDrainScheduled = false }
+        while (true) {
+            val next = synchronized(catalogIdentityPending) {
+                val background = catalogIdentityRunning.values.count { it == AppleInternalCatalogResolver.RequestPriority.BACKGROUND }
+                val candidate = catalogIdentityPending.keys
+                    .map { it to currentRequestPriority(it, RequestPriority.BACKGROUND) }
+                    .filter { (_, priority) -> priority != AppleInternalCatalogResolver.RequestPriority.BACKGROUND || background < 1 }
+                    .maxByOrNull { it.second.ordinal }
+                if (candidate == null || catalogIdentityRunning.size >= 3) null else {
+                    val task = catalogIdentityPending.remove(candidate.first)!!
+                    catalogIdentityRunning[candidate.first] = candidate.second
+                    candidate.first to task
+                }
+            } ?: break
+            runCatching { next.second() }.onFailure { error ->
+                ProviderLogger.error("Apple catalog identity query failed: id=${next.first}", error)
+                completeCatalogIdentity(next.first, CatalogIdentity(null, emptyList(), emptyList(), emptyList()))
+            }
+        }
+    }
+}
+
+private fun AppleInternalCatalogResolver.completeCatalogIdentity(mediaId: String, identity: CatalogIdentity) {
+    try {
+        finishCatalogIdentity(mediaId, identity)
+    } finally {
+        synchronized(catalogIdentityPending) { catalogIdentityRunning.remove(mediaId) }
+        scheduleCatalogIdentityDrain()
+    }
+}
+
+private fun AppleInternalCatalogResolver.queryCatalogIdentity(mediaId: String, languages: List<String>) {
+        catalogIdentityCache[mediaId]?.takeIf(::isUsefulCatalogIdentity)?.let {
+            completeCatalogIdentity(mediaId, it)
+            return
+        }
         queryById(mediaId, null) { currentSong ->
             currentSong?.isrc?.let { isrc ->
                 ProviderLogger.info("Apple 内部歌曲 ISRC: id=$mediaId, isrc=$isrc")
-                finishCatalogIdentity(
+                completeCatalogIdentity(
                     mediaId,
                     CatalogIdentity(
                         isrc = isrc,
@@ -578,7 +630,7 @@ internal fun AppleInternalCatalogResolver.resolveCatalogIdentity(
             }
             fun queryNext(index: Int) {
                 if (index >= languages.size) {
-                    finishCatalogIdentity(
+                    completeCatalogIdentity(
                         mediaId,
                         CatalogIdentity(
                             isrc = null,
@@ -598,7 +650,7 @@ internal fun AppleInternalCatalogResolver.resolveCatalogIdentity(
                         ProviderLogger.info(
                             "Apple 内部歌曲 ISRC: id=$mediaId, language=$language, isrc=$isrc"
                         )
-                        finishCatalogIdentity(
+                        completeCatalogIdentity(
                             mediaId,
                             CatalogIdentity(
                                 isrc = isrc,

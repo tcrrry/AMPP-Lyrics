@@ -2,6 +2,7 @@ package dev.amenhancer.module.config
 
 import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.model.CustomLyricsManifest
+import dev.amenhancer.module.model.LlmLyricsThinkingEffort
 import dev.amenhancer.module.model.ModuleSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,6 +10,35 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ModuleSettingsSchemaTest {
+    @Test
+    fun `dual pane status bar hiding defaults off and round trips`() {
+        assertFalse(ModuleSettings().dualPaneHideStatusBarEnabled)
+        assertFalse(ModuleSettingsSchema.decode(emptyMap<String, Any>()).dualPaneHideStatusBarEnabled)
+        assertFalse(ModuleSettingsSchema.decode(
+            mapOf("dual_pane_hide_status_bar_enabled" to "true"),
+        ).dualPaneHideStatusBarEnabled)
+        for (enabled in listOf(false, true)) {
+            val values = ModuleSettingsSchema.encodeOrdinarySettings(
+                ModuleSettings(dualPaneHideStatusBarEnabled = enabled),
+            )
+            assertEquals(enabled, values["dual_pane_hide_status_bar_enabled"])
+            assertEquals(enabled, ModuleSettingsSchema.decode(values).dualPaneHideStatusBarEnabled)
+        }
+    }
+
+    @Test
+    fun `startup prewarm defaults on and preserves an explicit opt out`() {
+        assertEquals(true, ModuleSettings().startupPagePrewarmEnabled)
+        assertEquals(true, ModuleSettingsSchema.decode(emptyMap<String, Any>()).startupPagePrewarmEnabled)
+        for (enabled in listOf(false, true)) {
+            val values = ModuleSettingsSchema.encodeOrdinarySettings(
+                ModuleSettings(startupPagePrewarmEnabled = enabled),
+            )
+            assertEquals(enabled, values["startup_page_prewarm_enabled"])
+            assertEquals(enabled, ModuleSettingsSchema.decode(values).startupPagePrewarmEnabled)
+        }
+    }
+
     @Test
     fun `cellular entry defaults off rejects malformed values and round trips`() {
         assertFalse(ModuleSettingsSchema.decode(emptyMap<String, Any>()).forceCellularDataEntryEnabled)
@@ -67,20 +97,37 @@ class ModuleSettingsSchemaTest {
         assertEquals(
             mapOf(
                 "dual_pane_enabled" to false,
+                "dual_pane_hide_status_bar_enabled" to false,
                 "disable_editorial_video_on_tablet" to false,
                 "phone_liquid_glass_enabled" to true,
                 "phone_liquid_glass_bottom_gap_dp" to 16,
                 "phone_liquid_glass_panel_blur_dp" to 4,
+                "phone_liquid_glass_collapse_enabled" to true,
+                "phone_liquid_glass_tablet_collapse_enabled" to false,
+                "phone_liquid_glass_collapse_rebound_percent" to 35,
+                "phone_liquid_glass_expand_rebound_percent" to 100,
+                "phone_liquid_glass_mini_rebound_percent" to 100,
+                "phone_liquid_glass_mini_sink_bounce_dp" to 4,
                 "future_blur_enabled" to false,
                 "cjk_karaoke_animation_enabled" to true,
+                "lyric_effects_optimization_enabled" to false,
                 "navigation_compensation_enabled" to false,
                 "force_cellular_data_entry_enabled" to false,
+                "startup_page_prewarm_enabled" to true,
                 "lyric_blur_radius_offset_px" to 6,
                 "apple_music_dpi_override_dpi" to 0,
                 "title_correction_enabled" to false,
                 "title_correction_mode" to "original_hyper",
                 "custom_lyrics_enabled" to false,
                 "automatic_lyrics_enabled" to true,
+                "automatic_lyrics_prefer_native" to true,
+                "automatic_lyrics_source_order" to "amll-ttml-db,am-lyrics,am-native,lunabeat-ttml-hub",
+                "llm_lyrics_enabled" to false,
+                "llm_lyrics_base_url" to "",
+                "llm_lyrics_api_key" to "",
+                "llm_lyrics_model" to "",
+                "llm_lyrics_thinking_enabled" to false,
+                "llm_lyrics_thinking_effort" to "default",
                 "lyrics_font_enabled" to false,
                 "lyrics_font_file_id" to "",
                 "lyrics_font_display_name" to "",
@@ -106,20 +153,37 @@ class ModuleSettingsSchemaTest {
         assertEquals(
             mapOf(
                 "dual_pane_enabled" to false,
+                "dual_pane_hide_status_bar_enabled" to false,
                 "disable_editorial_video_on_tablet" to true,
                 "phone_liquid_glass_enabled" to true,
                 "phone_liquid_glass_bottom_gap_dp" to 16,
                 "phone_liquid_glass_panel_blur_dp" to 4,
+                "phone_liquid_glass_collapse_enabled" to true,
+                "phone_liquid_glass_tablet_collapse_enabled" to false,
+                "phone_liquid_glass_collapse_rebound_percent" to 35,
+                "phone_liquid_glass_expand_rebound_percent" to 100,
+                "phone_liquid_glass_mini_rebound_percent" to 100,
+                "phone_liquid_glass_mini_sink_bounce_dp" to 4,
                 "future_blur_enabled" to true,
                 "cjk_karaoke_animation_enabled" to true,
+                "lyric_effects_optimization_enabled" to false,
                 "navigation_compensation_enabled" to false,
                 "force_cellular_data_entry_enabled" to false,
+                "startup_page_prewarm_enabled" to true,
                 "lyric_blur_radius_offset_px" to 0,
                 "apple_music_dpi_override_dpi" to 0,
                 "title_correction_enabled" to false,
                 "title_correction_mode" to "original_hyper",
                 "custom_lyrics_enabled" to false,
                 "automatic_lyrics_enabled" to true,
+                "automatic_lyrics_prefer_native" to true,
+                "automatic_lyrics_source_order" to "amll-ttml-db,am-lyrics,am-native,lunabeat-ttml-hub",
+                "llm_lyrics_enabled" to false,
+                "llm_lyrics_base_url" to "",
+                "llm_lyrics_api_key" to "",
+                "llm_lyrics_model" to "",
+                "llm_lyrics_thinking_enabled" to false,
+                "llm_lyrics_thinking_effort" to "default",
                 "lyrics_font_enabled" to false,
                 "lyrics_font_file_id" to "",
                 "lyrics_font_display_name" to "",
@@ -160,6 +224,53 @@ class ModuleSettingsSchemaTest {
     }
 
     @Test
+    fun `schema 18 upgrades to 19 with saved LLM configuration and default effort`() {
+        val upgraded = ModuleSettingsSchema.upgrade(
+            storedValues = mapOf(
+                "schema_version" to 18,
+                "dual_pane_enabled" to false,
+                "lyric_effects_optimization_enabled" to true,
+                "llm_lyrics_enabled" to true,
+                "llm_lyrics_base_url" to "https://example.test/v1",
+                "llm_lyrics_api_key" to "test-api-key",
+                "llm_lyrics_model" to "reasoning-model",
+                "llm_lyrics_thinking_enabled" to true,
+            ),
+            legacyValues = mapOf(
+                "llm_lyrics_enabled" to false,
+                "llm_lyrics_thinking_enabled" to false,
+            ),
+        )!!
+
+        assertEquals(ModuleConstants.CONFIG_SCHEMA_VERSION, upgraded["schema_version"])
+        assertEquals(false, upgraded["dual_pane_enabled"])
+        assertEquals(true, upgraded["lyric_effects_optimization_enabled"])
+        assertEquals(true, upgraded["llm_lyrics_enabled"])
+        assertEquals("https://example.test/v1", upgraded["llm_lyrics_base_url"])
+        assertEquals("test-api-key", upgraded["llm_lyrics_api_key"])
+        assertEquals("reasoning-model", upgraded["llm_lyrics_model"])
+        assertEquals(true, upgraded["llm_lyrics_thinking_enabled"])
+        assertEquals("default", upgraded["llm_lyrics_thinking_effort"])
+    }
+
+    @Test
+    fun `schema 18 upgrade retains an explicitly saved LLM thinking effort`() {
+        val upgraded = ModuleSettingsSchema.upgrade(
+            storedValues = mapOf(
+                "schema_version" to 18,
+                "llm_lyrics_thinking_enabled" to false,
+                "llm_lyrics_thinking_effort" to "max",
+            ),
+            legacyValues = emptyMap<String, Any?>(),
+        )!!
+        val decoded = ModuleSettingsSchema.decode(upgraded)
+
+        assertEquals("max", upgraded["llm_lyrics_thinking_effort"])
+        assertEquals(LlmLyricsThinkingEffort.MAX, decoded.llmLyricsThinkingEffort)
+        assertEquals(false, decoded.llmLyricsThinkingEnabled)
+    }
+
+    @Test
     fun `malformed values safely fall back without changing valid values`() {
         val decoded = ModuleSettingsSchema.decode(
             mapOf(
@@ -189,9 +300,14 @@ class ModuleSettingsSchemaTest {
     }
 
     @Test
-    fun `a future schema is never downgraded`() {
+    fun `a future schema with saved LLM effort is never downgraded or rewritten`() {
         val upgraded = ModuleSettingsSchema.upgrade(
-            storedValues = mapOf("schema_version" to ModuleConstants.CONFIG_SCHEMA_VERSION + 1),
+            storedValues = mapOf(
+                "schema_version" to ModuleConstants.CONFIG_SCHEMA_VERSION + 1,
+                "llm_lyrics_enabled" to true,
+                "llm_lyrics_thinking_enabled" to true,
+                "llm_lyrics_thinking_effort" to "high",
+            ),
             legacyValues = mapOf("dual_pane_enabled" to false),
         )
 
@@ -327,6 +443,47 @@ class ModuleSettingsSchemaTest {
             false,
             ModuleSettingsSchema.decode(encoded).automaticLyricsEnabled,
         )
+    }
+
+    @Test
+    fun `LLM thinking effort persists every saved choice while thinking is disabled`() {
+        val choices = listOf(
+            LlmLyricsThinkingEffort.DEFAULT to "default",
+            LlmLyricsThinkingEffort.LOW to "low",
+            LlmLyricsThinkingEffort.HIGH to "high",
+            LlmLyricsThinkingEffort.MAX to "max",
+        )
+
+        for ((effort, storageValue) in choices) {
+            val values = ModuleSettingsSchema.encodeOrdinarySettings(
+                ModuleSettings(
+                    llmLyricsThinkingEnabled = false,
+                    llmLyricsThinkingEffort = effort,
+                ),
+            )
+            val decoded = ModuleSettingsSchema.decode(values)
+
+            assertEquals(storageValue, values["llm_lyrics_thinking_effort"])
+            assertEquals(effort, decoded.llmLyricsThinkingEffort)
+            assertEquals(false, decoded.llmLyricsThinkingEnabled)
+        }
+    }
+
+    @Test
+    fun `missing malformed and unknown LLM thinking efforts safely default`() {
+        assertEquals(
+            LlmLyricsThinkingEffort.DEFAULT,
+            ModuleSettingsSchema.decode(emptyMap<String, Any?>()).llmLyricsThinkingEffort,
+        )
+
+        for (invalid in listOf<Any?>(true, 4, "medium")) {
+            assertEquals(
+                LlmLyricsThinkingEffort.DEFAULT,
+                ModuleSettingsSchema.decode(
+                    mapOf("llm_lyrics_thinking_effort" to invalid),
+                ).llmLyricsThinkingEffort,
+            )
+        }
     }
 
     @Test
@@ -535,5 +692,127 @@ class ModuleSettingsSchemaTest {
         assertFalse(upgraded!!.containsKey("modify_locale"))
         assertFalse(upgraded.containsKey("modify_locale_target_tag"))
         assertEquals("original_hyper", upgraded["title_correction_mode"])
+    }
+
+    @Test
+    fun `collapse animation amplitudes default and round trip`() {
+        val defaults = ModuleSettingsSchema.decode(emptyMap<String, Any?>())
+        // 35% is the recommended, deliberately understated collapse rebound; the expand rebound and
+        // the mini's own rebound keep the reference 100%, and the sink dip stays at 4dp.
+        assertEquals(35, defaults.phoneLiquidGlassCollapseReboundPercent)
+        assertEquals(100, defaults.phoneLiquidGlassExpandReboundPercent)
+        assertEquals(100, defaults.phoneLiquidGlassMiniReboundPercent)
+        assertEquals(4, defaults.phoneLiquidGlassMiniSinkBounceDp)
+
+        val encoded = ModuleSettingsSchema.encodeOrdinarySettings(
+            ModuleSettings(
+                phoneLiquidGlassCollapseReboundPercent = 150,
+                phoneLiquidGlassExpandReboundPercent = 40,
+                phoneLiquidGlassMiniReboundPercent = 60,
+                phoneLiquidGlassMiniSinkBounceDp = 7,
+            ),
+        )
+        assertEquals(150, encoded["phone_liquid_glass_collapse_rebound_percent"])
+        assertEquals(40, encoded["phone_liquid_glass_expand_rebound_percent"])
+        assertEquals(60, encoded["phone_liquid_glass_mini_rebound_percent"])
+        assertEquals(7, encoded["phone_liquid_glass_mini_sink_bounce_dp"])
+        val decoded = ModuleSettingsSchema.decode(encoded)
+        assertEquals(150, decoded.phoneLiquidGlassCollapseReboundPercent)
+        assertEquals(40, decoded.phoneLiquidGlassExpandReboundPercent)
+        assertEquals(60, decoded.phoneLiquidGlassMiniReboundPercent)
+        assertEquals(7, decoded.phoneLiquidGlassMiniSinkBounceDp)
+
+        // 0 is a meaningful value on every one of them (no rebound / no dip), not "unset":
+        // decoding must keep it rather than falling back to the default.
+        val off = ModuleSettingsSchema.decode(
+            mapOf(
+                "phone_liquid_glass_collapse_rebound_percent" to 0,
+                "phone_liquid_glass_expand_rebound_percent" to 0,
+                "phone_liquid_glass_mini_rebound_percent" to 0,
+                "phone_liquid_glass_mini_sink_bounce_dp" to 0,
+            ),
+        )
+        assertEquals(0, off.phoneLiquidGlassCollapseReboundPercent)
+        assertEquals(0, off.phoneLiquidGlassExpandReboundPercent)
+        assertEquals(0, off.phoneLiquidGlassMiniReboundPercent)
+        assertEquals(0, off.phoneLiquidGlassMiniSinkBounceDp)
+    }
+
+    @Test
+    fun `collapse animation amplitudes clamp out-of-range and reject malformed values`() {
+        assertEquals(
+            ModuleSettings.MAX_PHONE_LIQUID_GLASS_COLLAPSE_REBOUND_PERCENT,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_collapse_rebound_percent" to 9999),
+            ).phoneLiquidGlassCollapseReboundPercent,
+        )
+        assertEquals(
+            ModuleSettings.MIN_PHONE_LIQUID_GLASS_COLLAPSE_REBOUND_PERCENT,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_collapse_rebound_percent" to -50),
+            ).phoneLiquidGlassCollapseReboundPercent,
+        )
+        assertEquals(
+            ModuleSettings.MAX_PHONE_LIQUID_GLASS_EXPAND_REBOUND_PERCENT,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_expand_rebound_percent" to 9999),
+            ).phoneLiquidGlassExpandReboundPercent,
+        )
+        assertEquals(
+            ModuleSettings.MIN_PHONE_LIQUID_GLASS_EXPAND_REBOUND_PERCENT,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_expand_rebound_percent" to -50),
+            ).phoneLiquidGlassExpandReboundPercent,
+        )
+        assertEquals(
+            ModuleSettings.MAX_PHONE_LIQUID_GLASS_MINI_REBOUND_PERCENT,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_mini_rebound_percent" to 9999),
+            ).phoneLiquidGlassMiniReboundPercent,
+        )
+        assertEquals(
+            ModuleSettings.MIN_PHONE_LIQUID_GLASS_MINI_REBOUND_PERCENT,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_mini_rebound_percent" to -50),
+            ).phoneLiquidGlassMiniReboundPercent,
+        )
+        assertEquals(
+            ModuleSettings.MAX_PHONE_LIQUID_GLASS_MINI_SINK_BOUNCE_DP,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_mini_sink_bounce_dp" to 99),
+            ).phoneLiquidGlassMiniSinkBounceDp,
+        )
+        assertEquals(
+            ModuleSettings.MIN_PHONE_LIQUID_GLASS_MINI_SINK_BOUNCE_DP,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_mini_sink_bounce_dp" to -3),
+            ).phoneLiquidGlassMiniSinkBounceDp,
+        )
+        // Malformed values fall back to the defaults rather than throwing. The collapse rebound's
+        // default is the recommended 35, not the reference 100.
+        assertEquals(
+            35,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_collapse_rebound_percent" to "lots"),
+            ).phoneLiquidGlassCollapseReboundPercent,
+        )
+        assertEquals(
+            100,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_expand_rebound_percent" to "lots"),
+            ).phoneLiquidGlassExpandReboundPercent,
+        )
+        assertEquals(
+            100,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_mini_rebound_percent" to "lots"),
+            ).phoneLiquidGlassMiniReboundPercent,
+        )
+        assertEquals(
+            4,
+            ModuleSettingsSchema.decode(
+                mapOf("phone_liquid_glass_mini_sink_bounce_dp" to "deep"),
+            ).phoneLiquidGlassMiniSinkBounceDp,
+        )
     }
 }

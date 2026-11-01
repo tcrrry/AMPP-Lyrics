@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  Apple Music enhancements for Android: a tablet dual-pane player, lyric blur and fonts, custom lyrics, song title correction, and Liquid Glass navigation.
+  Apple Music enhancements for Android: a tablet dual-pane player, customizable lyrics, and Liquid Glass.
 </p>
 
 <p align="center">
@@ -19,10 +19,11 @@
   <a href="https://github.com/Zennmn/AM-plus-plus/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Zennmn/AM-plus-plus" alt="GNU GPL v3.0"></a>
   <img src="https://img.shields.io/badge/Android-API%2026%2B-3DDC84?logo=android&logoColor=white" alt="Android API 26+">
   <img src="https://img.shields.io/badge/libxposed-API%20102-7F52FF" alt="libxposed API 102">
+  <a href="#support-the-project"><img src="https://img.shields.io/badge/Support-WeChat-E3B341?logo=wechat&amp;logoColor=white" alt="Support the project via WeChat"></a>
 </p>
 
 <p align="center">
-  Without LSPosed, you can install the <a href="https://github.com/Zennmn/AM-plus-plus/releases/tag/embedded-2026.08.10-r1">npatch embedded edition</a> directly.
+  The <a href="https://github.com/Zennmn/AM-plus-plus/releases/tag/embedded">npatch embedded edition</a> can be installed directly without LSPosed.
 </p>
 
 <details>
@@ -39,33 +40,31 @@
 9. [Contributing](#contributing)
 10. [Privacy and permissions](#privacy-and-permissions)
 11. [License and acknowledgments](#license-and-acknowledgments)
+12. [Star History](#star-history)
+13. [Support the project](#support-the-project)
 
 </details>
 
 ## Overview
 
-The settings page is embedded in Apple Music's own settings list, under **AM++ Module Settings**. The module has no separate launcher icon.
+After installation, manage features in Apple Music → Settings → **AM++ Module Settings**. There is no separate launcher icon.
 
-Plugins can be imported and managed as ZIP packages. See the [plugin development guide](docs/plugin-development.md) for developer documentation.
+Import ZIP plugins to add more features. See the [plugin development guide](docs/plugin-development.md).
 
 ## Features
 
 | Feature | Default | Description |
 | --- | --- | --- |
-| Tablet dual-pane player | On | Shows the player on the left and live lyrics on the right in tablet landscape mode, while also suppressing Editorial Video. |
-| Show cellular data settings | Off | Preserves the native data settings group and restores the availability checks for cellular usage preferences on Apple Music 6.5.2/1586, 6.5.3/1599, and 7.0.0-beta builds 1606/1609 on the development branch. Independent of dual-pane mode and song title correction. Restart Apple Music to show the entry. |
-| Bidirectional lyric blur | On | Keeps the highlighted line clear and gradually blurs earlier and later lines according to their distance. Pauses during manual scrolling and resumes about one second after scrolling stops. Requires Android 12 or later. |
-| CJK long-tail lyric animation | On | Reuses Apple Music's native rush-gradient animation for Chinese, Japanese, and Korean lyrics. Requires restarting Apple Music. |
-| Lyric blur radius offset | `0px` | Adjusts the base blur radius by `-10..10px`. |
-| Song title correction | Off | Rewrites displayed song titles and metadata using the selected region. Modes: original song region, fixed Mainland China, or fixed Japan. Requires restarting Apple Music. |
-| Custom lyrics | Off | Injects TTML by Apple Music ID. Supports manual TTML, imports from AMLL, AM-Lyrics, and Lunabeat, and ZIP backup and restore. |
-| Automatic live completion | On | When custom lyrics are enabled, automatically searches lyric services for songs with missing lyrics, missing word timing, or missing translations. |
-| Lyric font | Off | Imports TTF/OTF fonts for player lyrics, with an option to restore the original font. |
-| Liquid Glass navigation | Off | Requires Android 13 or later. Apple Music 6.5.2/6.5.3 retains the existing glass layout for phones and tablets in landscape dual-pane mode. The development branch's 7.0.0-beta builds 1606/1609 use the new phone bottom navigation or tablet top navigation with a separate mini player, supporting both single-pane and dual-pane layouts. Device validation is pending; see the [feature preservation and acceptance matrix](docs/feature-preservation.md). |
-| Bottom bar height | `16dp` | Additional Liquid Glass setting for 6.5.x: the distance from the bar to the bottom of the screen, `0..48dp`. Requires restarting Apple Music. Version 7.0 uses the native navigation and mini-player bounds; this legacy geometry setting does not change the new layout. |
-| Bottom bar background blur | `4dp` | Additional Liquid Glass setting: the background blur radius for the bar and mini player, `0..24dp`. Visible and effective only while Liquid Glass navigation is enabled. Requires restarting Apple Music. |
-| Tablet bottom bar compensation | Off | Compatibility option for an incorrectly displayed tablet bottom bar. When Liquid Glass is enabled, it controls the bar geometry, so this option is inactive and its settings row is hidden. |
-| Apple Music internal DPI | Follow system | Changes resource density only within the Apple Music process. Range: `160..640`; `0` follows the system. Requires fully restarting Apple Music. |
+| Tablet dual-pane player | On | Displays playback controls and live lyrics side by side in landscape. |
+| Show cellular data settings | Off | Shows the native cellular data options in settings. |
+| Bidirectional lyric blur | On | Keeps the current line clear while surrounding lyrics gradually blur, with adjustable intensity (Android 12+). |
+| CJK long-tail lyric animation | On | Adds a sweeping highlight to sustained Chinese, Japanese, and Korean lyrics. |
+| Song title correction | Off | Displays titles and related information using the song's original region, Mainland China, or Japan. |
+| Custom lyrics | Off | Imports and edits TTML lyrics, with online fetching and ZIP backup and restore. |
+| Automatic live completion | On | With custom lyrics enabled, finds lyrics for songs missing lyrics, word timing, or translations. |
+| Lyric font | Off | Imports TTF/OTF fonts, with an option to restore the original font. |
+| Liquid Glass navigation | Off | Adds Liquid Glass effects to the navigation bar and mini player (Android 13+). |
+| Collapse on scroll | On | Collapses or expands the glass navigation bar as you scroll on phones. Applies immediately. |
 
 ## Screenshots
 
@@ -85,20 +84,20 @@ Plugins can be imported and managed as ZIP packages. See the [plugin development
 ### Tablet dual-pane player and lyric blur
 
 <p align="center">
-  <img src="docs/images/tablet-dual-pane-player-open-source-blur.png" alt="Tablet landscape dual-pane player with lyric blur" width="900">
+  <img src="docs/images/tablet-dual-pane-player-open-source-blur.jpg" alt="Tablet landscape dual-pane player with lyric blur" width="900">
 </p>
 
 ### Liquid Glass navigation
 
 <p align="center">
-  <img src="docs/images/liquid-glass-demo.jpg" alt="Liquid Glass navigation and mini player on the Home and Library pages" width="720">
+  <img src="docs/images/liquid-glass-demo.gif" alt="Liquid Glass navigation and mini player animation" width="360">
 </p>
 
 ## Installation
 
 ### Xposed module (recommended)
 
-Prerequisites: Apple Music and an Xposed framework supporting libxposed API 102. Check the API version reported by the framework core to determine compatibility; the Manager app version alone is insufficient.
+Requires Apple Music and an Xposed framework supporting libxposed API 102.
 
 1. Download and install the AM++ APK from [Releases](https://github.com/Zennmn/AM-plus-plus/releases/latest).
 2. Enable **AM++** in LSPosed or a compatible Xposed manager.
@@ -108,51 +107,45 @@ Prerequisites: Apple Music and an Xposed framework supporting libxposed API 102.
 
 ### npatch embedded edition
 
-If you do not have LSPosed, you can use the [npatch embedded edition](https://github.com/Zennmn/AM-plus-plus/releases/tag/embedded-2026.08.10-r1). It cannot be installed alongside the official Apple Music app.
+Install the [npatch embedded edition](https://github.com/Zennmn/AM-plus-plus/releases/tag/embedded) directly without LSPosed. It cannot be installed alongside the official app.
+
+Package filenames include the AM++ version, Apple Music version, and build number.
 
 ## Usage
 
-See the [feature table](#features) above for individual switches. The following sections cover workflows that require multiple steps.
+Some settings take effect after you force stop and reopen Apple Music.
 
 ### Custom lyrics
 
-1. Open **Custom Lyrics** in the module settings and enable custom lyric replacement.
-2. Tap **Get ID** to read the Apple Music ID, title, and artist of the currently playing song, or enter the ID manually.
-3. Choose a lyric source: paste or import a local TTML file, or import from AMLL, AM-Lyrics, or Lunabeat using the Apple Music ID.
-4. Save the mapping and enable it for the song.
+1. Open **Custom Lyrics** and enable custom lyric replacement.
+2. Tap **Get ID** to read the current song, or enter its Apple Music ID manually.
+3. Paste or import TTML, or fetch lyrics from AMLL, AM-Lyrics, or Lunabeat.
+4. Save and enable the lyrics for that song.
 5. Force stop and reopen Apple Music.
 
-Custom lyrics can be edited, deleted, and searched by name or Apple Music ID. ZIP backup and restore are also supported; when restoring, you can overwrite conflicting entries or keep the current versions. Invalid TTML is rejected, leaving Apple Music's original lyrics in use. TTML retrieved from AMLL is converted to Apple Music's format before being placed in the editor.
-
-For manually authored TTML, see the [Apple Music TTML format guide](docs/apple-music-ttml-format.md).
-
-With automatic live completion enabled, candidate lyrics are requested during playback only when the native lyrics are missing, lack word timing, or have word timing in a foreign language without a translation, and no usable manual lyrics are available. Disabling it stops these requests during playback. Manual imports are always initiated by the user.
-
-Lunabeat caches its manifest and song index, downloading them again only when the remote revision changes.
+Lyrics can be searched, edited, deleted, and backed up or restored as ZIP files. During restore, choose whether to overwrite or keep existing lyrics. To write TTML manually, see the [format guide](docs/apple-music-ttml-format.md).
 
 ### Lyric font
 
-1. Select a TTF or OTF file under **Lyric Font** in the module settings.
-2. Wait for the import to finish, then force stop and reopen Apple Music.
+1. Select a TTF or OTF file under **Lyric Font**.
+2. After importing, force stop and reopen Apple Music.
 3. To revert, tap **Restore Original Font** and reopen Apple Music.
 
-The font override applies only to player lyrics. It does not change system fonts or settings page fonts.
+The font applies only to player lyrics.
 
 ### Liquid Glass navigation
 
-Enable Liquid Glass navigation, then force stop and reopen Apple Music. For the 6.5.x layout, it applies to phones and tablets in landscape with the tablet dual-pane player enabled; tablets in portrait or with dual-pane mode disabled retain the native interface. On tablets, the navigation bar and mini player sit side by side in one bottom capsule row, with navigation on the left and the mini player on the right, centered vertically at the same height. The row occupies about two-thirds of the screen width, with equal margins on both sides. Opening the player expands the lower-right capsule into a full-screen view by interpolating all four edges.
+Enable **Liquid Glass bottom bar**, then force stop and reopen Apple Music to apply the glass effect to the navigation bar and mini player.
 
-The navigation bar uses AndroidLiquidGlass's `LiquidBottomTabs`, and the mini player uses the `LiquidButton` material and press deformation. Playback controls retain their native implementation. Page backgrounds are sampled through a shared hardware `RenderNode`. See the [host adaptation guide](docs/host-adaptation-guide.md) for integration and maintenance details. The development branch's 7.0 layout is described in the [feature table](#features).
-
-When Liquid Glass is enabled, two additional settings are available: **Bottom Bar Height** (`0..48dp`, the distance from the bar to the bottom of the screen, also adjusting bottom content padding and the player's peek height) and **Bottom Bar Background Blur** (`0..24dp`, applied to both the bar panel and mini player). These settings are hidden and inactive when Liquid Glass is disabled, and both require restarting Apple Music. The legacy height setting applies to 6.5.x as noted above. Each setting has a small reset button in its upper-right corner to restore its default independently (`16dp` / `4dp`).
+Adjust the background blur intensity, or enable **Collapse on scroll** on phones to automatically collapse and expand the bar as you scroll.
 
 ### Song title correction
 
-Enable song title correction, choose a mode, and reopen Apple Music. When disabled, metadata follows the Apple Music account region. When enabled, the module resolves metadata for the selected region and caches the results.
+Enable **Song title correction**, choose a region mode, and reopen Apple Music. When disabled, it follows your Apple Music account region.
 
 ## Building from source
 
-Requirements: JDK 17, Android SDK 37, Android Build Tools 37.0.0, and the bundled Gradle Wrapper. The project is written in Kotlin and built with Android Gradle Plugin. Module loading and cross-process configuration use the libxposed API and service.
+Requires JDK 17, Android SDK 37, Build Tools 37.0.0, and the bundled Gradle Wrapper.
 
 Windows:
 
@@ -167,29 +160,27 @@ chmod +x gradlew
 ./gradlew test :app:lintDebug :app:lintVitalRelease :app:assembleRelease
 ```
 
-CI also checks the glass renderer source and runs Lint on `glass`. Pull request builds use `assembleDebug` instead of `assembleRelease`.
-
 The release APK is generated at:
 
 ```text
 app/build/outputs/apk/release/app-release.apk
 ```
 
-To build a signed release APK, copy `keystore.properties.example` to the Git-ignored `keystore.properties` and fill in the keystore path, passwords, and alias. Environment variables such as `AMPP_RELEASE_STORE_FILE` can override these values. Debug APKs can still be built without a release signing configuration.
+Before building a release APK, copy `keystore.properties.example` to `keystore.properties` and fill in the signing details. Debug builds do not require this configuration.
 
 ## Project structure
 
 ```text
-app/src/main/java/        Module entry point, dependency assembly, settings, feature orchestration, and Android storage
+app/src/main/java/        Module entry point, settings, and feature assembly
 app/src/main/resources/   libxposed module metadata
-core/                    Configuration and lyric logic, network sources, caching, and layout policies
-host-api/                Semantic host capabilities, events, installation results, and subscriptions
-hook-runtime/            libxposed wrappers, registration scopes, and logging
-host-applemusic/          Version profiles, reflection/DexKit resolution, and native host integration
-glass/                   AndroidLiquidGlass renderer, vendored at a pinned commit
+core/                    Configuration, lyrics, network sources, and layout policies
+host-api/                Host capability and event interfaces
+hook-runtime/            Xposed wrappers and logging
+host-applemusic/          Apple Music version adaptation
+glass/                   Liquid Glass rendering
 backdrop/                Upstream Backdrop library
-docs/                    Adaptation and feature documentation
-scripts/                 Optional device regression, recording analysis, and host profile validation scripts
+docs/                    User and developer documentation
+scripts/                 Development tools
 ```
 
 ## Roadmap
@@ -198,26 +189,50 @@ scripts/                 Optional device regression, recording analysis, and hos
 - [x] Bidirectional lyric blur
 - [x] Custom lyric injection, backup, and restore
 - [x] Lyric font import and restore
-- [x] Liquid Glass navigation and mini player (phones; device validation pending for tablets in landscape with dual-pane mode enabled)
+- [x] Liquid Glass navigation and mini player
 - [x] Song title correction
 - [ ] Continue adapting to future Apple Music versions
 
 ## Contributing
 
-Issues and pull requests are welcome. For code changes, run at least `test`, `lintVitalRelease`, and `assembleRelease`. For changes affecting interface behavior, include your device model, Android version, Apple Music version, and screenshots or a recording in the issue or pull request. Read the [host adaptation guide](docs/host-adaptation-guide.md) before adapting a new Apple Music version. See the [documentation index](docs/README.md) for the full documentation.
+Issues and pull requests are welcome. Code changes should pass tests and builds. For interface issues, include your device model, Android and Apple Music versions, and screenshots or a recording.
+
+For development and adaptation, see the [documentation index](docs/README.md) and [host adaptation guide](docs/host-adaptation-guide.md).
 
 ## Privacy and permissions
 
-- The module declares only the `INTERNET` permission, used for user-initiated lyric imports from AMLL, AM-Lyrics, and Lunabeat in the settings page, and eligible lyric requests during playback when automatic live completion is enabled.
-- It requests no storage or notification runtime permissions. Local files are read through the Android file picker.
-- The module includes no analytics service or separate entry Activity.
-- Before the initial migration, configuration comes from Xposed remote preferences and remote files. After migration, ordinary settings, the lyric index, and font files are stored in Apple Music's private host directory.
+- Declares only the `INTERNET` permission for lyric fetching, translation completion, and song information queries.
+- Requests no storage or notification runtime permissions. Local files are imported through the system file picker.
+- Includes no analytics service or separate launcher icon.
+- Stores settings, lyrics, and fonts in Apple Music's private directory.
 
 ## License and acknowledgments
 
-This project is open source under the [GNU General Public License v3.0](LICENSE). Third-party code and dependencies remain subject to their original licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
+Licensed under the [GNU General Public License v3.0](LICENSE). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party licenses.
 
-- [AMLyricBlur](https://github.com/a23bc/amlyricblur): source of the ported bidirectional lyric blur core.
-- [AndroidLiquidGlass / Backdrop](https://github.com/Kyant0/AndroidLiquidGlass): glass refraction, highlights, dispersion, and reference interactions.
+- [AMLyricBlur](https://github.com/a23bc/amlyricblur): lyric blur.
+- [AndroidLiquidGlass / Backdrop](https://github.com/Kyant0/AndroidLiquidGlass): Liquid Glass effects and interactions.
+
+## Star History
+
+<p align="center">
+  <a href="https://www.star-history.com/?repos=Zennmn%2FAM-plus-plus&amp;type=date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Zennmn/AM-plus-plus&amp;type=date&amp;theme=dark">
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Zennmn/AM-plus-plus&amp;type=date">
+      <img src="https://api.star-history.com/chart?repos=Zennmn/AM-plus-plus&amp;type=date" alt="AM++ GitHub star history chart" width="800">
+    </picture>
+  </a>
+</p>
+
+## Support the project
+
+AM++ is free and open source. If you find it useful, you are welcome to buy the author a coffee. Support is entirely voluntary and does not affect access to any feature.
+
+<p align="center">
+  <a href="docs/images/wechat-appreciation.png">
+    <img src="docs/images/wechat-appreciation.png" alt="Zen's WeChat appreciation code" width="360">
+  </a>
+</p>
 
 <p align="right">(<a href="#top">Back to top</a>)</p>

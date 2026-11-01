@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Resources
 import android.view.View
 import android.view.ViewGroup
+import dev.amenhancer.module.ModuleConstants
 import java.util.WeakHashMap
 
 /** Uses the current exact Fragment profile; legacy dual-pane installation remains independent. */
@@ -17,7 +18,7 @@ internal object FragmentTabletDualPaneCoordinator {
     fun eligible(context: Context): Boolean {
         val c = context.resources.configuration
         if (!dev.amenhancer.module.config.TargetConfigClient.currentSettings().dualPaneEnabled) return false
-        val drawer = context.resources.getIdentifier("useNavigationDrawer", "bool", context.packageName)
+        val drawer = context.resources.getIdentifier("useNavigationDrawer", "bool", ModuleConstants.TARGET_PACKAGE)
         return c.screenWidthDp >= 600 && c.screenWidthDp > c.screenHeightDp && drawer != 0 && context.resources.getBoolean(drawer)
     }
     fun install(loader: ClassLoader, build: TargetBuild, registration: HookRegistrationScope) {

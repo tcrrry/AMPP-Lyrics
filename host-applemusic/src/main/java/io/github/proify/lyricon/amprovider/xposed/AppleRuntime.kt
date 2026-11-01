@@ -1,5 +1,6 @@
 package io.github.proify.lyricon.amprovider.xposed
 
+import com.juren233.hyperlyricsenhanced.BuildConfig
 import dev.amenhancer.module.hook.ModernXposedRuntime
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
@@ -8,8 +9,9 @@ import java.lang.reflect.Modifier
 import java.util.concurrent.ConcurrentHashMap
 
 internal object ProviderLogger {
-    fun debug(message: String) = ModernXposedRuntime.log("[HLE-metadata] $message")
-    fun diagnostic(message: String) = ModernXposedRuntime.log("[HLE-metadata] [debug] $message")
+    fun debug(message: String) { if (BuildConfig.DEBUG) ModernXposedRuntime.log("[HLE-metadata] $message") }
+    fun diagnostic(message: String) { if (BuildConfig.DEBUG) ModernXposedRuntime.log("[HLE-metadata] [debug] $message") }
+    inline fun debug(message: () -> String) { if (BuildConfig.DEBUG) ModernXposedRuntime.log("[HLE-metadata] ${message()}") }
     fun info(message: String) = ModernXposedRuntime.log("[HLE-metadata] $message")
     fun error(message: String, throwable: Throwable? = null) =
         ModernXposedRuntime.log("[HLE-metadata] $message", throwable)

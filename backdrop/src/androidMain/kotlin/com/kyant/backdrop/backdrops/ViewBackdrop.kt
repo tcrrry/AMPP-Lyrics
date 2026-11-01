@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
+import dev.amenhancer.backdrop.traceBackdrop
 import kotlin.math.abs
 
 /** AM++ Android View bridge. The source must NOT contain any consumer of this backdrop. */
@@ -32,6 +33,8 @@ import kotlin.math.abs
 class ViewBackdrop(
     private val source: View,
     private val onFailure: (Throwable) -> Unit,
+    /** Return false without drawing when a compatible host recording is unavailable. */
+    private val sourceRenderer: ((android.graphics.Canvas) -> Boolean)? = null,
 ) : Backdrop, AutoCloseable, ViewTreeObserver.OnPreDrawListener {
     private val node = RenderNode("AM++ content backdrop")
     private val sourceToWindow = Matrix()
@@ -80,11 +83,13 @@ class ViewBackdrop(
             if (!ready || source.isDirty || moved || node.width != source.width || node.height != source.height) {
                 recording = true
                 node.setPosition(0, 0, source.width, source.height)
-                val canvas = node.beginRecording()
-                try {
-                    drawWindowBackground(canvas)
-                    source.draw(canvas)
-                } finally { node.endRecording(); recording = false }
+                traceBackdrop("AM++/source/record") {
+                    val canvas = node.beginRecording()
+                    try {
+                        drawWindowBackground(canvas)
+                        if (sourceRenderer?.invoke(canvas) != true) source.draw(canvas)
+                    } finally { node.endRecording(); recording = false }
+                }
                 matrixValues.copyInto(previousMatrix)
                 ready = true
                 recordings++

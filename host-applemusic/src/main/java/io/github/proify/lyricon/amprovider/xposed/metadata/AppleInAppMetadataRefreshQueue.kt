@@ -182,6 +182,13 @@ internal class AppleInAppMetadataRefreshQueue(
 
     internal fun pendingSizeForTests(): Int = synchronized(lock) { pending.size }
 
+    /** Cancel one owner's queued work without dropping other metadata surfaces. Detached actions self-check ownership. */
+    internal fun cancelTarget(target: Any) {
+        synchronized(lock) {
+            pending.entries.removeAll { it.key.target === target }
+        }
+    }
+
     internal fun clearPending() {
         synchronized(lock) {
             pending.clear()

@@ -60,7 +60,7 @@ class HookEntryStructuralRegressionTest {
         assertTrue(source.indexOf("override fun beforeHookedMethod") <
             source.indexOf("override fun afterHookedMethod"))
         assertTrue(source.contains(
-            "installApplicationBootstrap(param.applicationInfo.className, targetClassLoader)",
+            "installApplicationBootstrap(param.packageName, param.applicationInfo.className, targetClassLoader)",
         ))
         assertTrue(source.contains("FeatureInstallation.installEmbedded("))
 

@@ -277,6 +277,9 @@ internal class AppleMediaApiMetadataCoordinator(
         originalArtist: String?,
         originalAlbum: String?,
     ) {
+        if (kind == InAppLibraryEntityKind.SONG) {
+            metadataStore.rememberSourceGenres(mediaId, genreNames(attributes))
+        }
         val attributeArtistIds = mediaApiAttributeArtistIds(
             attributes = attributes,
             getterNames = listOf(

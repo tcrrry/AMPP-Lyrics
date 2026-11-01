@@ -49,7 +49,7 @@ internal class FragmentGlassSession(
     private val initial = surface.snapshot()
     private val root = initial.contentRoot
     private val moduleContext = moduleContext(activity)
-    private val backdrop = ViewBackdrop(initial.backdropSource) { fail(it) }
+    private val backdrop = ViewBackdrop(initial.backdropSource, onFailure = { fail(it) })
     private var state by mutableStateOf(initial)
     private var navSnapshot by mutableStateOf(surface.navigation.snapshot())
     private var configuration by mutableStateOf(Configuration(activity.resources.configuration))
@@ -281,21 +281,21 @@ internal class FragmentGlassSession(
         if (p > .01f || !mini.isShown) cancelPress()
     }
 
-    override fun observeMiniTouch(event: MotionEvent) {
-        if (closed || !miniDrawn || state.expansion > .01f) return
-        val glass = miniGlass ?: return
+    override fun observeMiniTouch(event: MotionEvent): Boolean? {
+        if (closed || !miniDrawn || state.expansion > .01f) return null
+        val glass = miniGlass ?: return null
         glass.getLocationOnScreen(position)
         val x = event.rawX - position[0]
         val y = event.rawY - position[1]
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (x !in 0f..glass.width.toFloat() || y !in 0f..glass.height.toFloat()) return
+                if (x !in 0f..glass.width.toFloat() || y !in 0f..glass.height.toFloat()) return null
                 press.start(event.getPointerId(0), event.rawX, event.rawY); miniPress = true
                 miniInput.event(MotionEvent.ACTION_DOWN, x, y)
             }
             MotionEvent.ACTION_MOVE -> {
                 if (!press.move(event.rawX, event.rawY)) {
-                    cancelPress(); return
+                    cancelPress(); return null
                 }
                 if (miniPress) miniInput.event(MotionEvent.ACTION_MOVE, x, y)
             }
@@ -305,6 +305,8 @@ internal class FragmentGlassSession(
                 miniPress = false; press.cancel()
             }
         }
+        // Observation only: this form never consumes the mini's touches.
+        return null
     }
 
     override fun foreground(active: Boolean) {

@@ -34,7 +34,7 @@ def _uleb(data, offset):
 
 
 def dex_classes(data):
-    """Return {class descriptor: {"super": ..., "methods": set, "fields": dict}}."""
+    """Return class descriptors, inherited interfaces, methods and fields."""
     if not data.startswith(b"dex\n"):
         raise ValueError("Not a DEX file")
 
@@ -70,6 +70,10 @@ def dex_classes(data):
         base = u32(100) + i * 32
         class_name = types[u32(base)]
         superclass = u32(base + 8)
+        interfaces_offset = u32(base + 12)
+        interfaces = [] if not interfaces_offset else [
+            types[u16(interfaces_offset + 4 + 2 * j)] for j in range(u32(interfaces_offset))
+        ]
         offset = u32(base + 24)
         methods = set()
         fields = {}
@@ -99,6 +103,7 @@ def dex_classes(data):
                     method_access[method_defs[index]] = flags
         classes[class_name] = {
             "super": types[superclass] if superclass != 0xFFFFFFFF else None,
+            "interfaces": interfaces,
             "methods": methods,
             "fields": fields,
             "method_access": method_access,
@@ -145,6 +150,113 @@ def verify_fragment_contracts(document, classes, failures):
     sections = {name: document.get(name) for name in (
         'fragmentDualPane', 'fragmentLyricsRuntime', 'fragmentKaraokeWidth', 'fragmentTabletVideoHandoff')}
     sections['fragmentChrome.members'] = (document.get('fragmentChrome') or {}).get('members')
+    settings = document.get('settings') or {}
+    presentation = document.get('metadataPresentation')
+    if presentation is not None:
+        required = {'methods': {'createState', 'readState', 'writeState', 'entityType', 'lockup', 'roomPrepare', 'pagedRow', 'pagedRebuild'},
+                    'fields': {'searchSongRow', 'searchGridRow'}}
+        if not isinstance(presentation, dict) or presentation.get('contractVersion') != 1:
+            failures.append('metadataPresentation: missing versioned contract')
+        else:
+            for group, roles in required.items():
+                entries = presentation.get(group, {})
+                if not isinstance(entries, dict):
+                    failures.append(f'metadataPresentation.{group}: invalid inventory')
+                    continue
+                for role in sorted(roles - entries.keys()):
+                    failures.append(f'metadataPresentation.{group}.{role}: missing required role')
+            sections['metadataPresentation'] = presentation
+    settings_members = settings.get('members')
+    if settings_members is not None:
+        if not isinstance(settings_members, dict) or settings_members.get('contractVersion') != 1:
+            failures.append('settings.members: missing versioned contract')
+        else:
+            methods = settings_members.get('methods', {})
+            for role, owner_key, name_key, returns in (
+                    ('preferenceItems', 'viewModelClass', 'preferenceItemsMethod', 'java.util.List'),
+                    ('compose', 'fragmentClass', 'composeMethod', 'void')):
+                contract = methods.get(role, {})
+                if (contract.get('owner') != settings.get(owner_key) or
+                        contract.get('name') != settings.get(name_key) or
+                        contract.get('returns') != returns or contract.get('static') is not False):
+                    failures.append(f'settings.members.methods.{role}: invalid required role')
+            sections['settings.members'] = settings_members
+    # Optional independent renderer correction. Missing roles cannot silently pass as an empty inventory.
+    wrap = document.get('lyricWrapSweep')
+    if wrap is not None:
+        if not isinstance(wrap, dict) or wrap.get('contractVersion') != 1:
+            failures.append('lyricWrapSweep: missing versioned contract')
+        else:
+            required = {
+                'methods': {'build', 'update', 'rushUpdate', 'fadeUpdate', 'staticMask', 'rebind', 'bind', 'recycle', 'document',
+                            'clearMasks', 'textView', 'maskUpdate', 'animationTag', 'mediaBrowser',
+                            'mediaPosition', 'seek', 'pause', 'pauseRequested', 'resume'},
+                'fields': {'topMasks', 'bottomMasks', 'maskFirst', 'maskLast', 'wordBegin', 'wordDuration',
+                           'bindingRoot', 'holderBinding', 'adapterCallback', 'callbackFragment', 'featherPixels',
+                           'listenerMask', 'listenerColors', 'listenerFeather', 'listenerRtl', 'wordText', 'wordAnimator',
+                           'words', 'backgroundWords', 'pronunciationWords', 'pronunciationBackgroundWords',
+                           'foregroundInactiveColors', 'backgroundInactiveColors', 'fadeMask'},
+            }
+            for group, roles in required.items():
+                for role in sorted(roles - wrap.get(group, {}).keys()):
+                    failures.append(f'lyricWrapSweep.{group}.{role}: missing required role')
+            sections['lyricWrapSweep'] = wrap
+    # Independent native active-row retention; an absent section leaves the capability unsupported.
+    background = document.get('lyricBackgroundHighlight')
+    if background is not None:
+        if not isinstance(background, dict) or background.get('contractVersion') != 4:
+            failures.append('lyricBackgroundHighlight: missing versioned contract')
+        else:
+            required = {
+                'methods': {'commit', 'lineSubset', 'notifyRow', 'mapPosition', 'focus', 'payloadKind', 'document', 'detach',
+                            'lineCount', 'lineAt', 'lineGet', 'lineId', 'backgroundWords',
+                            'pronunciationBackgroundWords', 'vectorSize', 'vectorGet', 'wordGet',
+                            'timingBegin', 'timingEnd', 'mediaBrowser', 'mediaPosition', 'seek',
+                            'pause', 'pauseRequested', 'resume', 'destroyView'},
+                'fields': {'reader', 'currentLines', 'previousLines', 'wordHighlightIds', 'backgroundHighlightIds',
+                           'adapterCallback', 'callbackFragment', 'focusStart', 'focusEnd'},
+            }
+            for group, roles in required.items():
+                entries = background.get(group, {})
+                if not isinstance(entries, dict):
+                    failures.append(f'lyricBackgroundHighlight.{group}: invalid inventory')
+                    continue
+                for role in sorted(roles - entries.keys()):
+                    failures.append(f'lyricBackgroundHighlight.{group}.{role}: missing required role')
+            sections['lyricBackgroundHighlight'] = background
+    # Optional navigation startup prewarm. A declared capability needs its exact contract.
+    prewarm = document.get('startupPagePrewarm')
+    capability = (document.get('capabilities') or {}).get('startupPagePrewarm') is True
+    if prewarm is None and capability:
+        failures.append('startupPagePrewarm: capability declared without a contract section')
+    if prewarm is not None:
+        if not isinstance(prewarm, dict) or prewarm.get('schemaVersion') != 1:
+            failures.append('startupPagePrewarm: missing versioned contract')
+        elif not isinstance(prewarm.get('members'), dict):
+            failures.append('startupPagePrewarm.members: missing complete member inventory')
+        else:
+            members = prewarm['members']
+            required = {
+                'methods': {'viewCreated', 'destroyView', 'activity', 'view', 'childManager', 'resumed',
+                            'viewModel', 'tabs', 'value', 'selectedTab', 'kindLabel', 'kindId', 'menu', 'selectedId',
+                            'find', 'stateSaved', 'arguments', 'add', 'hide', 'onCommit', 'commit', 'tag', 'hidden',
+                            'observePlayContext', 'containerView', 'parent', 'libraryViewCreated', 'notifyEvent'},
+                'fields': {'modelKind', 'primary', 'reordering'},
+                'constructors': {'container', 'transaction'},
+            }
+            if prewarm.get('tabletNavigationResource'):
+                required['methods'].add('tabletMenu')
+            valid_groups = True
+            for group, roles in required.items():
+                entries = members.get(group, {})
+                if not isinstance(entries, dict):
+                    failures.append(f'startupPagePrewarm.members.{group}: invalid inventory')
+                    valid_groups = False
+                    continue
+                for role in sorted(roles - entries.keys()):
+                    failures.append(f'startupPagePrewarm.members.{group}.{role}: missing required role')
+            if valid_groups:
+                sections['startupPagePrewarm.members'] = members
     main = sections.get('fragmentDualPane') or {}
     policy = main.get('songLayoutPolicy')
     if policy == '1606-column':
@@ -156,7 +268,8 @@ def verify_fragment_contracts(document, classes, failures):
             failures.append(f'fragmentDualPane.layoutReview.{role}: missing comparison evidence')
     checks = 0
     for section, data in sections.items():
-        if not isinstance(data, dict) or not data.get('methods') or not data.get('fields'):
+        if (not isinstance(data, dict) or not data.get('methods') or
+                (section != 'settings.members' and not data.get('fields'))):
             failures.append(f'{section}: missing complete member inventory')
             continue
         for group in ('methods', 'fields', 'constructors'):
@@ -185,6 +298,185 @@ def verify_fragment_contracts(document, classes, failures):
                         failures.append(f'{section}.{group}.{role}: invalid exact descriptor {contract}')
                 except (KeyError, TypeError, AttributeError) as error:
                     failures.append(f'{section}.{group}.{role}: incomplete descriptor ({error})')
+    return checks
+
+
+def verify_artist_compose_contract(document, classes, failures):
+    """Optional artist surface; a partial declaration cannot suppress required invocation checks."""
+    surface = document.get('hookTargets', {}).get('ARTIST_SURFACE_CLASSES', [])
+    declared = [target.get('runtimeMemberNames', {}).get('ARTIST_RUNTIME_ROLE') for target in surface]
+    roles = {'compose_profile_view_model', 'compose_profile_success_state'}
+    if 'artistComposeProfile' not in document and not roles.intersection(declared):
+        return 0
+    for role in sorted(roles):
+        if declared.count(role) != 1:
+            failures.append(f'artistComposeProfile: expected one surface role {role}')
+    data = document.get('artistComposeProfile')
+    if not isinstance(data, dict) or data.get('contractVersion') != 1:
+        failures.append('artistComposeProfile: missing versioned contract')
+        return 0
+    for key in ('artistType', 'topSongsView'):
+        if not isinstance(data.get(key), str) or not data[key].strip():
+            failures.append(f'artistComposeProfile.{key}: missing semantic key')
+    required = {
+        'methods': {'setUiState', 'headerData', 'shelves', 'entityType', 'entityTitle', 'entityViews', 'viewEntities'},
+        'fields': {'id', 'title', 'header', 'shelves', 'entity', 'revision'},
+        'constructors': {'success'},
+    }
+    primitive = {'void': 'V', 'long': 'J', 'int': 'I', 'boolean': 'Z'}
+    def descriptor(name):
+        return primitive.get(name, name.replace('.', '/') if name.startswith('[') else 'L' + name.replace('.', '/') + ';')
+    checks = 0
+    for group, expected in required.items():
+        entries = data.get(group, {})
+        if not isinstance(entries, dict):
+            failures.append(f'artistComposeProfile.{group}: invalid inventory')
+            continue
+        for role in sorted(expected - entries.keys()):
+            failures.append(f'artistComposeProfile.{group}.{role}: missing required role')
+        for role, contract in entries.items():
+            checks += 1
+            try:
+                native = classes.get(descriptor(contract['owner']), {})
+                if group == 'fields':
+                    valid = (native.get('fields', {}).get(contract['name']) == descriptor(contract['type'])
+                             and not native.get('field_access', {}).get(contract['name'], 8) & 8)
+                else:
+                    name = '<init>' if group == 'constructors' else contract['name']
+                    returns = 'V' if group == 'constructors' else descriptor(contract['returns'])
+                    signature = name + '(' + ''.join(map(descriptor, contract['parameters'])) + ')' + returns
+                    flags = native.get('method_access', {}).get(signature)
+                    valid = (flags is not None and not flags & (8 | 0x40 | 0x400 | 0x1000)
+                             and (group == 'constructors' or contract['static'] is False))
+                if not valid:
+                    failures.append(f'artistComposeProfile.{group}.{role}: invalid exact instance descriptor')
+            except (KeyError, TypeError, AttributeError) as error:
+                failures.append(f'artistComposeProfile.{group}.{role}: incomplete descriptor ({error})')
+    try:
+        m, f, c = data['methods'], data['fields'], data['constructors']['success']
+        surface_classes = {target['runtimeMemberNames']['ARTIST_RUNTIME_ROLE']: target['className'] for target in surface}
+        vm, state, entity = (surface_classes[role] for role in
+                             ('compose_profile_view_model', 'compose_profile_success_state', 'media_entity'))
+        assert all(m[role]['owner'] == vm for role in ('setUiState', 'headerData', 'shelves'))
+        assert all(f[role]['owner'] == state for role in required['fields'])
+        assert len({f[role]['name'] for role in required['fields']}) == 6
+        assert [f[role]['type'] for role in ('id', 'title', 'shelves', 'entity', 'revision')] == [
+            'java.lang.String', 'java.lang.String', 'java.util.List', entity, 'long']
+        assert c['owner'] == state and c['parameters'] == [f[role]['type'] for role in
+                                                        ('id', 'title', 'header', 'shelves', 'entity', 'revision')]
+        assert m['setUiState']['returns'] == 'void' and len(m['setUiState']['parameters']) == 1
+        ancestor = descriptor(state)
+        publisher_type = descriptor(m['setUiState']['parameters'][0])
+        while ancestor in classes and ancestor != publisher_type:
+            ancestor = classes[ancestor]['super']
+        assert ancestor == publisher_type
+        for role in ('headerData', 'shelves'):
+            assert m[role]['parameters'] == [entity]
+            assert m[role]['returns'] == f['header' if role == 'headerData' else 'shelves']['type']
+        for role, returns in (('entityType', 'java.lang.String'), ('entityTitle', 'java.lang.String'),
+                              ('entityViews', 'java.util.Map')):
+            assert m[role]['owner'] == entity and m[role]['parameters'] == [] and m[role]['returns'] == returns
+        assert m['viewEntities']['parameters'] == [] and m['viewEntities']['returns'] == '[L' + entity + ';'
+    except (KeyError, TypeError, AttributeError, AssertionError) as error:
+        failures.append(f'artistComposeProfile: state/entity/builder relationship mismatch ({error})')
+    return checks
+
+
+def verify_lyric_blur_contract(document, classes, failures):
+    """Independent blur inventory for both host families; run only when the verifier is requested."""
+    data = document.get('lyricBlur')
+    if data is None and not document.get('productionEnabled'):
+        return 0
+    if not isinstance(data, dict) or data.get('contractVersion') != 1:
+        failures.append('lyricBlur: missing versioned production contract')
+        return 0
+    adapter_roles = ('Commit', 'Snapshot', 'Map', 'Type', 'Id', 'Reader', 'Token', 'Document', 'Bind', 'Payload', 'Recycle')
+    native_roles = ('nativeLine', 'nativeWord', 'nativeBackground', 'nativePronunciation', 'nativePronunciationBackground')
+    word_roles = ('wordProgress',)
+    required_methods = {
+        'createView', 'destroyView', 'resume', 'installDocument', 'readerCount', 'readerLine', 'lineGet', 'nativeLineId',
+        'lineVectorSize', 'lineVectorGet', 'wordVectorSize', 'wordVectorGet', 'wordGet', 'wordLine', 'nativeWordId',
+        'getAdapter', 'getScrollState', 'setScrollState', 'onTouchEvent', 'onInterceptTouchEvent', 'rowPosition',
+        'rowHolder', 'registerChildListener', 'childAttach', 'childDetach', 'vmWord', 'vmLine', 'seek', 'seekItem',
+        'nativeLineBegin', 'nativeLineEnd', 'mediaBrowser', 'mediaPosition', 'wordAnimationTag',
+    } | {prefix + role for prefix in ('line', 'word') for role in adapter_roles} | set(native_roles) | {
+        role + phase for role in word_roles for phase in ('Start', 'End')}
+    required_fields = {
+        'binding', 'recycler', 'activeAdapter', 'viewModel', 'holderView', 'holderId', 'holderType', 'wordLineId',
+        'wordAnimator', 'childListeners', 'words', 'backgroundWords', 'pronunciationWords',
+        'pronunciationBackgroundWords', 'instrumentalPosition', 'wordInstrumentalPosition',
+    } | set(native_roles) | {role + 'Model' for role in word_roles}
+    primitive = {'void': 'V', 'int': 'I', 'long': 'J', 'float': 'F', 'boolean': 'Z'}
+    def descriptor(name):
+        return primitive.get(name, name.replace('.', '/') if name.startswith('[') else 'L' + name.replace('.', '/') + ';')
+    checks = 0
+    for group, required in (('methods', required_methods), ('fields', required_fields)):
+        declared = data.get(group, {})
+        for role in sorted(required - declared.keys()):
+            failures.append(f'lyricBlur.{group}.{role}: missing required role')
+        for role, contract in declared.items():
+            checks += 1
+            try:
+                native = classes.get(descriptor(contract['owner']), {})
+                if group == 'fields':
+                    valid = (native.get('fields', {}).get(contract['name']) == descriptor(contract['type'])
+                             and not native.get('field_access', {}).get(contract['name'], 8) & 8)
+                else:
+                    signature = contract['name'] + '(' + ''.join(map(descriptor, contract['parameters'])) + ')' + descriptor(contract['returns'])
+                    flags = native.get('method_access', {}).get(signature)
+                    forbidden = 0x40 | 0x1000 | (0 if contract.get('invocationOnly') else 0x400)
+                    valid = flags is not None and not flags & forbidden and bool(flags & 8) == contract['static']
+                if not valid:
+                    failures.append(f'lyricBlur.{group}.{role}: invalid exact descriptor')
+            except (KeyError, TypeError, AttributeError) as error:
+                failures.append(f'lyricBlur.{group}.{role}: incomplete descriptor ({error})')
+    return checks
+
+
+def verify_lyric_result_submission(document, classes, failures):
+    """Check the explicitly declared result channel, without inferring missing roles."""
+    data = document.get('lyricResultSubmission')
+    if data is None:
+        return 0
+    if not isinstance(data, dict) or data.get('contractVersion') != 1:
+        failures.append('lyricResultSubmission: invalid versioned contract')
+        return 0
+    script = data.get('methods', {}).get('pointerScript', {})
+    if script.get('returns') != 'boolean':
+        failures.append('lyricResultSubmission.pointerScript: setScript returns boolean')
+    primitive = {'void': 'V', 'int': 'I', 'long': 'J', 'boolean': 'Z'}
+    def descriptor(name):
+        return primitive.get(name, name.replace('.', '/') if name.startswith('[')
+                             else 'L' + name.replace('.', '/') + ';')
+    checks = 0
+    required = {
+        'methods': {'resultSet', 'resultPost', 'resultValue', 'fragmentResume', 'buildIndex', 'loadLyrics', 'systemLyricsLanguage',
+                    'pointerGet', 'pointerAdamId', 'pointerScript', 'clear'},
+        'fields': {'fragmentViewModel', 'lyricsResult'},
+    }
+    for group in ('methods', 'fields'):
+        entries = data.get(group)
+        if not isinstance(entries, dict) or not entries:
+            failures.append(f'lyricResultSubmission.{group}: missing inventory')
+            continue
+        for role in sorted(required[group] - entries.keys()):
+            failures.append(f'lyricResultSubmission.{group}.{role}: missing required role')
+        for role, member in entries.items():
+            checks += 1
+            try:
+                native = classes.get(descriptor(member['owner']), {})
+                if group == 'fields':
+                    valid = (native.get('fields', {}).get(member['name']) == descriptor(member['type'])
+                             and not native.get('field_access', {}).get(member['name'], 8) & 8)
+                else:
+                    signature = member['name'] + '(' + ''.join(map(descriptor, member['parameters'])) + ')' + descriptor(member['returns'])
+                    flags = native.get('method_access', {}).get(signature)
+                    valid = (flags is not None and not flags & (0x40 | 0x400 | 0x1000)
+                             and bool(flags & 8) == member.get('static', False))
+                if not valid:
+                    failures.append(f'lyricResultSubmission.{group}.{role}: invalid exact descriptor')
+            except (KeyError, TypeError, AttributeError) as error:
+                failures.append(f'lyricResultSubmission.{group}.{role}: incomplete descriptor ({error})')
     return checks
 
 
@@ -267,6 +559,9 @@ def main():
                 document = json.loads(candidate.read_text(encoding="utf-8"))
         if document:
             checks += verify_fragment_contracts(document, classes, failures)
+            checks += verify_artist_compose_contract(document, classes, failures)
+            checks += verify_lyric_blur_contract(document, classes, failures)
+            checks += verify_lyric_result_submission(document, classes, failures)
             def descriptor(name):
                 primitive = {'void':'V','int':'I','long':'J','float':'F','boolean':'Z',
                              'double':'D','byte':'B','short':'S','char':'C'}

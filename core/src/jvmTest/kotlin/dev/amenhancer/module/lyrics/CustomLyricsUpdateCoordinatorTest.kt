@@ -123,8 +123,16 @@ class CustomLyricsUpdateCoordinatorTest {
 
     @Test
     fun `amll canonical conversion recognizes unchanged and changed hashes`() {
-        val raw = "<tt xmlns=\"http://www.w3.org/ns/ttml\"><body><div><p itunes:key=\"L1\"><span ttm:role=\"x-translation\">Hi</span>歌</p></div></body></tt>"
+        val raw = """
+            <tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal">
+            <head><metadata/></head><body><div>
+            <p begin="5s" end="6s" itunes:key="late"><span begin="5s" end="6s">late</span><span ttm:role="x-translation">Later</span></p>
+            <p begin="1s" end="2s" itunes:key="one"><span begin="1s" end="2s">one</span><span ttm:role="x-translation">One</span></p>
+            <p begin="00:01.000" end="3s" itunes:key="two"><span begin="00:01.000" end="3s">two</span><span ttm:role="x-translation">Two</span></p>
+            </div></body></tt>
+        """.trimIndent()
         val converted = AmllTtmlFormatConverter.toAppleFormat(raw).ttml
+        assertTrue(converted.contains("<text for=\"one\">One\nTwo</text><text for=\"two\"> </text>"))
         val same = entry(7L, CustomLyricsSources.AMLL, converted, "lyrics_same")
         val changed = entry(8L, CustomLyricsSources.AMLL, ttml("old"), "lyrics_changed")
         val writes = AtomicInteger()

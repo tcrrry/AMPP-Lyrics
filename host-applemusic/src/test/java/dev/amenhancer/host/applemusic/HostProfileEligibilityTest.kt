@@ -37,7 +37,9 @@ class HostProfileEligibilityTest {
         assertFalse(AppleMusicHostProfiles.isProductionBuild("com.apple.android.music","6.5.0",1580))
         assertTrue(AppleMusicHostProfiles.isProductionBuild("com.apple.android.music","7.0.0-beta",1606))
         assertFalse(AppleMusicHostProfiles.isProductionBuild("com.apple.android.music","7.0.0",1606))
-        assertFalse(AppleMusicHostProfiles.isProductionBuild("com.apple.android.music","7.0.0-beta",1607))
-        assertFalse(AppleMusicHostProfiles.isProductionBuild("other","6.5.3",1599))
+        assertTrue(AppleMusicHostProfiles.isProductionBuild("com.apple.android.music","7.0.0-beta",1607))
+        assertFalse(AppleMusicHostProfiles.isProductionBuild("com.apple.android.music","7.0.0-beta",1608))
+        assertFalse(AppleMusicHostProfiles.isProductionBuild("com.apple.android.music.clone","7.0.0-beta",1606))
+        assertTrue(AppleMusicHostProfiles.isProductionBuild("com.tcrrry.ampplyrics.coexist","7.0.0",1614))
     }
 }

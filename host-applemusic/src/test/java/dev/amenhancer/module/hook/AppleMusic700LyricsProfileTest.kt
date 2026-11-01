@@ -94,7 +94,7 @@ class AppleMusic700LyricsProfileTest {
         val profiles = io.github.proify.lyricon.amprovider.xposed.AppleMusicHookProfiles
         val version = io.github.proify.lyricon.amprovider.xposed.AppleMusicVersion("7.0.0-beta", 1606)
         assertTrue(profiles.profileFor(version)!!.strict)
-        assertNull(profiles.profileFor(io.github.proify.lyricon.amprovider.xposed.AppleMusicVersion("7.0.0-beta", 1607)))
+        assertNull(profiles.profileFor(io.github.proify.lyricon.amprovider.xposed.AppleMusicVersion("7.0.0-beta", 1608)))
         assertNull(profiles.profileFor(io.github.proify.lyricon.amprovider.xposed.AppleMusicVersion("7.0.0", 1606)))
         io.github.proify.lyricon.amprovider.xposed.AppleMusicHookPoint.entries.forEach { point ->
             assertEquals(profiles.exactTargets(version, point), profiles.candidates(version, point))

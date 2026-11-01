@@ -108,6 +108,14 @@ internal class AppleArtistSurfaceHooks(
         ConcurrentHashMap<String, MutableSet<String>>()
     private val topSongRetryIds = ConcurrentHashMap.newKeySet<String>()
 
+    private class ComposeProfileInstallation(
+        val members: ArtistComposeProfileContract,
+        val sessions: ArtistComposeProfileSessions,
+    )
+    private val composeProfileRepublishing = ThreadLocal<ArtistComposeProfileSession>()
+    @Volatile
+    private var composeProfiles: ComposeProfileInstallation? = null
+
     private val artistClassesLock = Any()
     @Volatile
     private var resolvedArtistClasses: Map<String, ResolvedAppleMusicHookClass>? = null
@@ -122,6 +130,7 @@ internal class AppleArtistSurfaceHooks(
         kind: AppleMetadataRefreshKind,
         mediaId: String? = null,
         target: Any? = null,
+        slot: Int = -1,
         priority: AppleInternalCatalogResolver.RequestPriority =
             AppleInternalCatalogResolver.RequestPriority.BACKGROUND,
         originalResolutionMode: InAppOriginalResolutionMode =
@@ -138,6 +147,7 @@ internal class AppleArtistSurfaceHooks(
                 priority = priority,
                 originalResolutionMode = originalResolutionMode,
                 target = target,
+                slot = slot,
                 action = work,
             )
         }
@@ -386,6 +396,254 @@ internal class AppleArtistSurfaceHooks(
         }
     }
 
+    /**
+     * Declared Compose artist surfaces publish immutable Success(id, title, headerData, shelves,
+     * entity, revision) states. Register the page entity through the same ARTIST alias
+     * path as the Epoxy header; songs from the top-songs view supply the region evidence.
+     * Profiles without the Compose roles skip this installer.
+     */
+    fun hasComposeProfileSurface(): Boolean =
+        ArtistComposeProfileContract.isDeclared(runtime.hookResolver.version)
+
+    fun installComposeProfileHooks() {
+        runCatching {
+            val group = checkNotNull(runtime.hookRegistrar.currentInstallation()) {
+                "Compose artist hooks require an installation scope"
+            }
+            val classes = checkNotNull(artistClasses()) { "Compose artist surface classes unavailable" }
+            val members = ArtistComposeProfileContract.resolve(
+                runtime.hookResolver.version, runtime.classLoader, classes,
+            )
+            val sessions = ArtistComposeProfileSessions(
+                isInstallationActive = { group.isActive },
+                cancelPending = { refreshQueue?.cancelTarget(it) },
+                onOwnerRemoved = ::clearComposeProfileMediaId,
+            )
+            val installation = ComposeProfileInstallation(members, sessions)
+            runtime.hookRegistrar.onInstallationClose {
+                sessions.close()
+                if (composeProfiles === installation) composeProfiles = null
+            }
+            runtime.hookRegistrar.installArgumentRewriteHook(members.setUiState) { chain ->
+                val owner = chain.thisObject ?: return@installArgumentRewriteHook null
+                val state = chain.args.firstOrNull()
+                if (state == null || !members.successStateClass.isInstance(state)) {
+                    // Clear saved Success so an in-flight alias refresh cannot republish stale page content.
+                    clearComposeProfileOwner(owner, installation)
+                    return@installArgumentRewriteHook null
+                }
+                val republishing = composeProfileRepublishing.get()
+                if (republishing != null && republishing.owner.get() === owner && sessions.isCurrent(republishing)) {
+                    sessions.updateState(republishing, state)
+                    return@installArgumentRewriteHook null
+                }
+                val rewritten = onComposeProfileState(owner, state, installation)
+                    ?: return@installArgumentRewriteHook null
+                arrayOf(rewritten)
+            }
+            // Publish only after successful registration; callbacks remain inactive until staging completes.
+            composeProfiles = installation
+            ProviderLogger.info(
+                "Apple Music Compose 歌手页标题实时元数据 Hook 已安装: " +
+                    "owner=${members.setUiState.declaringClass.name}, method=${members.setUiState.name}"
+            )
+        }.onFailure {
+            runtime.hookRegistrar.reportInstallationFailure(it)
+            ProviderLogger.error("Apple Music Compose 歌手页标题实时元数据 Hook 安装失败", it)
+        }
+    }
+
+    /** Re-publishes the last Success state of every live Compose artist page showing [mediaId]. */
+    fun refreshComposeProfiles(mediaId: String): Int {
+        if (librarySurfaceHooks.hasPresentationObservation() &&
+            metadataStore.entityType(mediaId) == AppleInternalCatalogResolver.LocalizedEntityType.SONG) return 0
+        val installation = composeProfiles ?: return 0
+        val sessions = installation.sessions
+        val pending = sessions.requestRefresh(mediaId)
+        pending.forEach { session ->
+            // Distinct slot from page-state ARTIST_BINDING work so mergeIntents cannot drop
+            // this action (and its pending cleanup) when another Success arrives mid-frame.
+            dispatchSurfaceWork(
+                kind = AppleMetadataRefreshKind.ARTIST_BINDING,
+                mediaId = mediaId,
+                target = session,
+                slot = COMPOSE_PROFILE_REFRESH_SLOT,
+                priority = AppleInternalCatalogResolver.RequestPriority.VISIBLE,
+                originalResolutionMode = InAppOriginalResolutionMode.ORIGINAL_FIRST,
+            ) {
+                try {
+                    runCatching { republishComposeProfile(session, installation) }
+                        .onFailure {
+                            ProviderLogger.error(
+                                "Apple Music Compose 歌手页标题刷新失败: id=$mediaId",
+                                it,
+                            )
+                        }
+                } finally {
+                    sessions.finishRefresh(session)
+                }
+            }
+        }
+        return pending.size
+    }
+
+    fun hasComposeProfileRefs(mediaId: String): Boolean =
+        composeProfiles?.sessions?.hasRefs(mediaId) == true
+
+    private fun onComposeProfileState(
+        owner: Any,
+        state: Any,
+        installation: ComposeProfileInstallation,
+    ): Any? {
+        val members = installation.members
+        val sessions = installation.sessions
+        // Any Success this hook cannot own (non-artist, missing id) also supersedes the saved one.
+        val entity = members.stateEntity(state) ?: return clearComposeProfileOwner(owner, installation).let { null }
+        if (!members.isArtistEntity(entity)) return clearComposeProfileOwner(owner, installation).let { null }
+        val attributes = host.mediaApiEntityAttributes(entity)
+            ?: return clearComposeProfileOwner(owner, installation).let { null }
+        val mediaId = host.mediaApiEntityCatalogId(entity, attributes)
+            ?: return clearComposeProfileOwner(owner, installation).let { null }
+        // Drop refs from the owner's previous artist/top songs before registering this page.
+        val session = sessions.replace(owner, mediaId, state)
+        profileMediaIds[owner] = mediaId
+        latestProfileMediaId = mediaId
+        host.registerLibraryEntity(
+            mediaId = mediaId,
+            entity = entity,
+            kind = InAppLibraryEntityKind.ARTIST,
+            knownAttributes = attributes,
+        )
+        host.enrichLibraryEntity(
+            mediaId = mediaId,
+            entity = entity,
+            kind = InAppLibraryEntityKind.ARTIST,
+            attributes = attributes,
+        )
+        val songIds = registerComposeProfileTopSongs(owner, entity, session, installation)
+        var aliasApplied = false
+        host.effectiveAlias(mediaId)?.let { alias ->
+            aliasApplied = librarySurfaceHooks.applyAliasToEntity(
+                entity = entity,
+                kind = InAppLibraryEntityKind.ARTIST,
+                alias = alias,
+            )
+        }
+        val pageWork = {
+            if (sessions.isCurrent(session)) {
+                host.markMetadataVisible(listOf(mediaId))
+                host.enrichLibraryEntitiesForResolution(listOf(mediaId))
+                if (host.shouldRequestOverride(mediaId)) {
+                    host.scheduleMetadataResolution(
+                        mediaIds = listOf(mediaId),
+                        priority = AppleInternalCatalogResolver.RequestPriority.VISIBLE,
+                        originalResolutionMode = InAppOriginalResolutionMode.ORIGINAL_FIRST,
+                    )
+                }
+                if (songIds.isNotEmpty()) requestPageOriginalMetadata(songIds)
+            }
+        }
+        dispatchSurfaceWork(
+            kind = AppleMetadataRefreshKind.ARTIST_BINDING,
+            mediaId = mediaId,
+            target = session,
+            priority = AppleInternalCatalogResolver.RequestPriority.VISIBLE,
+            originalResolutionMode = InAppOriginalResolutionMode.ORIGINAL_FIRST,
+            work = pageWork,
+        )
+        if (BuildConfig.DEBUG) {
+            ProviderLogger.info(
+                "Apple Music 元数据链路: seq=${host.nextMetadataTraceSequence()}, " +
+                    "event=artist_compose_profile_state, contentId=$mediaId, " +
+                    "owner=${owner.javaClass.name}@${System.identityHashCode(owner)}, " +
+                    "topSongs=${songIds.size}, aliasApplied=$aliasApplied"
+            )
+        }
+        if (!aliasApplied) return null
+        return members.rebuildState(owner, state, entity).also { sessions.updateState(session, it) }
+    }
+
+    private fun republishComposeProfile(session: ArtistComposeProfileSession, installation: ComposeProfileInstallation) {
+        val sessions = installation.sessions
+        val members = installation.members
+        val state = sessions.state(session) ?: return
+        val owner = session.owner.get() ?: return
+        val entity = members.stateEntity(state) ?: return
+        val mediaId = session.mediaId
+        host.effectiveAlias(mediaId)?.let { alias ->
+            librarySurfaceHooks.applyAliasToEntity(
+                entity = entity,
+                kind = InAppLibraryEntityKind.ARTIST,
+                alias = alias,
+            )
+        }
+        val rebuilt = members.rebuildState(owner, state, entity)
+        if (rebuilt == state || !sessions.isCurrent(session)) return
+        // The re-entrant setUiState hook only records the state it publishes.
+        val previous = composeProfileRepublishing.get()
+        composeProfileRepublishing.set(session)
+        try {
+            members.setUiState.invoke(owner, rebuilt)
+        } finally {
+            if (previous == null) composeProfileRepublishing.remove() else composeProfileRepublishing.set(previous)
+        }
+        if (BuildConfig.DEBUG) {
+            ProviderLogger.info(
+                "Apple Music 元数据链路: seq=${host.nextMetadataTraceSequence()}, " +
+                    "event=artist_compose_profile_republish, contentId=$mediaId, " +
+                    "title=${members.stateTitle(rebuilt)}"
+            )
+        }
+    }
+
+    private fun registerComposeProfileTopSongs(owner: Any, profileEntity: Any,
+        session: ArtistComposeProfileSession, installation: ComposeProfileInstallation): List<String> {
+        val members = installation.members
+        val songEntities = host.mediaApiEntityRelationshipEntities(profileEntity, members.topSongsView)
+            .ifEmpty { members.topSongEntities(profileEntity) }
+        val songIds = songEntities.mapNotNull { songEntity ->
+            val attributes = host.mediaApiEntityAttributes(songEntity) ?: return@mapNotNull null
+            val mediaId = host.mediaApiEntityCatalogId(songEntity, attributes)
+                ?: return@mapNotNull null
+            host.registerLibraryEntity(
+                mediaId = mediaId,
+                entity = songEntity,
+                kind = InAppLibraryEntityKind.SONG,
+                knownAttributes = attributes,
+            )
+            // Associate before enrich so a missing song artist still gets the profile candidate.
+            associateTopSongWithProfileArtist(owner, mediaId)
+            host.enrichLibraryEntity(
+                mediaId = mediaId,
+                entity = songEntity,
+                kind = InAppLibraryEntityKind.SONG,
+                attributes = attributes,
+            )
+            // Song aliases rewrite artistName on the shared entity; republish the shelves.
+            installation.sessions.register(session, mediaId)
+            mediaId
+        }.distinct()
+        if (songIds.isNotEmpty()) {
+            host.markMetadataVisible(songIds)
+            host.enrichLibraryEntitiesForResolution(songIds)
+        }
+        return songIds
+    }
+
+    /**
+     * Clears the owner's saved Success and media refs whenever the view model leaves Success.
+     * Without this, [refreshComposeProfiles] can republish the old Success over loading/error.
+     */
+    private fun clearComposeProfileOwner(owner: Any, installation: ComposeProfileInstallation) {
+        installation.sessions.clear(owner)
+    }
+
+    private fun clearComposeProfileMediaId(owner: Any) {
+        val detachedMediaId = profileMediaIds[owner]
+        profileMediaIds.remove(owner)
+        if (latestProfileMediaId == detachedMediaId) latestProfileMediaId = null
+    }
+
     fun handleFinalBinding(model: Any, finalHolder: Any?, position: Int?) {
         val classes = artistClasses() ?: return
         val topSongClass = classes["top_song_model"]?.clazz
@@ -522,6 +780,8 @@ internal class AppleArtistSurfaceHooks(
             renderedTexts = renderedTexts,
         )
     }
+
+    fun isHeaderBinding(binding: Any, mediaId: String): Boolean = headerBindingIds[binding] == mediaId
 
     fun subtitleForBinding(
         binding: Any?,
@@ -911,11 +1171,12 @@ internal class AppleArtistSurfaceHooks(
             .filter { it.isNotEmpty() && it.all(Char::isDigit) }
             .distinct()
             .toList()
-        if (pageMediaIds.isEmpty() || !topSongRetryIds.addAll(pageMediaIds)) return
-        host.markMetadataVisible(pageMediaIds)
-        host.enrichLibraryEntitiesForResolution(pageMediaIds)
+        val requestIds = pageMediaIds.filter { topSongRetryIds.add(it) || host.shouldRequestOverride(it) }
+        if (requestIds.isEmpty()) return
+        host.markMetadataVisible(requestIds)
+        host.enrichLibraryEntitiesForResolution(requestIds)
         host.retryOriginalMetadata(
-            mediaIds = pageMediaIds,
+            mediaIds = requestIds,
             priority = AppleInternalCatalogResolver.RequestPriority.ACTIVE_PAGE,
             originalResolutionMode = InAppOriginalResolutionMode.ORIGINAL_FIRST,
         )
@@ -933,10 +1194,13 @@ internal class AppleArtistSurfaceHooks(
                         // The global Epoxy final-bind hook reaches this for ordinary home cards
                         // too. Resolve once, then reject unrelated model types using cached Classes.
                         // Return partial results as before, but do not freeze an incomplete lookup.
-                        if (classes.keys.containsAll(listOf(
+                        val declaredRoles = AppleMusicHookProfiles.exactTargets(
+                            runtime.hookResolver.version, AppleMusicHookPoint.ARTIST_SURFACE_CLASSES,
+                        ).mapNotNull { it.runtimeMemberNameOrNull(AppleMusicRuntimeMember.ARTIST_RUNTIME_ROLE) }
+                        if (classes.keys.containsAll(declaredRoles.ifEmpty { listOf(
                                 "recycler", "media_entity", "base_controller", "artist_controller",
                                 "top_song_model", "header_model",
-                            ))
+                            ) })
                         ) resolvedArtistClasses = classes
                     }
             }.onFailure {
@@ -1034,3 +1298,6 @@ internal fun artistProfileSubtitleWithArtist(
     }
     return subtitle
 }
+
+/** Alias republish identity; must differ from page-state work (default slot -1). */
+private const val COMPOSE_PROFILE_REFRESH_SLOT = 1

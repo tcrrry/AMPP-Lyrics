@@ -123,21 +123,22 @@ class DualPaneStructuralRegressionTest {
     }
 
     @Test
-    fun `sizes artwork from progress width and centers it above metadata`() {
+    fun `sizes native artwork from the shared reference column geometry`() {
         assertTrue(source.contains("private const val ARTWORK_CONTAINER = \"artwork_container\""))
         assertTrue(source.contains("private const val METADATA_BARRIER_TOP = \"metadata_barrier_top\""))
         assertTrue(source.contains("installTabletArtworkLayout(playerRoot, playerHost)"))
-        assertTrue(source.contains("TabletArtworkLayoutPolicy.forProgress("))
-        assertTrue(source.contains("progressWidthPx = progress.width.toFloat()"))
+        assertTrue(source.contains("TabletSongColumnLayout(playerRoot, playerHost as ViewGroup,"))
+        assertTrue(source.contains("val columnChanged = column.prepare(topInset, bottomInset)"))
+        assertTrue(source.contains("val layout = column.geometry() ?: run {"))
+        assertTrue(source.contains("val sizePx = layout.coverSize"))
         assertFalse(source.contains("nativeSizeByArtwork"))
         assertTrue(source.contains("val statusBarInsetTopPx = playerRoot.rootWindowInsets?.systemWindowInsetTop"))
-        assertTrue(source.contains("windowRootLocation[1] + statusBarInsetTopPx"))
-        assertTrue(source.contains("val availableHeightPx = (barrierLocation[1] - intervalTopPx).toFloat()"))
-        assertTrue(source.contains("val desiredArtworkTopPx = intervalTopPx + layout.edgeGapPx"))
-        assertTrue(source.contains(".set(artwork.translationY + artworkDeltaPx)"))
-        assertTrue(source.contains("progressContent.boundsIn(parent, progress)"))
-        assertTrue(source.contains("progressBounds.left, parent.width - progressBounds.right"))
-        assertTrue(source.contains("artworkLayoutLease(artwork) }.apply(sizePx, 0,"))
+        assertTrue(source.contains("val topInset = (statusBarInsetTopPx - playerRoot.top).coerceAtLeast(0)"))
+        assertTrue(source.contains("val at = column.origin(parent)"))
+        assertTrue(source.contains("val left = layout.contentLeft - at.first"))
+        assertTrue(source.contains("artworkLayoutLease(artwork) }.apply(sizePx,"))
+        assertTrue(source.contains("topInset + layout.coverTop - at.second, left, parent.width - left - sizePx"))
+        assertFalse(source.contains("artwork.translationY + artworkDeltaPx"))
         assertTrue(source.contains("width.set(sizePx); height.set(sizePx); top.set(topMarginPx); bottom.set(0)"))
         assertTrue(source.contains("val values = listOf(0, -1, -1, -1)"))
         assertTrue(source.contains("listOf(\"topToTop\", \"topToBottom\", \"bottomToTop\", \"bottomToBottom\")"))
@@ -408,8 +409,8 @@ class DualPaneStructuralRegressionTest {
     @Test
     fun `maps the target's obfuscated ConstraintLayout params from the APK`() {
         assertTrue(source.contains("TARGET_650_LAYOUT_PARAMS"))
-        assertTrue(source.contains("\"leftToLeft\" to \"h\""))
-        assertTrue(source.contains("\"rightToRight\" to \"e\""))
+        assertTrue(source.contains("\"leftToLeft\" to \"e\""))
+        assertTrue(source.contains("\"rightToRight\" to \"h\""))
         assertTrue(source.contains("\"startToStart\" to \"t\""))
         assertTrue(source.contains("\"endToStart\" to \"u\""))
         assertTrue(source.contains("\"guidePercent\" to \"c\""))

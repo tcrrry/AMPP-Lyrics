@@ -9,7 +9,7 @@ import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.host.OwnedHostProperty
-import dev.amenhancer.module.hook.tabletmedia.TabletProgressContent
+import dev.amenhancer.module.hook.tabletmedia.TabletSongColumnLayout
 import dev.amenhancer.host.applemusic.R
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -97,10 +97,10 @@ internal object ConstraintLayoutPane {
         "guideBegin" to "a",
         "guideEnd" to "b",
         "guidePercent" to "c",
-        "leftToLeft" to "h",
-        "leftToRight" to "g",
-        "rightToLeft" to "f",
-        "rightToRight" to "e",
+        "leftToLeft" to "e",
+        "leftToRight" to "f",
+        "rightToLeft" to "g",
+        "rightToRight" to "h",
         "topToTop" to "i",
         "topToBottom" to "j",
         "bottomToTop" to "k",
@@ -333,10 +333,7 @@ internal object ConstraintLayoutPane {
         return DualPaneState(root, playerHost, lyricsHost, artworkLayoutReapply)
     }
 
-    /**
-     * Follow the actual progress width, capped by the interval above metadata,
-     * without taking ownership of native card scale or video content.
-     */
+    /** Apply the shared left-column geometry without taking over native card scale or video content. */
     private fun installTabletArtworkLayout(
         playerRoot: ViewGroup,
         playerHost: View,
@@ -348,80 +345,72 @@ internal object ConstraintLayoutPane {
             ModuleConstants.RESOURCE_PACKAGE,
         )
         if (artworkId == 0) return null
-        val barrierId = playerRoot.resources.getIdentifier(
-            METADATA_BARRIER_TOP,
-            "id",
-            ModuleConstants.RESOURCE_PACKAGE,
-        )
-        if (barrierId == 0) return null
-        val progressIds = HashMap<String, Int>()
-        val findContent: (View, String) -> View? = { parent, name ->
-            progressIds.getOrPut(name) { resources.getIdentifier(name, "id", ModuleConstants.RESOURCE_PACKAGE) }
-                .takeIf { it != 0 }?.let { parent.findViewById<View>(it) }
-        }
-        val progressContent = TabletProgressContent(findContent)
         val videoId = resources.getIdentifier("video_surface", "id", ModuleConstants.RESOURCE_PACKAGE)
         val imageId = resources.getIdentifier("artwork_image", "id", ModuleConstants.RESOURCE_PACKAGE)
         val layoutLeases = WeakHashMap<View, TabletArtworkLayoutLease>()
-        val translations = WeakHashMap<View, OwnedHostProperty<Float>>()
+        var songColumn: TabletSongColumnLayout? = null
         var artworkLayoutChanged = false
+        var failed = false
         fun release() {
+            songColumn?.close(); songColumn = null
             layoutLeases.values.toList().forEach { it.close() }; layoutLeases.clear()
-            translations.values.toList().forEach { it.close() }; translations.clear()
         }
-        fun apply(): Boolean {
+        fun applyLayout(): Boolean {
             artworkLayoutChanged = false
             if (!TabletModeQualifier.isEligible(playerRoot.context)) { release(); return true }
             val artwork = playerHost.findViewById<View>(artworkId) ?: return false
-            val barrier = playerHost.findViewById<View>(barrierId) ?: return false
             val parent = artwork.parent as? ViewGroup ?: return false
             if (parent.width <= 0 || parent.height <= 0 || artwork.width <= 0) return false
             layoutLeases.keys.toList().filter { it !== artwork }.forEach {
-                layoutLeases.remove(it)?.close(); translations.remove(it)?.close()
+                layoutLeases.remove(it)?.close()
             }
             val video = if (videoId != 0) artwork.findViewById<View>(videoId) else null
             val image = if (imageId != 0) artwork.findViewById<View>(imageId) else null
             if (video?.isShown == true && video.alpha >= .99f && image?.alpha?.let { it <= .01f } == true) {
-                layoutLeases.remove(artwork)?.close(); translations.remove(artwork)?.close()
+                layoutLeases.remove(artwork)?.close()
+                songColumn?.present(0f, transitioning = false, songVisible = false)
                 return true
             }
-            val progress = progressContent.resolve(playerHost) ?: return false
-            val hostLocation = IntArray(2)
-            val windowRootLocation = IntArray(2)
-            val artworkLocation = IntArray(2)
-            val barrierLocation = IntArray(2)
-            playerHost.getLocationInWindow(hostLocation)
-            playerRoot.rootView.getLocationInWindow(windowRootLocation)
-            artwork.getLocationInWindow(artworkLocation)
-            barrier.getLocationInWindow(barrierLocation)
+            val column = songColumn ?: TabletSongColumnLayout(playerRoot, playerHost as ViewGroup,
+                { TabletSongColumnLayout.collapsePlayer(playerRoot) }, keepNativeFooter = true).also { songColumn = it }
             val statusBarInsetTopPx = playerRoot.rootWindowInsets?.systemWindowInsetTop
                 ?: playerRoot.resources.getIdentifier("status_bar_height", "dimen", "android")
                     .takeIf { it != 0 }
                     ?.let(playerRoot.resources::getDimensionPixelSize)
                 ?: 0
-            val intervalTopPx = maxOf(
-                hostLocation[1],
-                windowRootLocation[1] + statusBarInsetTopPx,
-            )
-            val availableHeightPx = (barrierLocation[1] - intervalTopPx).toFloat()
-            val layout = TabletArtworkLayoutPolicy.forProgress(
-                availableHeightPx = availableHeightPx,
-                progressWidthPx = progress.width.toFloat(),
-            ) ?: return false
+            // Use layout-space insets rather than the sheet's moving window Y.
+            val topInset = (statusBarInsetTopPx - playerRoot.top).coerceAtLeast(0)
+            @Suppress("DEPRECATION")
+            val bottomInset = playerRoot.rootWindowInsets?.systemWindowInsetBottom ?: 0
+            val columnChanged = column.prepare(topInset, bottomInset)
+            val layout = column.geometry() ?: run {
+                val restored = layoutLeases.isNotEmpty()
+                layoutLeases.values.toList().forEach { it.close() }; layoutLeases.clear()
+                artworkLayoutChanged = columnChanged || restored
+                return true
+            }
             val params = artwork.layoutParams as? ViewGroup.MarginLayoutParams ?: return true
             if (constraintField(params.javaClass, "startToStart") == null) return true
-            val sizePx = (layout.sizePx + 0.5f).toInt().coerceAtLeast(1)
-            val desiredArtworkTopPx = intervalTopPx + layout.edgeGapPx
-            val artworkDeltaPx = desiredArtworkTopPx - artworkLocation[1]
-            if (kotlin.math.abs(artworkDeltaPx) > 0.5f) {
-                translations.getOrPut(artwork) {
-                    OwnedHostProperty({ artwork.translationY }, { artwork.translationY = it })
-                }.set(artwork.translationY + artworkDeltaPx)
-            }
-            val progressBounds = progressContent.boundsIn(parent, progress)
-            artworkLayoutChanged = layoutLeases.getOrPut(artwork) { artworkLayoutLease(artwork) }.apply(sizePx, 0,
-                progressBounds.left, parent.width - progressBounds.right)
+            val sizePx = layout.coverSize
+            val at = column.origin(parent)
+            val left = layout.contentLeft - at.first
+            artworkLayoutChanged = layoutLeases.getOrPut(artwork) { artworkLayoutLease(artwork) }.apply(sizePx,
+                topInset + layout.coverTop - at.second, left, parent.width - left - sizePx) || columnChanged
+            val visibleBounds = android.graphics.Rect()
+            val visible = artwork.isShown && artwork.alpha > .001f && playerRoot.isShown &&
+                playerRoot.getGlobalVisibleRect(visibleBounds) && visibleBounds.height() >= playerRoot.height * .95f
+            column.present(if (visible) 1f else 0f, transitioning = false, songVisible = true)
             return true
+        }
+        fun apply(): Boolean {
+            if (failed) return true
+            return runCatching(::applyLayout).getOrElse { error ->
+                failed = true
+                runCatching(::release)
+                artworkLayoutChanged = false
+                dualPaneDebug("tablet song-column layout failed; restored native geometry: $error")
+                true
+            }
         }
         // Padding/media updates can change the track without changing the host's bounds.
         var liveTree: ViewTreeObserver? = null
@@ -870,7 +859,7 @@ internal object ConstraintLayoutPane {
             ?: error("ConstraintLayout.LayoutParams.$name was not found on " + javaClass.name)
     }
 
-    private fun constraintField(type: Class<*>, semanticName: String): Field? {
+    internal fun constraintField(type: Class<*>, semanticName: String): Field? {
         dualPaneField(type, semanticName)?.let { return it }
         val obfuscatedName = TARGET_650_FIELD_NAMES[semanticName]
             ?.takeIf { type.name == TARGET_650_LAYOUT_PARAMS }

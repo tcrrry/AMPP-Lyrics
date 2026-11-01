@@ -11,7 +11,7 @@ import org.junit.Test
 class TargetConfigClientIndexResolveTest {
 
     @Test
-    fun `settings without a pointer falls back to the legacy v1 manifest`() {
+    fun `custom lyrics manifest without a pointer falls back to the legacy v1 manifest`() {
         val v1 = """{"version":1,"entries":[{"appleMusicId":42,"displayName":"Old","fileId":"lyrics_old","sizeBytes":42,"sha256":"0cba697d61a21fb62408b2411aa2152d1bc24cc2414d2bd162f70e04d20c5e53","source":"manual","enabled":true}]}"""
         val client = TargetConfigClient(
             preferences(
@@ -22,7 +22,11 @@ class TargetConfigClientIndexResolveTest {
             ),
         )
 
-        val manifest = client.settings().customLyricsManifest
+        assertTrue(
+            "ordinary settings must not resolve the legacy lyrics index",
+            client.settings().customLyricsManifest.entries.isEmpty(),
+        )
+        val manifest = client.customLyricsManifest()
 
         assertEquals(listOf(42L), manifest.entries.map(CustomLyricsEntry::appleMusicId))
     }

@@ -8,5 +8,6 @@ internal object LyricCreditsRowResourceHook {
                 CreditsRowIdentity.mark(root)
             }
         }
+        LayoutInflationRegistry.register("lyrics_line_instrumental") { root -> InstrumentalRowIdentity.mark(root) }
     }
 }

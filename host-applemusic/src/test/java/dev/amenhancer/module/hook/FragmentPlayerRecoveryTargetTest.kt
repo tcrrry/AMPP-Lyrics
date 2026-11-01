@@ -8,7 +8,7 @@ class FragmentPlayerRecoveryTargetTest {
 
     @Test fun `legacy and unknown builds never resolve or register repair hooks`() {
         for (candidate in listOf(TargetBuild("com.apple.android.music", "6.5.3", 1599),
-            build.copy(versionCode = 1607), build.copy(versionName = "7.0.0"), build.copy(packageName = "other"))) {
+            build.copy(versionCode = 1608), build.copy(versionName = "7.0.0"), build.copy(packageName = ""))) {
             val symbols = FixtureSymbols()
             val target = FragmentPlayerRecoveryTarget(symbols, candidate) { _, _ -> fail("unexpected repair registration") }
             assertTrue(target.install() is TargetCapabilityInstall.Unsupported)

@@ -128,6 +128,7 @@ class TtmlTimingObservationRegistry(
     private data class Observation(
         val pointer: java.lang.ref.WeakReference<Any>,
         val metadata: TtmlDocumentMetadata,
+        var nativeTtml: String? = null,
     )
 
     private val observations = ArrayDeque<Observation>()
@@ -145,8 +146,13 @@ class TtmlTimingObservationRegistry(
         pointer: Any?,
         metadata: TtmlDocumentMetadata,
         appleMusicId: Long? = null,
+        nativeTtml: String? = null,
     ) {
         if (pointer == null) return
+        val document = nativeTtml?.takeIf {
+            it.length <= dev.amenhancer.module.lyrics.TtmlInputPolicy.MAX_TTML_BYTES &&
+                it.toByteArray(Charsets.UTF_8).size <= dev.amenhancer.module.lyrics.TtmlInputPolicy.MAX_TTML_BYTES
+        }
         synchronized(observations) {
             sweepCleared()
             val iterator = observations.iterator()
@@ -154,7 +160,12 @@ class TtmlTimingObservationRegistry(
                 if (iterator.next().pointer.get() === pointer) iterator.remove()
             }
             while (observations.size >= maxEntries.coerceAtLeast(1)) observations.removeFirst()
-            observations.addLast(Observation(java.lang.ref.WeakReference(pointer), metadata))
+            // Only a handful of raw documents are needed to bridge parse and delivery.
+            // Metadata can retain its existing larger bound without retaining lyric bodies.
+            if (document != null && observations.count { it.nativeTtml != null } >= MAX_RAW_DOCUMENTS) {
+                observations.firstOrNull { it.nativeTtml != null }?.nativeTtml = null
+            }
+            observations.addLast(Observation(java.lang.ref.WeakReference(pointer), metadata, document))
             appleMusicId?.takeIf { it > 0L }?.let { idObservations[it] = metadata }
         }
     }
@@ -173,6 +184,15 @@ class TtmlTimingObservationRegistry(
         synchronized(observations) {
             sweepCleared()
             return observations.firstOrNull { it.pointer.get() === pointer }?.metadata
+        }
+    }
+
+    /** Exact pointer identity only: never borrow another song's last observed raw text. */
+    fun nativeTtmlOf(pointer: Any?): String? {
+        if (pointer == null) return null
+        synchronized(observations) {
+            sweepCleared()
+            return observations.firstOrNull { it.pointer.get() === pointer }?.nativeTtml
         }
     }
 
@@ -195,5 +215,6 @@ class TtmlTimingObservationRegistry(
 
     private companion object {
         const val DEFAULT_MAX_ENTRIES = 256
+        const val MAX_RAW_DOCUMENTS = 4
     }
 }

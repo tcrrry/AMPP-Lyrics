@@ -41,7 +41,7 @@ class TargetConfigClient private constructor(
         active = this
     }
     /** Ordinary feature settings only; never opens the potentially large lyrics index. */
-    fun settings(): ModuleSettings = ModuleSettingsSchema.decode(valuesProvider())
+    fun settings(): ModuleSettings = ModuleSettingsSchema.decodeOrdinarySettings(valuesProvider())
 
     /** Background custom-lyrics index read. */
     fun customLyricsManifest(): CustomLyricsManifest {

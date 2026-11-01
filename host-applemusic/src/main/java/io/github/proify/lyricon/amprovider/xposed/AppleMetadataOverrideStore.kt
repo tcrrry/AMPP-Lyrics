@@ -7,6 +7,7 @@
 package io.github.proify.lyricon.amprovider.xposed
 
 import android.os.SystemClock
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 
 /** Owns Apple Music metadata overrides, identity facts, and request lifecycle state. */
@@ -30,6 +31,10 @@ internal class AppleMetadataOverrideStore {
     private val metadataLookupIds = ConcurrentHashMap<String, Set<String>>()
     private val metadataEntityTypes =
         ConcurrentHashMap<String, AppleInternalCatalogResolver.LocalizedEntityType>()
+    private val sourceGenres = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(128, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > 4_096
+        })
     private val metadataArtistKeys = ConcurrentHashMap<String, Set<String>>()
     private val metadataAssociatedArtistIds = ConcurrentHashMap<String, List<String>>()
     private val associatedMediaIdsByArtistKey =
@@ -43,6 +48,7 @@ internal class AppleMetadataOverrideStore {
     private val originalResolvedIds = ConcurrentHashMap.newKeySet<String>()
     private val originalPendingIds = ConcurrentHashMap.newKeySet<String>()
     private val originalCacheMissUptimeMillis = ConcurrentHashMap<String, Long>()
+    private val originalSongMissCounts = ConcurrentHashMap<String, Int>()
     private val originalLanguageByArtistKey = ConcurrentHashMap<String, String>()
 
     @Volatile
@@ -64,6 +70,7 @@ internal class AppleMetadataOverrideStore {
         originalResolvedIds.clear()
         originalPendingIds.clear()
         originalCacheMissUptimeMillis.clear()
+        originalSongMissCounts.clear()
         originalLanguageByArtistKey.clear()
         currentPlaybackOverride = null
     }
@@ -200,13 +207,27 @@ internal class AppleMetadataOverrideStore {
     fun lookupIds(mediaId: String): Set<String> = metadataLookupIds[mediaId].orEmpty()
 
     fun mergeLookupIds(mediaId: String, lookupIds: Collection<String>) {
+        val previous = metadataLookupIds[mediaId].orEmpty()
         metadataLookupIds.merge(mediaId, lookupIds.toSet()) { previous, incoming ->
             previous + incoming
+        }
+        if (previous.isNotEmpty() && lookupIds.any { it !in previous }) {
+            resetOriginalResolutionState(mediaId)
         }
     }
 
     fun entityType(mediaId: String): AppleInternalCatalogResolver.LocalizedEntityType? =
         metadataEntityTypes[mediaId]
+
+    fun sourceGenre(mediaId: String): String? = sourceGenres[mediaId]
+
+    fun rememberSourceGenres(mediaId: String, genres: Collection<String>) {
+        val normalized = genres.map(String::trim).filter(String::isNotEmpty).distinct().sorted()
+        if (normalized.isEmpty()) return
+        val genre = normalized.joinToString(", ")
+        val previous = sourceGenres.put(mediaId, genre)
+        if (previous != genre) resetOriginalResolutionState(mediaId)
+    }
 
     fun rememberEntityType(
         mediaId: String,
@@ -237,6 +258,7 @@ internal class AppleMetadataOverrideStore {
             changed = merged != previous
             merged
         }
+        if (changed) resetOriginalResolutionState(mediaId)
         return changed
     }
 
@@ -323,6 +345,21 @@ internal class AppleMetadataOverrideStore {
 
     fun clearOriginalCacheMiss(mediaId: String) {
         originalCacheMissUptimeMillis.remove(mediaId)
+        originalSongMissCounts.remove(mediaId)
+    }
+
+    /** Unknown/failed songs back off on visible binds; identity evidence resets the delay. */
+    fun recordOriginalSongMiss(mediaId: String, uptimeMillis: Long) {
+        originalSongMissCounts.merge(mediaId, 1) { previous, _ -> (previous + 1).coerceAtMost(3) }
+        recordOriginalCacheMiss(mediaId, uptimeMillis)
+        markOriginalPending(mediaId)
+    }
+
+    fun shouldRetryOriginalSong(mediaId: String, nowUptimeMillis: Long): Boolean? {
+        val attempts = originalSongMissCounts[mediaId] ?: return null
+        val lastMiss = originalCacheMissUptimeMillis[mediaId] ?: return true
+        val retryAfter = if (attempts >= 3) 300_000L else 30_000L * attempts
+        return nowUptimeMillis - lastMiss >= retryAfter
     }
 
     /**
@@ -336,6 +373,7 @@ internal class AppleMetadataOverrideStore {
         originalResolvedIds.remove(mediaId)
         originalPendingIds.remove(mediaId)
         originalCacheMissUptimeMillis.remove(mediaId)
+        originalSongMissCounts.remove(mediaId)
     }
 
     fun originalLanguage(artistKey: String): String? = originalLanguageByArtistKey[artistKey]

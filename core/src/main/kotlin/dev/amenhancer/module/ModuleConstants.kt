@@ -5,14 +5,17 @@ object ModuleConstants {
     @Volatile var TARGET_PACKAGE = "com.apple.android.music"
     const val RESOURCE_PACKAGE = "com.apple.android.music"
     const val REMOTE_PREFERENCES_GROUP = "settings"
-    const val CONFIG_SCHEMA_VERSION = 15
+    const val CONFIG_SCHEMA_VERSION = 19
 
     const val FEATURE_DUAL_PANE = "dual_pane"
     const val FEATURE_EDITORIAL_VIDEO = "editorial_video"
     const val FEATURE_PHONE_LIQUID_GLASS = "phone_liquid_glass"
     const val FEATURE_FUTURE_BLUR = "future_blur"
     const val FEATURE_CJK_KARAOKE_ANIMATION = "cjk_karaoke_animation"
+    const val FEATURE_LYRIC_WRAP_SWEEP = "lyric_wrap_sweep"
+    const val FEATURE_LYRIC_BACKGROUND_HIGHLIGHT = "lyric_background_highlight"
     const val FEATURE_LYRICS_TYPEFACE = "lyrics_typeface"
+    const val FEATURE_LYRICS_PARSER = "lyrics_parser"
     const val FEATURE_CUSTOM_LYRICS = "custom_lyrics"
     const val FEATURE_CURRENT_SONG_IDENTITY = "current_song_identity"
     const val FEATURE_CATALOG_LANGUAGE = "catalog_language"
@@ -20,4 +23,5 @@ object ModuleConstants {
     const val FEATURE_APPLE_MUSIC_DPI = "apple_music_dpi"
     const val FEATURE_CELLULAR_DATA_ENTRY = "cellular_data_entry"
     const val FEATURE_PLAYER_RECOVERY = "player_recovery"
+    const val FEATURE_STARTUP_PAGE_PREWARM = "startup_page_prewarm"
 }

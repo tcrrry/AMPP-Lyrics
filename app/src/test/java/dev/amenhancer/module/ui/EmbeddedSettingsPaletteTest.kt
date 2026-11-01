@@ -18,12 +18,12 @@ class EmbeddedSettingsPaletteTest {
     }
 
     @Test
-    fun `dark surfaces use pure black with visible card and action layers`() {
+    fun `dark surfaces use layered panels with visible card and action layers`() {
         val colors = EmbeddedSettingsPalette.Dark
-        assertEquals(0xFF000000.toInt(), colors.pageBackground)
-        assertEquals(0xFF171717.toInt(), colors.surface)
-        assertEquals(0xFF242424.toInt(), colors.softSurface)
-        assertTrue(luminance(colors.surface) > luminance(colors.pageBackground))
+        assertEquals(0xFF1C1C1E.toInt(), colors.pageBackground)
+        assertEquals(0xFF1C1C1E.toInt(), colors.surface)
+        assertEquals(0xFF3B2029.toInt(), colors.softSurface)
+        assertTrue(luminance(colors.background) < luminance(colors.surface))
         assertTrue(luminance(colors.softSurface) > luminance(colors.surface))
     }
 

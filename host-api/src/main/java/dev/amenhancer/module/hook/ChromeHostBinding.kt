@@ -36,6 +36,8 @@ enum class ChromeResource {
 data class NativeSheetSnapshot(val state: Int, val collapsedTop: Int, val expandedTop: Int)
 data class NativeNavigationSnapshot(val menu: Menu, val selectedId: Int)
 interface ChromeHostBinding : PlayerSurfacePort, AutoCloseable {
+    /** Explicit opt-in from a profiled phone adapter; legacy and tablet forms stay expanded. */
+    val supportsScrollCollapse: Boolean get() = false
     fun resourceId(role: ChromeResource): Int
     fun find(role: ChromeResource): View?
     fun dimension(role: ChromeResource): Int
@@ -43,9 +45,17 @@ interface ChromeHostBinding : PlayerSurfacePort, AutoCloseable {
     fun playerBehavior(preferPlayerRuntime: Boolean): Any?
     fun sheetSnapshot(owner: Any): NativeSheetSnapshot
     fun writePeek(owner: Any, height: Int)
+    /** Draw a compatible host-owned content recording, or return false without drawing. */
+    fun drawContentBackdrop(source: View, canvas: android.graphics.Canvas): Boolean = false
     fun navigation(view: View): NativeNavigationSnapshot
     fun selectNavigation(view: View, id: Int)
     fun isScrollContainer(view: View): Boolean
+    /** Actual native content offset, or null when the adapter cannot observe this container. */
+    fun verticalScrollOffset(view: View): Int? = null
+    /** Native container or the Compose semantics owner that can report directional boundaries. */
+    fun verticalScrollTouchTarget(view: View): View? = null
+    /** Android scroll direction: -1 toward the start, +1 toward the end; null if unavailable. */
+    fun canScrollVertically(view: View, direction: Int): Boolean? = null
     fun isComposeScene(view: View): Boolean
     fun isPagerPageHost(view: View): Boolean
 }

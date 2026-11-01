@@ -153,11 +153,33 @@ object FragmentChromeFactory {
                 object : ModernMethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         val view = param.thisObject as? View ?: return
+                        val event = param.args[0] as MotionEvent
                         // Root dispatch observes one event before native child controls consume it.
                         bindings.values.forEach { binding ->
+                            if (binding.blocksNavigationTouch(view)) {
+                                // Skip only the hidden native navigation subtree. Returning false
+                                // leaves the parent free to route empty glass space to native input.
+                                param.result = false
+                                return
+                            }
                             if (binding.tabletChrome == null && binding.isMiniTouchPanel(view)) {
-                                runCatching { observer.onMiniTouch(binding.viewSessionIdentity, param.args[0] as MotionEvent) }
-                                    .onFailure { fail(null, it) }
+                                // The current phone session observes presses and returns null,
+                                // preserving native mini controls and player drag. Only an
+                                // explicit true result claims the event at this dispatch entry.
+                                val claimed = runCatching {
+                                    observer.onMiniTouch(binding.viewSessionIdentity, event)
+                                }.onFailure { fail(null, it) }.getOrNull()
+                                if (claimed == true) param.result = true
+                            }
+                            // Observe each page event once at the content root, including gestures
+                            // handled internally by Compose. Current sessions return null so page
+                            // scrolling and native child controls retain their own dispatch.
+                            // Only an explicit true result claims the event at this seam.
+                            if (binding.isContentRoot(view)) {
+                                val claimed = runCatching {
+                                    observer.onContentTouch(binding.viewSessionIdentity, event)
+                                }.onFailure { fail(null, it) }.getOrNull()
+                                if (claimed == true) param.result = true
                             }
                         }
                     }
@@ -198,6 +220,16 @@ object FragmentChromeFactory {
                     val bottom = Math.round(param.args[2] as Float)
                     bindings.values.firstNotNullOfOrNull { it.tabletChrome?.miniBottomMargin(view, bottom) }
                         ?.let { param.args[2] = it.toFloat() }
+                }
+            })
+            hook(contract.settleSheet, object : ModernMethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val owner = param.thisObject ?: return
+                    val sheet = param.args[0] as View
+                    val target = param.args[1] as Int
+                    runCatching {
+                        bindings.values.forEach { it.phoneChrome?.prepareSheetSettle(owner, sheet, target) }
+                    }.onFailure { observer.onFailure(null, it) }
                 }
             })
             hook(contract.writePeek, object : ModernMethodHook() {

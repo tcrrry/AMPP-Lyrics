@@ -7,7 +7,6 @@ import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.Bundle
 import android.util.DisplayMetrics
-import dev.amenhancer.module.ModuleConstants
 import dev.amenhancer.module.model.ModuleSettings
 import java.lang.ref.WeakReference
 import java.util.Collections
@@ -249,6 +248,11 @@ internal object AppleMusicDpiOverrideRuntime : Application.ActivityLifecycleCall
         }
     }
 
+    private fun belongsToBoundApplication(activity: Activity): Boolean {
+        val boundApplication = applicationReference?.get() ?: return false
+        return activity.application?.packageName == boundApplication.packageName
+    }
+
     private fun installResourceHook() {
         if (!resourceHookInstalled.compareAndSet(false, true)) return
         val updateConfiguration = Resources::class.java.getDeclaredMethod(
@@ -274,7 +278,7 @@ internal object AppleMusicDpiOverrideRuntime : Application.ActivityLifecycleCall
         ModernXposedRuntime.hookMethod(activityOnCreate, object : ModernMethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
                 val activity = param.thisObject as? Activity ?: return
-                if (activity.application?.packageName != ModuleConstants.TARGET_PACKAGE) return
+                if (!belongsToBoundApplication(activity)) return
                 applyToResources(activity.resources)
             }
         })
@@ -294,7 +298,7 @@ internal object AppleMusicDpiOverrideRuntime : Application.ActivityLifecycleCall
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     if (!runtimeEnabled.get()) return
                     val activity = param.thisObject as? Activity ?: return
-                    if (activity.application?.packageName != ModuleConstants.TARGET_PACKAGE) return
+                    if (!belongsToBoundApplication(activity)) return
                     applyToResources(activity.resources)
                 }
             },
@@ -347,17 +351,13 @@ internal object AppleMusicDpiOverrideRuntime : Application.ActivityLifecycleCall
     }
 
     override fun onActivityPreCreated(activity: Activity, savedInstanceState: Bundle?) {
-        if (runtimeEnabled.get() &&
-            activity.application?.packageName == ModuleConstants.TARGET_PACKAGE
-        ) {
+        if (runtimeEnabled.get() && belongsToBoundApplication(activity)) {
             applyToResources(activity.resources)
         }
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
-        if (runtimeEnabled.get() &&
-            activity.application?.packageName == ModuleConstants.TARGET_PACKAGE
-        ) {
+        if (runtimeEnabled.get() && belongsToBoundApplication(activity)) {
             applyToResources(activity.resources)
         }
     }

@@ -149,7 +149,7 @@ class CellularDataEntryTargetTest {
             TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.1", 1583L),
             TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.3", 1586L),
             TargetBuild(ModuleConstants.TARGET_PACKAGE, "6.5.4", 1599L),
-            TargetBuild("other.package", "6.5.3", 1599L),
+            TargetBuild("", "6.5.3", 1599L),
             TargetBuild.UNKNOWN,
         ).forEach { build ->
             val target = AppleMusicCellularDataEntryTarget(

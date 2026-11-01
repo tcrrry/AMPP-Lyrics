@@ -1,0 +1,17 @@
+{
+  "bundles": {
+    "tcrrry-lyrics.zip": {
+      "id": "com.tcrrry.lyrics",
+      "versionCode": 71,
+      "sha256": "cb9669c555b162472af6415a83576a920a1cee08a6553ce492e83e3adfc9d438",
+      "codeSha256": "f3ac381c44189bde81254204ddc93819b203e44599de2b2d3e44e3802b6170bb"
+    },
+    "tcrrry-translation.zip": {
+      "id": "com.tcrrry.translation",
+      "versionCode": 3,
+      "sha256": "c13f64a55edea86c6e7cc38f20f3b5e038e9590c35510acab60ba09e08f47f67",
+      "codeSha256": "830c094d29b159f5ac7574320b634c98bbac1a416e2d2961b58bcae62941d9b2"
+    }
+  },
+  "chineseModelSha256": "ab077c810b001d16667877d9fcda565a206718128a5163428ab5b6ace08936c4"
+}

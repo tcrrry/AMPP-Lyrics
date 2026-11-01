@@ -43,7 +43,7 @@ internal class HleMetadataRuntime(
 ) {
     private val version = runCatching {
         val info = application.packageManager.getPackageInfo(
-            "com.apple.android.music",
+            application.packageName,
             0,
         )
         AppleMusicVersion(

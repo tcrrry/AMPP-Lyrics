@@ -13,6 +13,9 @@ interface SettingsActivityMatcher {
 interface SettingsViewBridge {
     /** Compose-native settings must never install the legacy decor/title-scan fallback. */
     val supportsViewFallback: Boolean get() = true
+    /** Host eligibility for the collapse setting; unregistered host forms stay unavailable. */
+    fun supportsGlassScrollCollapse(activity: Activity): Boolean = false
+    fun supportsStartupPagePrewarm(activity: Activity): Boolean = false
     fun fragmentView(fragment: Any): ViewGroup?
     fun findSettingsListOverlayContainer(root: View): ViewGroup?
     fun injectNativeSettingsPreference(fragment: Any, activity: Activity): Boolean
