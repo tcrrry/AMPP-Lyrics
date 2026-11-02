@@ -130,6 +130,9 @@ class HookEntry : XposedModule() {
                             val config = TargetConfigClient(dev.amenhancer.module.integration.BundledLyrics.builtinReader(bootstrap.reader)) { health ->
                                 ModernXposedRuntime.log("${health.feature}: ${health.state} - ${health.message} [${health.targetVersion}]")
                             }
+                            if ((build.versionCode in setOf(1609L, 1613L) && build.versionName == "7.0.0-beta") ||
+                                (build.versionCode == 1614L && build.versionName == "7.0.0"))
+                                AppleMusicHostFactory.installResourceRecovery(application)
                             AppleMusicHostFactory.installDensity(
                                 application = application,
                                 configuredDpi = config.settings().appleMusicDpiOverrideDpi,

@@ -19,6 +19,7 @@ import java.lang.reflect.Executable
 import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 enum class PluginRunState { DISABLED, LOADING, ACTIVE, BLOCKED, UNSUPPORTED, FAILED }
 data class PluginStatus(val installed: InstalledPlugin, val state: PluginRunState, val message: String,
@@ -28,6 +29,7 @@ data class PluginStatus(val installed: InstalledPlugin, val state: PluginRunStat
 class PluginManager(private val application: Application, private val hostLoader: ClassLoader,
     private val prepareBundled: (PluginStore) -> Unit = {},
     private val assetOverride: (String, String) -> InputStream? = { _, _ -> null }) {
+    private val externalMedia by lazy { ExternalMediaRuntime(application, hostLoader) }
     val store = PluginStore(File(application.filesDir, "ampp-plugins-v1"))
     private val main = Handler(Looper.getMainLooper())
     private val tasks = PluginTasks()
@@ -51,13 +53,15 @@ class PluginManager(private val application: Application, private val hostLoader
                 store.installed().filter { it.enabled }
             },
             load = { enabled ->
-                if (enabled.isEmpty()) return@prepareAndLoad
+                if (enabled.isEmpty()) { externalMedia.finishStartup(); return@prepareAndLoad }
                 registryListener = HookRegistrations.listen(::checkConflicts)
                 val pending = enabled.map { installed ->
                     Session(installed) { action -> main.post { runCatching(action).onFailure {
                         ModernXposedRuntime.log("Plugin stop failed: ${installed.manifest.id}", it)
                     } } }.also { sessions[installed.manifest.id] = it }
                 }
+                val remaining = AtomicInteger(pending.size)
+                fun finished() { if (remaining.decrementAndGet() == 0) externalMedia.finishStartup() }
                 for (session in pending) tasks.loadPlugin(
                     load = {
                         val installed = session.installed
@@ -76,15 +80,17 @@ class PluginManager(private val application: Application, private val hostLoader
                                 checkConflicts()
                                 if (!session.scope.isClosed) session.start { session.plugin!!.onStart() }
                             } catch (failure: Throwable) { fail(session, failure) }
+                            finally { finished() }
                         }
                     },
-                    failed = { fail(session, it) }
+                    failed = { fail(session, it); finished() }
                 )
             },
             failed = { failure ->
                 startupError = failure.message ?: failure.javaClass.simpleName
                 ModernXposedRuntime.log("Plugin startup failed", failure)
                 sessions.values.forEach { fail(it, failure) }
+                externalMedia.finishStartup()
             }
         )
     }
@@ -131,10 +137,27 @@ class PluginManager(private val application: Application, private val hostLoader
     private fun context(session: Session): PluginContext {
         val id = session.installed.manifest.id
         val hostApplication = application
+        session.scope.onClose { externalMedia.releaseLyrics(id) }
         val info = hostApplication.packageManager.getPackageInfo(hostApplication.packageName, 0)
         return object : PluginContext {
             override fun getApplication(): Application = hostApplication
             override fun getHostClassLoader() = hostLoader
+            override fun getExternalMedia(): PluginExternalMedia = object : PluginExternalMedia {
+                override fun supportsEndpoint(id: String) = this@PluginManager.externalMedia.supports(id)
+                override fun registerEndpoint(id: String, endpoint: PluginMediaEndpoint): PluginRegistration {
+                    require(this@PluginManager.externalMedia.supports(id)) { "Host has no declared external endpoint: $id" }
+                    return register(session, null, "ampp.external-media.$id", HookAccess.MODIFY, true) { scope, alive ->
+                        this@PluginManager.externalMedia.bind(endpoint, scope, alive)
+                    }
+                }
+                override fun refresh() = this@PluginManager.externalMedia.refresh()
+                override fun notifyChildrenChanged(parentId: String) = this@PluginManager.externalMedia.notifyChildrenChanged(parentId)
+                override fun publishLyrics(mediaId: String, lrc: String) {
+                    check(!session.scope.isClosed)
+                    this@PluginManager.externalMedia.offerLyrics(id, mediaId, lrc)
+                }
+                override fun lyricsFor(mediaId: String) = this@PluginManager.externalMedia.lyricsFor(mediaId)
+            }
             override fun getHostPackageName(): String = hostApplication.packageName
             override fun getHostVersionName() = info.versionName.orEmpty()
             @Suppress("DEPRECATION")

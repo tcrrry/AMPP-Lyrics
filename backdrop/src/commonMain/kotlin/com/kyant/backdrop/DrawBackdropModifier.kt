@@ -54,6 +54,28 @@ private val DefaultHighlight = { Highlight.Default }
 private val DefaultShadow = { Shadow.Default }
 private val DefaultOnDrawBackdrop: DrawScope.(DrawScope.() -> Unit) -> Unit = { it() }
 
+/** Keep the pre-minLayerSize binary entry points used by existing SDK plugins. */
+@Deprecated("Binary compatibility for existing plugins", level = DeprecationLevel.HIDDEN)
+fun Modifier.drawBackdrop(
+    backdrop: Backdrop,
+    shape: () -> Shape,
+    effects: BackdropEffectScope.() -> Unit,
+    highlight: (() -> Highlight?)? = DefaultHighlight,
+    shadow: (() -> Shadow?)? = DefaultShadow,
+    innerShadow: (() -> InnerShadow?)? = null,
+    layerBlock: (GraphicsLayerScope.() -> Unit)? = null,
+    clipCompositingStrategy: androidx.compose.ui.graphics.CompositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen,
+    exportedBackdrop: LayerBackdrop? = null,
+    onDrawBehind: (DrawScope.() -> Unit)? = null,
+    onDrawBackdrop: DrawScope.(DrawScope.() -> Unit) -> Unit = DefaultOnDrawBackdrop,
+    onDrawSurface: (DrawScope.() -> Unit)? = null,
+    onDrawFront: (DrawScope.() -> Unit)? = null,
+): Modifier = drawBackdrop(
+    backdrop, shape, effects, highlight, shadow, innerShadow, layerBlock,
+    clipCompositingStrategy, exportedBackdrop, IntSize.Zero,
+    onDrawBehind, onDrawBackdrop, onDrawSurface, onDrawFront,
+)
+
 fun Modifier.drawPlainBackdrop(
     backdrop: Backdrop,
     shape: () -> Shape,

@@ -1,0 +1,1 @@
+package Z6;import com.apple.android.music.model.CollectionItemView;public interface f {int getItemCount();CollectionItemView getItemAtIndex(int index);}

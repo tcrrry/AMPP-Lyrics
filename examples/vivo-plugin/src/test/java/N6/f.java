@@ -1,0 +1,1 @@
+package N6;public class f extends g {public f(a builder){favorite=builder.j;libraryOnly=builder.f;download=builder.c;}public static class a extends h.a {public void c(g.c type){}}}

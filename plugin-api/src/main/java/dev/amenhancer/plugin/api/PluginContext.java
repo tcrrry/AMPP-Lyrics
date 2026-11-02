@@ -19,4 +19,8 @@ public interface PluginContext {
     void log(String message, Throwable error);
     void onClose(Runnable cleanup);
     PluginRegistration claimResource(String key, boolean exclusive);
+    /** Optional extension. Old SDK v1 hosts remain valid and report unsupported. */
+    default PluginExternalMedia getExternalMedia() {
+        throw new UnsupportedOperationException("External media endpoints require a compatible host");
+    }
 }

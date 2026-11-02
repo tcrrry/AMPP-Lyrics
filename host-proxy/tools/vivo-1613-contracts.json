@@ -1,0 +1,66 @@
+{
+  "checks": 37,
+  "passed": true,
+  "methods": {
+    "com.apple.android.music.playback.controller.LocalMediaPlayerController": [
+      "getRepeatMode()I",
+      "getShuffleMode()I",
+      "getAllQueueItems()Ljava/util/List;",
+      "canSetRepeatMode()Z",
+      "canSetShuffleMode()Z",
+      "canSkipToQueueItem()Z",
+      "setRepeatMode(I)V",
+      "setShuffleMode(I)V",
+      "skipToQueueItemWithId(J)V",
+      "getCurrentItem()Lcom/apple/android/music/playback/model/PlayerQueueItem;",
+      "prepare(Lcom/apple/android/music/playback/queue/PlaybackQueueItemProvider;Z)V"
+    ],
+    "com.apple.android.music.playback.model.PlayerQueueItem": [
+      "getItem()Lcom/apple/android/music/playback/model/PlayerMediaItem;",
+      "getPlaybackQueueId()J"
+    ],
+    "com.apple.android.music.playback.model.PlayerMediaItem": [
+      "getTitle()Ljava/lang/String;",
+      "getArtistName()Ljava/lang/String;",
+      "getReportingAdamId()J",
+      "getPersistentId()J"
+    ],
+    "com.apple.android.medialibrary.library.MediaLibrary": [
+      "g(LN6/g;)LAh/m;"
+    ],
+    "com.apple.android.medialibrary.library.a": [
+      "d0()Lcom/apple/android/medialibrary/library/MediaLibrary;"
+    ],
+    "Ah.m": [
+      "d()Ljava/lang/Object;"
+    ],
+    "N6.f$a": [
+      "c(LN6/g$c;)V"
+    ],
+    "N6.f": [
+      "<init>(LN6/f$a;)V"
+    ],
+    "Z6.f": [
+      "getItemCount()I",
+      "getItemAtIndex(I)Lcom/apple/android/music/model/CollectionItemView;"
+    ],
+    "Z6.c": [
+      "release()V"
+    ],
+    "android.support.v4.media.session.MediaSessionCompat$a$b": [
+      "onSetRating(Landroid/media/Rating;)V",
+      "onCustomAction(Ljava/lang/String;Landroid/os/Bundle;)V",
+      "onPlayFromMediaId(Ljava/lang/String;Landroid/os/Bundle;)V"
+    ],
+    "K4.A$b$b": [
+      "onSetRating(Landroid/media/Rating;)V",
+      "onCustomAction(Ljava/lang/String;Landroid/os/Bundle;)V",
+      "onPlayFromMediaId(Ljava/lang/String;Landroid/os/Bundle;)V"
+    ],
+    "com.apple.android.music.playback.queue.LibraryItemListPlaybackQueueItemProvider$Builder": [
+      "dataSource(LZ6/f;Lcom/apple/android/music/model/CollectionItemView;)Lcom/apple/android/music/playback/queue/LibraryItemListPlaybackQueueItemProvider$Builder;",
+      "startItemIndex(I)Lcom/apple/android/music/playback/queue/LibraryItemListPlaybackQueueItemProvider$Builder;",
+      "build()Lcom/apple/android/music/playback/queue/PlaybackQueueItemProvider;"
+    ]
+  }
+}

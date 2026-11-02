@@ -1,0 +1,1 @@
+package N6; public class g {public enum c {MediaTypeSong} public enum a {Downloaded,None} public boolean favorite,libraryOnly;public a download;}

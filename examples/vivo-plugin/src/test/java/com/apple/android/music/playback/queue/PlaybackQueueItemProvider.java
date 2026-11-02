@@ -1,0 +1,1 @@
+package com.apple.android.music.playback.queue;import java.util.*;import com.apple.android.music.model.CollectionItemView;public class PlaybackQueueItemProvider {public List<CollectionItemView> rows;public int index;}

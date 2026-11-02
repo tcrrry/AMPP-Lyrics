@@ -85,3 +85,8 @@ com.vivo.musicwidgetmix.support.service
 ## 责任与范围
 
 这次流程的问题是已有适配没有进入主发布路径，而且缺少对应的二进制门禁；不能把责任归给用户设置，也不能仅靠“下次注意”解决。上述主流程补声明与最终产物校验用于防止同一种遗漏；系统版本、协议变化或权限变化仍需单独实机检查。
+
+
+## v1.11 稳定性修订：可选外部媒体服务
+
+继续保留并验证原生 MediaPlaybackService 的 vivo action。增加默认关闭的 ExternalMediaService 时，它需要独立声明同一个发现 action；校验器只允许该明确的第二个服务，验证两个服务各一次并检查外部服务默认关闭、已导出，拒绝其他重复。内嵌 origin 仍只保留原生服务 action。最终共存 APK 与 origin 均运行 VivoAtomicManifest --verify，原生显示、控制与外部媒体功能仍须实机分别验收。

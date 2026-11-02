@@ -16,4 +16,15 @@ tasks.withType<Test>().configureEach {
         systemProperty("pluginFixture", it)
         inputs.file(it).withPropertyName("pluginFixture").withPathSensitivity(PathSensitivity.NONE)
     }
+    providers.gradleProperty("externalMediaFixture").orNull?.let {
+        systemProperty("externalMediaFixture", it)
+        inputs.file(it).withPropertyName("externalMediaFixture").withPathSensitivity(PathSensitivity.NONE)
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    providers.gradleProperty("lyricsFixture").orNull?.let {
+        systemProperty("lyricsFixture", it)
+        inputs.file(it).withPropertyName("lyricsFixture").withPathSensitivity(PathSensitivity.NONE)
+    }
 }

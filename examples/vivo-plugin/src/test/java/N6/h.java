@@ -1,0 +1,1 @@
+package N6;public class h {public static class a {public g.a c=g.a.None;public boolean f=true,j;}}

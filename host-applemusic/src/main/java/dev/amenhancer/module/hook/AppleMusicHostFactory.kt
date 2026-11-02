@@ -6,6 +6,7 @@ import dev.amenhancer.module.config.TargetConfigClient
 
 /** Apple Music composition; the application supplies configuration and automatic-lyric services. */
 object AppleMusicHostFactory {
+    fun installResourceRecovery(application: Application) = NativeHostResourceRecovery.install(application)
     fun installDensity(application: Application, configuredDpi: Int): AppleMusicDpiOverrideStatus = AppleMusicDpiOverrideRuntime.install(application,configuredDpi)
     fun densityStatus(): AppleMusicDpiOverrideStatus = AppleMusicDpiOverrideRuntime.status
 

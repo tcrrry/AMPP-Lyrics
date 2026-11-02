@@ -1,0 +1,1 @@
+package Ah;public class m {private final Object value;public m(Object value){this.value=value;}public Object d(){return value;}}

@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "apiVersion": 1,
+  "id": "com.tcrrry.vivo.externalmedia",
+  "name": "vivo 系统播放器扩展",
+  "author": "Tcrrry",
+  "versionName": "0.2-preview.3",
+  "versionCode": 16,
+  "entryClass": "com.tcrrry.vivo.VivoMediaPlugin",
+  "minAndroidApi": 31,
+  "description": "适配 1614 普通版与共存版 External Media 宿主，支持 vivo 歌词、循环、队列、收藏及已下载。"
+}

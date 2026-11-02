@@ -58,7 +58,22 @@ class VivoAtomicManifest {
             ResXmlElement filter = browserFilter(manifest);
             int count = actions(manifest.recursiveElements());
             if (verify) {
-                if (count != 1 || actions(filter.recursiveElements()) != 1) throw new IllegalStateException("Expected one vivo action in the exported browser filter");
+                if (actions(filter.recursiveElements()) != 1) throw new IllegalStateException("Expected one vivo action in the original exported browser filter");
+                // The optional External Media proxy deliberately declares a second,
+                // default-disabled service. No unrelated duplicate is permitted.
+                int proxyActions = 0, proxies = 0;
+                Iterator<ResXmlElement> all = manifest.recursiveElements();
+                while (all.hasNext()) {
+                    ResXmlElement e = all.next();
+                    if (!"service".equals(e.getName()) || !"dev.amenhancer.hostproxy.ExternalMediaService".equals(AndroidManifestBlock.getAndroidNameValue(e))) continue;
+                    proxies++;
+                    if (e.getOrCreateAndroidAttribute("enabled", 0x0101000e).getValueAsBoolean() ||
+                        !e.getOrCreateAndroidAttribute("exported", 0x01010010).getValueAsBoolean())
+                        throw new IllegalStateException("External Media proxy must be default-disabled and exported");
+                    proxyActions += actions(e.recursiveElements());
+                }
+                if (proxies > 1 || proxyActions != proxies || count != 1 + proxyActions)
+                    throw new IllegalStateException("Unexpected vivo discovery action outside the verified services");
             } else {
                 if (count != 0) throw new IllegalStateException("Action already present");
                 filter.newElement("action").getOrCreateAndroidAttribute("name", 0x01010003).setValueAsString(ACTION);

@@ -1,0 +1,1 @@
+package com.apple.android.medialibrary.library;public class a {public static MediaLibrary instance=new MediaLibrary();public static MediaLibrary d0(){return instance;}}
